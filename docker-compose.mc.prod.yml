@@ -71,6 +71,8 @@ services:
       # by scripts/operations/planning_mirror.sh. Files only (its git data stays outside, root-only); no scorers-only/
       # answer key and no career material. PLANNING_STATUS.txt at its root names the commit and the fetch time.
       - /opt/minimoi/planning/tree:/minimoi/planning:ro
+      # The Prototype Lab in the code repo (#666). CoS mounts the same directory.
+      - /opt/minimoi/mc/repo/prototype-lab:/minimoi/prototype-lab:ro
     networks: [mc-internal]
     mem_limit: 2048m          # dev, 25 Oct: OpenClaw ~600-770 MiB idle plus a Claude Code subprocess per turn; 1024m/1536m OOM-killed
     oom_score_adj: 1000

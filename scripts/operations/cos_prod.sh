@@ -3,6 +3,8 @@
 # working skills, Robert, 26 Oct 2026; #215, #335; runbook docs/runbooks/cos_prod.md).
 #
 #   cos_prod.sh prepare           create CoS's folders (every main release runs this before the deploy; idempotent)
+#   cos_prod.sh keep-planning     copy files from the old Planning Studio folder that the live mirror does not have,
+#                                 into the outbox, and leave the old folder in place (#666)
 #   cos_prod.sh key <dollars>     mint CoS's own capped key inside the gateway (CoS's routes, its API failover tiers, Grok; chat completions and
 #                                 responses only, a 30-day budget, rpm 60) and recreate only cos-agent-a, which then uses
 #                                 it instead of the master key. A re-run rotates (the old key is deleted).
@@ -35,19 +37,35 @@ prepare() {
   # Written by cos-scheduler (root), read by CoS's runtime (node, uid 1000).
   install -d -m 0755 -o root -g root "$COS/inbox" "$COS/conversations"
   # Written by CoS's runtime.
-  install -d -m 0750 -o 1000 -g 1000 "$COS/outbox" "$COS/planning-studio"
+  install -d -m 0750 -o 1000 -g 1000 "$COS/outbox"
+  # The old writable Planning Studio copy. No longer mounted and no longer seeded. keep-planning reads it.
   install -d -m 0750 -o root -g 1000 "$KEY_DIR"
   # CoS 1.2 (spec v0.3 sections 4.5, 4.19): the store and the canonical history, written only by cos-scheduler (root)
   # and read by CoS's runtime through group 1000. The setgid bit makes every file and folder the writer creates
   # inherit group 1000 (domains/cos/store/fsio.py keeps it on new folders); files are 0640, folders 0750.
   install -d -m 2750 -o root -g 1000 "$COS/store" "$COS/conversations/history"
-  # Planning Studio working copy, seeded once from MC's read-only repo clone (refreshed nightly by MC's cron).
-  if [[ -d "$ROOT/mc/repo/planning-studio" && -z "$(ls -A "$COS/planning-studio")" ]]; then
-    cp -R "$ROOT/mc/repo/planning-studio/." "$COS/planning-studio/"
-    chown -R 1000:1000 "$COS/planning-studio"
-    log "seeded the Planning Studio working copy from the repo clone"
+  if [[ -d "$COS/planning-studio" ]]; then
+    install -d -m 0750 -o 1000 -g 1000 "$COS/planning-studio"
   fi
   log "folders ready under $COS"
+}
+
+keep_planning() {
+  # Files the old copy has and the live mirror does not, plus files whose bytes differ. Nothing is deleted.
+  local old="${COS_PLANNING_OLD:-$COS/planning-studio}" live="${PLANNING_TREE:-$ROOT/planning/tree}" dest moved=0 f rel
+  [[ -d "$old" ]] || { log "no old Planning Studio copy at $old"; return 0; }
+  [[ -d "$live" ]] || die "the live planning mirror is not there yet ($live)"
+  dest="${COS_PLANNING_KEEP:-$COS/outbox}/planning-studio-kept-$(date -u +%Y%m%dT%H%M%SZ)"
+  install -d -m 0750 "$dest"
+  while IFS= read -r -d '' f; do
+    rel="${f#"$old"/}"
+    if [[ ! -f "$live/$rel" ]] || ! cmp -s "$f" "$live/$rel"; then
+      mkdir -p -- "$(dirname "$dest/$rel")"
+      install -m 0640 "$f" "$dest/$rel"
+      moved=$((moved + 1))
+    fi
+  done < <(find "$old" -type f -print0)
+  log "kept $moved file(s) in $dest; the old directory was not deleted"
 }
 
 set_env_line() {
@@ -161,9 +179,10 @@ audit() {
 
 case "${1:-}" in
   prepare) prepare ;;
+  keep-planning) keep_planning ;;
   key) if [[ "${2:-}" == off ]]; then key_off; else key_on "${2:-}"; fi ;;
   status) status ;;
   audit) audit ;;
   vault) vault "${2:-}" ;;
-  *) die "usage: cos_prod.sh prepare | key <dollars> | key off | vault on|off | status | audit" ;;
+  *) die "usage: cos_prod.sh prepare | keep-planning | key <dollars> | key off | vault on|off | status | audit" ;;
 esac
