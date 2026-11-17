@@ -474,6 +474,10 @@ def test_each_image_gets_its_own_paths():
     assert set(where("guildhall-cos")) == {"services/rooms_worker/worker.py"} == set(where("guildhall-mc"))
     assert where("model-gateway") == {"services/model_gateway/litellm.staging.yaml": "@config/litellm.staging.yaml"}
     assert "domains/cos/chief_of_staff.py" in where("cos-scheduler") and "core/telegram/telegram_bot.py" not in where("cos-scheduler")
+    assert where("cos-scheduler")["minimoi_portal/guild_ui/conversations.py"] == "/app/minimoi_portal/guild_ui/conversations.py"
+    assert where("cos-scheduler")["minimoi_portal/guild_ui/stores.py"] == "/app/minimoi_portal/guild_ui/stores.py"
+    assert where("cos-scheduler")["minimoi_portal/guild_ui/board.py"] == "/app/minimoi_portal/guild_ui/board.py"
+    assert where("cos-scheduler")["minimoi_portal/guild_ui/adapters/contract.py"] == "/app/minimoi_portal/guild_ui/adapters/contract.py"
 
 
 def test_mc_lays_out_its_persona_handbook_and_release_tools():

@@ -171,7 +171,7 @@ def build_meta(git, commit_ref: str, bases=None, from_ref=None, release=None) ->
                            "base": sha(base_blob) if base_blob is not None else None, "accepted": accepted_hashes(git, commit, path)}
             if path in always:                      # an input a RUN step compiles over: the file the image holds is the compiled one
                 files[path]["generated_input"] = True
-        out = {k: v for k, v in spec.items() if k not in ("rules", "extra_rules", "always", "layout", "exclude", "catch_up")}
+        out = {k: v for k, v in spec.items() if k not in ("rules", "extra_rules", "always", "carry", "layout", "exclude", "catch_up")}
         if from_commit:                             # one digest, recomputed in the built image from the shared path list
             paths = D.layout_paths(tree, spec.get("layout", ()), mapping, spec.get("exclude", ()))
             targets[key] = {**out, "files": files, "layout_digest": {"prefixes": list(spec.get("layout", ())), "count": len(paths),

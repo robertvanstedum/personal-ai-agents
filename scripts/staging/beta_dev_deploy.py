@@ -99,6 +99,12 @@ TARGETS = {
                               health="http://127.0.0.1:8772/healthz", down="under 1 minute"),
     "cos-scheduler": dict(container="minimoi-cos-scheduler", repo="cos-scheduler", tier=2, base="cos", old="plan-20261105", wait=DEFAULT_WAIT,
                           image_env=(("MINIMOI_COS_TO_MC", "1"), ("COS_TO_MC_URL", "http://minimoi-portal:5011/internal/mc/v1/from-cos")), rules=_SCHEDULER, exclude=_BOTS_ONLY,
+                          # hosts.py runs in this image and imports these. stores.py then imports the
+                          # adapter contract and the board mixin. The scheduler image otherwise copies only doc_reader.py.
+                          carry=(("minimoi_portal/guild_ui/conversations.py", "/app/minimoi_portal/guild_ui/conversations.py"),
+                                 ("minimoi_portal/guild_ui/stores.py", "/app/minimoi_portal/guild_ui/stores.py"),
+                                 ("minimoi_portal/guild_ui/board.py", "/app/minimoi_portal/guild_ui/board.py"),
+                                 ("minimoi_portal/guild_ui/adapters/contract.py", "/app/minimoi_portal/guild_ui/adapters/contract.py")),
                           layout=_SCHEDULER_LAYOUT, smoke=_python("core.model_routes", "domains.cos.model_route"),
                           health="http://127.0.0.1:8769/health", down="under 2 minutes; CoS refuses messages meanwhile"),
     "cos-agent-a": dict(container="minimoi-cos-agent-a", repo="cos-agent-a", tier=3, base="cos", old="plan-20261105d", wait=AGENT_WAIT, kind="node", build="cos",
@@ -169,6 +175,74 @@ REVIEWED_HOST_CONFIGS = frozenset({"a50a08e429c7f6a1237089a588e2985a8dcb972eec1a
 
 class Refused(RuntimeError):
     """Stopped before anything live changed."""
+
+
+# bin/mc.sh is the stack an update recreates. The 5 Nov MC operator still renders the older stack.
+# Measured on Dev, 17 Nov 2026: the wrapper has the plan-route env and the planning mount, the
+# operator's gateway key is empty, and the operator's relay list is the short one. The running
+# containers match the wrapper. The key's value stays unchecked, but a non-empty MC_METERED_ROUTES
+# on the wrapper requires a non-empty MC_MODEL_GATEWAY_KEY. Any other field still fails this gate.
+# The failure line names fields, never values.
+MC_WRAPPER_ENV_ABSENT_ON_OPERATOR = {
+    "mc-agent": frozenset({
+        "MC_FAILOVER_ROUTES", "MC_METERED_ROUTES", "MC_PRIMARY_ROUTE",
+        "MINIMOI_DEPTH_PROOF", "MINIMOI_RUNTIME_PROOF_MODULE",
+    }),
+    "mc-relay": frozenset({"MC_RELAY_DEPTH_PROOFS", "MC_RELAY_TOOL_STARTS"}),
+}
+MC_WRAPPER_ENV_VALUE_UNCHECKED = {
+    "mc-agent": frozenset({"MC_MODEL_GATEWAY_KEY"}),
+    "mc-relay": frozenset({"MC_RELAY_ROUTES"}),
+}
+MC_WRAPPER_VOLUME_ABSENT_ON_OPERATOR = {
+    "mc-agent": frozenset({"/minimoi/planning"}),
+}
+
+
+def _volume_target(volume):
+    if isinstance(volume, str):
+        parts = volume.split(":")
+        return parts[1] if len(parts) >= 2 else parts[0]
+    if isinstance(volume, dict):
+        return volume.get("target")
+    return None
+
+
+def mc_update_services_agree(reviewed: dict, wrapper: dict, service: str, image_named_by_override: bool) -> None:
+    """Refuse unless bin/mc.sh and the MC operator differ only by the known plan-route drift."""
+    if image_named_by_override:
+        left = {k: v for k, v in reviewed.items() if k not in ("image", "pull_policy")}
+        right = {k: v for k, v in wrapper.items() if k not in ("image", "pull_policy")}
+    else:
+        left, right = dict(reviewed), dict(wrapper)
+    absent = MC_WRAPPER_ENV_ABSENT_ON_OPERATOR.get(service, frozenset())
+    unchecked = MC_WRAPPER_ENV_VALUE_UNCHECKED.get(service, frozenset())
+    if isinstance(left.get("environment"), dict) and isinstance(right.get("environment"), dict):
+        operator_env, wrapper_env = dict(left["environment"]), dict(right["environment"])
+        if service == "mc-agent":
+            metered = str(wrapper_env.get("MC_METERED_ROUTES") or "").strip()
+            gateway_key = str(wrapper_env.get("MC_MODEL_GATEWAY_KEY") or "").strip()
+            if metered and not gateway_key:
+                raise AssertionError("bin/mc.sh: MC_METERED_ROUTES is set and MC_MODEL_GATEWAY_KEY is empty")
+        for key in absent:
+            if key not in operator_env:
+                wrapper_env.pop(key, None)
+        for key in unchecked:
+            operator_env.pop(key, None)
+            wrapper_env.pop(key, None)
+        left["environment"], right["environment"] = operator_env, wrapper_env
+    extra_targets = MC_WRAPPER_VOLUME_ABSENT_ON_OPERATOR.get(service, frozenset())
+    op_vols, wrap_vols = left.get("volumes") or [], right.get("volumes") or []
+    if extra_targets and isinstance(op_vols, list) and isinstance(wrap_vols, list):
+        drop = extra_targets - {_volume_target(v) for v in op_vols}
+        if drop:
+            left["volumes"] = list(op_vols)
+            right["volumes"] = [v for v in wrap_vols if _volume_target(v) not in drop]
+    if left == right:
+        return
+    fields = sorted((set(left) ^ set(right)) | {k for k in left.keys() & right.keys() if left[k] != right[k]})
+    print("RENDER", service, "fields", ",".join(fields), flush=True)
+    raise AssertionError("bin/mc.sh and the MC operator render differently: " + service)
 
 
 # ── Dev's delivery record: what MC and CoS read for "what was delivered?" ──
@@ -261,6 +335,7 @@ def files_for(spec: dict, names) -> dict:
     out = {n: d for n in names if n not in spec.get("exclude", ()) for d in [dest_for(rules, n)] if d}
     if out:
         out.update(dict(spec.get("always", ())))    # an unchanged input a RUN step needs: only when there is a build at all
+        out.update(dict(spec.get("carry", ())))     # unchanged files this image must hold so a shipped module's imports resolve
     return out
 
 
@@ -1555,11 +1630,9 @@ class RealHost:                                     # pragma: no cover  (exercis
             refuse_production_sources(render, [s for w, s in self.where.values() if w == wrapper])
         reviewed = json.loads(self.O.mc_compose("config", "--format", "json"))
         ours = set(json.loads(self.OVERRIDES["mc"].read_text()).get("services") or {})
-        strip = lambda svc, name: {k: v for k, v in svc.items() if name not in ours or k not in ("image", "pull_policy")}
         for key, (wrapper, service) in self.where.items():
             if wrapper == "mc":                     # this operator's override names the image; the MC operator's render may not
-                assert strip(reviewed["services"][service], service) == strip(renders["mc"]["services"][service], service), \
-                    "bin/mc.sh and the MC operator render differently: " + service
+                mc_update_services_agree(reviewed["services"][service], renders["mc"]["services"][service], service, service in ours)
         check_catalogue(json.loads(self.CAT.read_text()))
         self.saved = json.loads((self.BEFORE / "state.private.json").read_text())
         touched = set(self.saved.get("specs") or self.current["targets"])

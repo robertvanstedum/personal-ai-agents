@@ -677,6 +677,7 @@ def test_a_file_an_image_is_built_without_on_purpose_is_not_held_against_an_upda
     meta, _ = next_meta(["minimoi_portal/static/site.css"])
     portal = meta["targets"]["portal"]["layout_digest"]
     assert portal["exclude"] == list(op._BOTS_ONLY)
+    assert "hold" not in portal
     assert "/app/core/telegram/telegram_bot.py" not in op.layout_paths(meta["tree"], portal["prefixes"], set(), portal["exclude"])
 
 
