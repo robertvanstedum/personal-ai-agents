@@ -60,7 +60,7 @@ def test_about_page_uses_readme_introduction(client):
     assert "This repository is the personal version" in story
     assert "in daily use since February 2026" in story
     assert "on AWS since June 2026" in story
-    assert "Current state (July 2026)" in story
+    assert "Current state (1.2 beta, November 2026)" in story
     assert "Curator" in story
     assert "Mein Deutsch" in story
     assert "Meu Português" in story
@@ -69,7 +69,7 @@ def test_about_page_uses_readme_introduction(client):
 
     pdf_link = soup.select_one('.about-pdf-link[href="/about/readme.pdf"]')
     assert pdf_link is not None
-    assert "PDF · 10 pages" in pdf_link.get_text(" ", strip=True)
+    assert "PDF · 12 pages" in pdf_link.get_text(" ", strip=True)
 
     header_links = _links(soup.select(".front-door-account a"))
     assert "GitHub" not in header_links
