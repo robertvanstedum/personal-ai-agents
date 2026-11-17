@@ -1135,7 +1135,7 @@
   "not_jobs": [
     {
       "defined_in": "docker-compose.records-production.yml::restart:",
-      "why": "minimoi-records is a long-running service (healthcheck), default off; restart unless-stopped (#656), not a one-shot job"
+      "why": "minimoi-records is a long-running service (healthcheck), default off; restart \"no\" because scripts/rooms/deployment.py requires it (#656 tried unless-stopped on 17 Nov and the Guildhall gate refused it), not a one-shot job"
     },
     {
       "defined_in": "scripts/vault/pin_manifest.py::StartCalendarInterval",

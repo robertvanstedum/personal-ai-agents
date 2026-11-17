@@ -408,3 +408,17 @@ Last updated: 2026-06-09 | Hard cap: 8,000 chars
 ⚠️ Memory approaching cap — distillation needed
 2026-07-13 03:25 UTC: [doc_created] spec_platform_tour_2026-07-12.md — Spec for full platform screenshot tour with status labels.
 ⚠️ Memory approaching cap — distillation needed
+2026-08-09 18:11 UTC: [doc_modified] spec_key_document_pdf_publishing_2026-07-26.md — Defines PDF publishing process for four key root Markdown files via Python script.
+⚠️ Memory approaching cap — distillation needed
+2026-08-09 18:11 UTC: [doc_modified] spec_ai_cost_tracking_2026-07-19.md — Specification for per-domain per-model AI cost tracking across minimoi.
+⚠️ Memory approaching cap — distillation neededpproaching cap — distillation needed
+2026-08-09 18:11 UTC: [doc_modified] spec_guest_tour_interaction_capture_2026-07-30.md — Spec for repeatable Playwright-based screenshots of the public guest tour.
+⚠️ Memory approaching cap — distillation needed
+2026-08-09 18:11 UTC: [doc_modified] spec_voice_realtime_architecture_2026-07-24.md — Spec for provider-swappable realtime voice architecture replacing current pipeline.
+⚠️ Memory approaching cap — distillation needed
+2026-08-09 22:17 UTC: [doc_modified] spec_146_openclaw_cos_gateway_2026-08-09.md — Spec for OpenClaw CoS Gateway installation, config and acceptance.
+⚠️ Memory approaching cap — distillation needed
+2026-08-14 22:31 UTC: [doc_modified] spec_docs_only_deploy_fast_path_2026-08-14.md — Spec: spec_docs_only_deploy_fast_path_2026-08-14.md
+⚠️ Memory approaching cap — distillation needed
+2026-08-14 22:56 UTC: [doc_created] spec_docs_publish_fast_path_20260814_v2.md — Spec: spec_docs_publish_fast_path_20260814_v2.md
+⚠️ Memory approaching cap — distillation needed
