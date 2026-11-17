@@ -7,7 +7,7 @@ services:
     profiles: [records-production]
     image: ${MINIMOI_RECORDS_IMAGE:?immutable reviewed portal image digest required}
     container_name: minimoi-records
-    restart: unless-stopped
+    restart: "no"
     command: [python, -m, services.records_runtime, --data-dir, /var/lib/minimoi-records, --execute]
     environment:
       BASE_URL: https://minimoi.ai
