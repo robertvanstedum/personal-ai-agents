@@ -919,6 +919,24 @@
       "undo": null,
       "egress": "none",
       "max_operations_per_turn": 5
+    },
+    {
+      "capability": "professional.initiative.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "initiative_read_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
     }
   ]
 }

@@ -12,7 +12,8 @@ SAMPLE = {"type_id": "repo-lookup", "set_digest": "sha256:" + "a" * 64, "verdict
           "done_when": "Some words.", "action":"find", "title":"Draft", "content":"Draft text", "unresolved":[], "expected_revision":0}
 SOURCE = Path(tasks_adapter.__file__).read_text()
 METHOD = {"minimoi_task_list": "list", "minimoi_task_delegate": "delegate", "minimoi_task_submit": "submit",
-          "minimoi_task_accept": "accept", "minimoi_task_adopt": "adopt", "minimoi_build_item": "build_item", "minimoi_helper_ask": "helper_ask", "minimoi_helper_result": "helper_result", "minimoi_helper_review": "helper_review", "minimoi_work_read":"work_read", "minimoi_work_save":"work_save"}
+          "minimoi_task_accept": "accept", "minimoi_task_adopt": "adopt", "minimoi_build_item": "build_item", "minimoi_helper_ask": "helper_ask", "minimoi_helper_result": "helper_result", "minimoi_helper_review": "helper_review", "minimoi_work_read":"work_read", "minimoi_work_save":"work_save", "minimoi_initiative_read":"initiative_read"}
+PER_TOOL = {"minimoi_initiative_read": {"action": "list"}}
 
 
 def schema(name):
@@ -21,7 +22,7 @@ def schema(name):
 
 @pytest.mark.parametrize("name", tasks_adapter.TOOLS)
 def test_the_fields_a_tool_marks_required_pass_the_real_validator(name):
-    required = {k: SAMPLE[k] for k in schema(name)["required"]}
+    required = {k: {**SAMPLE, **PER_TOOL.get(name, {})}[k] for k in schema(name)["required"]}
     assert catalogue.validate(name, required) == required
 
 

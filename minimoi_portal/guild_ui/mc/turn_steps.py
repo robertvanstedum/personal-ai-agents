@@ -61,7 +61,7 @@ LABELS = {
     "minimoi_task_adopt": "Moved a task onto a correction",
     "minimoi_helper_ask": "Asked the Apprentice", "minimoi_helper_result": "Checked the Apprentice's result",
     "minimoi_helper_review": "Reviewed the Apprentice's result",
-    "minimoi_work_read": "Read a working document", "minimoi_work_save": "Saved a working document",
+    "minimoi_work_read": "Read a working document", "minimoi_initiative_read": "Read professional initiatives", "minimoi_work_save": "Saved a working document",
 }
 
 # The row's headline when every step is of one kind ("Ran 2 commands"); a mix is "Ran 3 steps".

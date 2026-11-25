@@ -86,7 +86,8 @@ class Policy(unittest.TestCase):
 
     def test_the_prod_revision_builds_on_547s_so_one_approval_covers_both(self):
         prod = json.loads((ROOT / "services/mc_operations/policy/mc-policy.prod.json").read_text())
-        # #584 (web fetch), #594 (vault search) and #599 (work documents) build on this one in a single revision.
+        # #584 (web fetch), #594 (vault search), #599 (work documents) and #680 (initiative read) build on this one in a
+        # single revision.
         self.assertEqual(prod["revision"], "mc-prod-20261125-work-documents")
         handlers = [r["handler"] for r in prod["rules"]]
         self.assertIn("github_get_v1", handlers)            # #547's rule, unchanged
@@ -96,7 +97,8 @@ class Policy(unittest.TestCase):
         if base.returncode == 0:                              # the only changes from #547's revision are these rules
             before = json.loads(base.stdout)
             self.assertEqual(before["revision"], "mc-prod-20261112-github-get")
-            later = {"open_card_v1", "web_fetch_v1", "vault_search_v1", "work_read_v1", "work_save_v1"}
+            later = {"open_card_v1", "web_fetch_v1", "vault_search_v1", "work_read_v1", "work_save_v1",
+                     "initiative_read_v1"}
             self.assertEqual([r for r in prod["rules"] if r["handler"] not in later], before["rules"])
 
 
