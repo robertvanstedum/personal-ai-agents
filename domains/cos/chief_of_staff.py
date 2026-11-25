@@ -2334,12 +2334,14 @@ def _start_cos():
 
     if os.environ.get('MINIMOI_GUILDHALL_COS') == '1':
         from domains.cos.guildhall import admit_environment, install as install_guildhall
+        from domains.cos.room_approval_client import from_environ as room_approvals_from_environ
         admit_environment(os.environ, verifier=_meeting_verifier())
         install_guildhall(app, token_file=os.environ['COS_GUILDHALL_TOKEN_FILE'],
                          data_dir=os.environ['COS_GUILDHALL_DIR'], run_turn=_process_confer_turn,
                          is_ready=lambda: _backend is not None,
                          stop_turn=lambda turn_id, reason='meeting_stop': _bindings is not None and _bindings.revoke(turn_id, reason),
-                         verifier=_meeting_verifier(), room_proposal=_room_proposal)
+                         verifier=_meeting_verifier(), room_proposal=_room_proposal,
+                         approve_room=room_approvals_from_environ(os.environ))
 
     _start_tool_listener()
 

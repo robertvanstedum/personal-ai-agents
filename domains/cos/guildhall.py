@@ -47,7 +47,7 @@ def admit_environment(environ, *, verifier):
 
 
 def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verify_members=None, stop_turn=None,
-            verifier=None, room_proposal=None):
+            verifier=None, room_proposal=None, approve_room=None):
     """``verify_members(turn)`` returns the room's members from Records, or None; never the request body's.
     ``verifier`` (F2 step 4, ``meeting_verifier.RecordsMeetingVerifier``) supersedes it: the turn runs only when
     Records admits it, with the owner's text from the snapshot, the meeting binding and a once-a-second watch."""
@@ -115,6 +115,15 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
         prompt=json.dumps(context,ensure_ascii=False)
         binding=None
         try:
+            ra=(facts or {}).get('room_approval')
+            if ra is not None and approve_room is not None and facts is not None and facts.get('owner_private'):
+                # Robert's exact yes/no for a card CoS published here (Records routed it by its registry). The portal
+                # confirms it against the stored digest; no model call is made.
+                decision=approve_room(value['room'],value['id'],ra)
+                answer={'text':decision['receipt'],'turn_id':value['id'],'room':value['room'],
+                        'room_decision':{'code':ra['code'],'state':decision['state'],'receipt':decision['receipt']}}
+                with db() as c:c.execute('UPDATE turns SET state=?,result=? WHERE id=?',('done',json.dumps(answer),value['id']))
+                return jsonify(answer)
             if value['trigger']['text'].strip() == '/new':
                 from types import SimpleNamespace
                 result=SimpleNamespace(reply='Each Guildhall turn has its own CoS session. Start a new meeting for a fresh shared conversation; your private CoS chat is unchanged.')

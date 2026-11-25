@@ -40,7 +40,8 @@ class CoS:
             data=response.json()
             if response.status_code==200 and data.get('turn_id')==turn['id'] and data.get('room')==turn['room'] and isinstance(data.get('text'),str):
                 out={'outcome':'done','text':data['text'],'usage':None,'detail':'done'}
-                if isinstance(data.get('room_proposal'),dict):out['room_proposal']=data['room_proposal']
+                for extra in ('room_proposal','room_decision'):
+                    if isinstance(data.get(extra),dict):out[extra]=data[extra]
                 return out
             return {**empty,'outcome':'error','detail':'cos_outcome_uncertain'}
         except (requests.RequestException,ValueError):

@@ -79,6 +79,8 @@ class RecordsMeetingVerifier:
                 "context": {"room": room, "brief": snap.get("brief"), "transcript": snap.get("transcript"),
                             "coverage": snap.get("coverage")},
                 "trigger_text": trigger["text"], "claim_id": claim_id, "room_generation": snap["generation"],
+                # Lane G: an owner approval turn names the registry row of a card CoS published in this room.
+                "room_approval": snap.get("room_approval"),
                 "trigger_seq": snap.get("trigger_seq"),
                 # owner_words: the verified trigger text, kept with the binding so an owner-private meeting turn can
                 # cite Robert's words (Lane G: initiatives filed from Guildhall).
