@@ -20,7 +20,7 @@ def test_confer_page_uses_shared_controller_and_keeps_typed_path():
     assert "onAssistantTurn:text=>appendMsg('cos',text)" in template
     assert "controller.stop('pagehide')" in template
     assert 'aria-label="Start voice conversation">🎤</button>' in template
-    assert "Voice is AI-generated." in template and "channel: 'html_text'" in template
+    assert "partner_menu(\"cos\"" in template and "channel: 'html_text'" in template     # the footnote is in the shared menu (#661)
 
 
 def test_confer_relative_voice_paths_work_directly_and_through_portal():

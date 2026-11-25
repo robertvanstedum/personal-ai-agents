@@ -23,13 +23,14 @@ class Finder(HTMLParser):
             self.stack.pop()
 
 
-def test_the_model_choice_sits_inside_the_options_menu_and_starts_hidden():
-    finder = Finder()
-    finder.feed((ROOT / "domains/cos/templates/cos_ui.html").read_text(encoding="utf-8"))
-    assert finder.found, "the Model control is gone"
-    _, attrs, ancestors = finder.found
-    assert "data-cos-options" in ancestors
-    assert "hidden" in attrs
+def test_the_model_line_is_the_shared_menus_inside_the_options():
+    """#661: Voice and Model are the shared partner menu (founders_ui), placed inside CoS's ••• as in MC's."""
+    template = (ROOT / "domains/cos/templates/cos_ui.html").read_text(encoding="utf-8")
+    body = template[template.index("data-cos-options"):template.index("</details>", template.index("data-cos-options"))]
+    assert 'partner_menu("cos", dictate=dictate_btn, private=private_btn)' in body
+    assert 'id="cos-route-control"' not in template and "cos-route-picker.js" not in template
+    partial = (ROOT / "core/founders_ui/templates/_partner_menu.html").read_text(encoding="utf-8")
+    assert 'data-partner-model-row hidden' in partial                  # hidden until the server says what it is
 
 
 def test_the_menu_row_stays_hidden_while_routes_are_off():
@@ -42,7 +43,7 @@ def test_voice_starts_from_one_place_and_the_options_hold_dictate_and_voice():
     template = (ROOT / "domains/cos/templates/cos_ui.html").read_text(encoding="utf-8")
     assert "data-voice-start" not in template and "Talk with CoS" not in template
     body = template[template.index("data-cos-options"):template.index("</details>", template.index("data-cos-options"))]
-    assert 'id="btn-dictate"' in body and 'id="voice-provider"' in body
+    assert 'id="btn-dictate"' in body and "partner_menu(" in body
     assert 'id="btn-voice"' in template.split('class="input-row"')[1]
 
 

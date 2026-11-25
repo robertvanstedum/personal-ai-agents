@@ -21,7 +21,7 @@ import { initJobs } from './jobs.js';
 import { initAgentRequests } from './agent_requests.js';
 import { initQueue } from './mc_queue.js';
 import { interruptions } from './mc_interruption.js';
-import { initRoutePicker } from './route_picker.js';
+import { initPartnerMenu } from '/founders-ui/partner-menu.js';
 
 let page, panel, thread, pill;
 let latestStreamRequest = null;
@@ -1358,7 +1358,15 @@ export function initConversation(p) {
   // it only ever goes back on the record, by the owner's own click, never by itself.
   if (exit) exit.addEventListener('click', () => { if (live.off) toggleRecord(); });
   wireOptionsMenu($('[data-mc-options]'), document);
-  initRoutePicker($('[data-mc-options]'), () => page?.conversation?.id);
+  // The shared ⋯ menu (#661): Voice, Model, the Last-answer line; the owner's choice, kept by MiniMoi (one for every device).
+  const partnerMenu = initPartnerMenu({ root: $('[data-partner-menu]'), settingsUrl: '/mc/partner-settings',
+    request: (method, path, body) => (method === 'GET' ? apiGet(path) : apiPost(path, body)),
+    conversationId: () => page?.conversation?.id });
+  if (partnerMenu) {
+    const opts = $('[data-mc-options]');
+    if (opts) opts.addEventListener('toggle', () => { if (opts.open) partnerMenu.load(); });
+    partnerMenu.load();
+  }
   const typeBtn = $('[data-mc-type]');
   if (typeBtn) typeBtn.addEventListener('click', () => {
     document.body.dataset.typing = 'true';

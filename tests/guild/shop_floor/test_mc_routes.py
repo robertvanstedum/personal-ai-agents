@@ -32,11 +32,12 @@ def catalogue(monkeypatch):
 
 
 @pytest.fixture
-def routed(floored, catalogue):
+def routed(floored, catalogue, tmp_path, monkeypatch):
+    monkeypatch.setenv("MINIMOI_PARTNER_SETTINGS_DIR", str(tmp_path / "settings"))
     runtime = StreamRuntime(HAPPY + [nd({"t": "served", "provider": "openai", "model": "gpt-6-astra", "api": "openai-chatgpt-responses", "harness": "openclaw"})])
     services = _turn_on(floored, _openclaw(runtime))
     services.mc_stream = True
-    floored.extra.update(runtime=runtime, services=services)
+    floored.extra.update(runtime=runtime, services=services, catalogue=catalogue)
     floored.runtime = runtime
     return floored
 
@@ -47,9 +48,15 @@ def _new_conv(client, token):
     return r.get_json()["conversation"]["id"]
 
 
-def _choose(client, token, cid, route_id, revision, **extra):
-    return client.post(f"{API}/conversations/{cid}/route", json=keyed(route_id=route_id, revision=revision, **extra),
+def _voice(client, token, voice, revision, **extra):
+    """The owner's Voice for MC (#661): the one choice; the model follows it, in every conversation."""
+    return client.post(f"{API}/mc/partner-settings", json=keyed(voice=voice, revision=revision, **extra),
                        headers=write_headers(token))
+
+
+def _map(portal, **voices):
+    """A host's own voice-to-route mapping (the catalogue's voice_routes), so a test can put a route behind a voice."""
+    portal.extra["catalogue"]["voice_routes"] = {"mc": voices}
 
 
 def _route_sent(runtime, index=-1):
@@ -66,51 +73,65 @@ def test_a_new_conversation_shows_the_default_and_the_unavailable_routes_with_re
     assert not shown[CLAUDE]["available"] and shown[CLAUDE]["reason"]
 
 
-def test_a_choice_survives_a_reload_and_stays_in_its_own_conversation(routed):
+def test_the_owners_voice_sets_the_model_in_every_conversation_new_ones_too(routed):
     client = routed.owner()
     token = routed.csrf(client)
-    one, two = _new_conv(client, token), _new_conv(client, token)
-    assert _choose(client, token, one, SOL, 0).status_code == 200
-    assert client.get(f"{API}/conversations/{one}/route").get_json()["selected_route_id"] == SOL
-    assert client.get(f"{API}/conversations/{two}/route").get_json()["selected_route_id"] == ASTRA
+    _map(routed, xai=SOL)
+    one = _new_conv(client, token)
+    view = client.get(f"{API}/mc/partner-settings").get_json()
+    assert view["voice"]["selected"] == "openai" and view["model"]["text"] == "GPT-6 Astra · Plan"   # plan first
+    r = _voice(client, token, "xai", 0)
+    assert r.status_code == 200 and r.get_json()["voice"]["selected"] == "xai" and r.get_json()["revision"] == 1
+    two = _new_conv(client, token)
+    for cid in (one, two):
+        assert client.get(f"{API}/conversations/{cid}/route").get_json()["selected_route_id"] == SOL
+    other_device = routed.owner()                                       # another browser, the same owner
+    assert other_device.get(f"{API}/mc/partner-settings").get_json()["voice"]["selected"] == "xai"
 
 
 def test_a_stale_page_changes_nothing(routed):
     client = routed.owner()
     token = routed.csrf(client)
-    cid = _new_conv(client, token)
-    assert _choose(client, token, cid, SOL, 0).status_code == 200
-    stale = _choose(client, token, cid, ASTRA, 0)
-    assert stale.status_code == 409 and stale.get_json()["error"] == "route_changed" and stale.get_json()["revision"] == 1
-    assert client.get(f"{API}/conversations/{cid}/route").get_json()["selected_route_id"] == SOL
+    _map(routed, xai=SOL)
+    assert _voice(client, token, "xai", 0).status_code == 200
+    stale = _voice(client, token, "openai", 0)
+    assert stale.status_code == 409 and stale.get_json()["error"] == "settings_changed" and stale.get_json()["revision"] == 1
+    assert client.get(f"{API}/mc/partner-settings").get_json()["voice"]["selected"] == "xai"
 
 
-@pytest.mark.parametrize("route_id,code", [(CLAUDE, "route_unavailable"), ("gateway-cos-role", "route_unknown"),
-                                           ("openai/gpt-6-astra", "route_unknown"), ("http://evil/v1", "route_unknown")])
-def test_only_offered_routes_can_be_chosen(routed, route_id, code):
+@pytest.mark.parametrize("voice", ["anthropic", "claude", "plan-openai-strong", "http://evil/v1", None])
+def test_only_openai_or_grok_can_be_chosen(routed, voice):
     client = routed.owner()
     token = routed.csrf(client)
-    cid = _new_conv(client, token)
-    r = _choose(client, token, cid, route_id, 0)
-    assert r.status_code == 409 and r.get_json()["error"] == code
-    assert client.get(f"{API}/conversations/{cid}/route").get_json()["revision"] == 0
+    r = _voice(client, token, voice, 0)
+    assert r.status_code == 409 and r.get_json()["error"] == "voice_unavailable"
+    assert client.get(f"{API}/mc/partner-settings").get_json()["revision"] == 0
 
 
-def test_browser_fields_beyond_the_route_id_are_ignored(routed):
+def test_a_voice_whose_model_is_not_offered_here_is_refused_and_shown_off(routed):
     client = routed.owner()
     token = routed.csrf(client)
-    cid = _new_conv(client, token)
-    assert _choose(client, token, cid, SOL, 0, model="anthropic/x", endpoint="http://evil", api_key="k").status_code == 200
-    stored = client.get(f"{API}/conversations/{cid}/route").get_json()
-    assert stored["selected"]["model"] == "gpt-6-sol"
+    view = client.get(f"{API}/mc/partner-settings").get_json()
+    grok = next(o for o in view["voice"]["options"] if o["provider"] == "xai")
+    assert grok["available"] is False and grok["reason"] == "Grok model not set up for MC here"
+    assert _voice(client, token, "xai", 0).status_code == 409
 
 
-def test_a_route_change_needs_csrf_and_someone_elses_conversation_is_not_found(routed):
+def test_browser_fields_beyond_the_voice_are_ignored(routed):
     client = routed.owner()
     token = routed.csrf(client)
+    _map(routed, xai=SOL)
+    assert _voice(client, token, "xai", 0, route_id=CLAUDE, model="anthropic/x", endpoint="http://evil").status_code == 200
     cid = _new_conv(client, token)
-    assert client.post(f"{API}/conversations/{cid}/route", json=keyed(route_id=SOL, revision=0)).status_code in (400, 403)
+    assert client.get(f"{API}/conversations/{cid}/route").get_json()["selected"]["model"] == "gpt-6-sol"
+
+
+def test_a_change_needs_csrf_and_the_route_read_is_owner_scoped(routed):
+    client = routed.owner()
+    assert client.post(f"{API}/mc/partner-settings", json=keyed(voice="openai", revision=0)).status_code in (400, 403)
     assert client.get(f"{API}/conversations/c-000000000000/route").status_code == 404
+    assert client.post(f"{API}/conversations/c-000000000000/route", json=keyed(route_id=SOL, revision=0),
+                       headers=write_headers(routed.csrf(client))).status_code in (404, 405)   # nothing is chosen per conversation
 
 
 def test_the_turn_sends_only_the_route_id_and_keeps_the_runtimes_evidence_apart(routed):
@@ -140,8 +161,8 @@ def test_a_switch_during_a_turn_leaves_that_turn_alone_and_applies_to_the_next(r
     first = threading.Thread(target=lambda: out.update(first=_stream(client, token, note["request_id"]).get_data(as_text=True)))
     first.start()
     assert runtime.waiting.wait(5)
-    revision = other.get(f"{API}/conversations/{cid}/route").get_json()["revision"]
-    assert _choose(other, routed.csrf(other), cid, SOL, revision).status_code == 200
+    _map(routed, xai=SOL)
+    assert _voice(other, routed.csrf(other), "xai", 0).status_code == 200
     runtime.gate.set()
     first.join(10)
     turn_posts = [p for p in runtime.posts if p["url"].endswith("/chat/completions")]
@@ -271,9 +292,9 @@ def _serve(portal, provider, model):
     portal.runtime.script = list(HAPPY) + [nd({"t": "served", "provider": provider, "model": model, "api": "x"})]
 
 
-def _move(client, token, cid, route_id):
-    revision = client.get(f"{API}/conversations/{cid}/route").get_json()["revision"]
-    assert _choose(client, token, cid, route_id, revision).status_code == 200
+def _move(portal, route_id):
+    """The owner's Voice now maps to ``route_id`` (a host mapping): the next turn of every conversation takes it."""
+    _map(portal, openai=route_id)
 
 
 def test_a_move_to_claude_carries_earlier_turns_once_as_history_not_authority(routed, claude_offered):
@@ -282,7 +303,7 @@ def test_a_move_to_claude_carries_earlier_turns_once_as_history_not_authority(ro
     cid = _new_conv(client, token)
     _, sent = _turn(routed, client, token, cid, "Remember the word Cedar.")
     assert "Earlier turns" not in sent and "Remember the word Cedar." in sent
-    _move(client, token, cid, CLAUDE)
+    _move(routed, CLAUDE)
     _serve(routed, "claude-cli", "claude-opus-5")
     _, sent = _turn(routed, client, token, cid, "What was the word?")
     head, _, rest = sent.partition("[End of earlier turns.]")
@@ -297,14 +318,14 @@ def test_openai_gets_no_block_and_a_return_to_claude_carries_only_what_it_missed
     token = routed.csrf(client)
     cid = _new_conv(client, token)
     _turn(routed, client, token, cid, "Word one is Cedar.")
-    _move(client, token, cid, CLAUDE)
+    _move(routed, CLAUDE)
     _serve(routed, "claude-cli", "claude-opus-5")
     _turn(routed, client, token, cid, "Word two is Maple.")
-    _move(client, token, cid, ASTRA)
+    _move(routed, ASTRA)
     _serve(routed, "openai", "gpt-6-astra")
     _, sent = _turn(routed, client, token, cid, "Word three is Oak.")
     assert "Earlier turns" not in sent                                  # its shared transcript already holds Claude's turns
-    _move(client, token, cid, CLAUDE)
+    _move(routed, CLAUDE)
     _serve(routed, "claude-cli", "claude-opus-5")
     _, sent = _turn(routed, client, token, cid, "All the words?")
     head = sent.partition("[End of earlier turns.]")[0]
@@ -315,13 +336,13 @@ def test_a_reply_with_no_receipt_is_still_carried_back_to_claude(routed, claude_
     client = routed.owner()
     token = routed.csrf(client)
     cid = _new_conv(client, token)
-    _move(client, token, cid, CLAUDE)
+    _move(routed, CLAUDE)
     _serve(routed, "claude-cli", "claude-opus-5")
     _turn(routed, client, token, cid, "Word one is Cedar.")
-    _move(client, token, cid, ASTRA)
+    _move(routed, ASTRA)
     routed.runtime.script = list(HAPPY)                                 # OpenAI answers; its record could not be read
     _turn(routed, client, token, cid, "Word two is Maple.")
-    _move(client, token, cid, CLAUDE)
+    _move(routed, CLAUDE)
     _serve(routed, "claude-cli", "claude-opus-5")
     _, sent = _turn(routed, client, token, cid, "All the words?")
     head = sent.partition("[End of earlier turns.]")[0]
@@ -333,7 +354,7 @@ def test_a_turn_served_by_something_other_than_claude_does_not_count_as_claudes(
     token = routed.csrf(client)
     cid = _new_conv(client, token)
     _turn(routed, client, token, cid, "Word one is Cedar.")
-    _move(client, token, cid, CLAUDE)
+    _move(routed, CLAUDE)
     _serve(routed, "openai", "gpt-6-astra")                             # selected Claude, the runtime's record says otherwise
     _turn(routed, client, token, cid, "Word two is Maple.")
     _serve(routed, "claude-cli", "claude-opus-5")
@@ -358,7 +379,7 @@ def test_only_this_conversations_kept_notes_are_carried(routed, claude_offered):
         q("DELETE FROM guild.floor_messages WHERE floor=%s AND text=%s RETURNING id", [floor.floor, "Deleted later: Rowan."])
         return None
     floor._run(delete, write=True)
-    _move(client, token, cid, CLAUDE)
+    _move(routed, CLAUDE)
     _serve(routed, "claude-cli", "claude-opus-5")
     _, sent = _turn(routed, client, token, cid, "Words?")
     head = sent.partition("[End of earlier turns.]")[0]
@@ -372,7 +393,7 @@ def test_when_history_cannot_be_read_the_turn_refuses_and_nothing_is_sent(routed
     token = routed.csrf(client)
     cid = _new_conv(client, token)
     _turn(routed, client, token, cid, "Word one is Cedar.")
-    _move(client, token, cid, CLAUDE)
+    _move(routed, CLAUDE)
 
     def broken(*_):
         def read(*_):
@@ -389,7 +410,7 @@ def test_the_legacy_shared_thread_refuses_a_move_to_claude_rather_than_losing_hi
     token = routed.csrf(client)
     note = _keep(client, token, "first")
     cid = _conversation_of(client, note)
-    _move(client, token, cid, CLAUDE)
+    _move(routed, CLAUDE)
     sent_before = len(routed.runtime.posts)
     second = _keep(client, token, "second")
     body = _stream(client, token, second["request_id"], request_id=uuid.uuid4().hex).get_data(as_text=True)

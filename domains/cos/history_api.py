@@ -98,29 +98,33 @@ def create_blueprint(history: History, *, resolve_owner: Callable, stop_turn=Non
         except OSError:
             return unavailable()
 
-    @bp.route("/ui/history/conversations/<conversation_id>/route", methods=["GET", "POST"])
-    def conversation_route(conversation_id: str):
-        from core.model_routes import RouteRefused
+    @bp.route("/ui/history/partner-settings", methods=["GET", "POST"])
+    def partner_settings():
+        """The shared ⋯ menu for CoS (core.model_routes.menu), the same shape as MC's: the owner's Voice, kept by MiniMoi
+        for every device and chat; the Model follows it. ``conversation`` names whose last answer to describe."""
+        from core.model_routes.menu import VoiceUnavailable, catalogue_or_none, choose, menu_view
+        from core.partner_settings import SettingsConflict
         from domains.cos import model_route
-        if resolve_owner(request) is None:
+        owner = resolve_owner(request)
+        if owner is None:
             return refused(HistoryRefused("identity_required"))
-        if not model_route.enabled():
-            return jsonify({"error": "not_found"}), 404
+        store = model_route.settings(history)
         try:
-            if history.conversation(conversation_id) is None:
-                return jsonify({"error": "not_found"}), 404
+            catalogue = catalogue_or_none()
             if request.method == "GET":
-                return jsonify(model_route.view_for(history, conversation_id))
+                return jsonify(menu_view(catalogue, "cos", store.get(owner),
+                                         model_route.last_turn(history, request.args.get("conversation"))))
             body = request.get_json(silent=True)
-            if not isinstance(body, dict) or type(body.get("revision")) is not int or not isinstance(body.get("route_id"), str):
-                return jsonify({"error": "route_request_invalid"}), 400
-            return jsonify(model_route.choose(history, conversation_id, body["route_id"], body["revision"]))
-        except model_route.RevisionConflict as exc:
-            return jsonify({"error": "route_conflict", "revision": exc.revision}), 409
-        except RouteRefused as exc:
-            return jsonify({"error": exc.code, "message": exc.message}), 409
-        except HistoryRefused as exc:
-            return refused(exc)
+            if not isinstance(body, dict) or type(body.get("revision")) is not int:
+                return jsonify({"error": "settings_request_invalid"}), 400
+            saved = choose(store, owner, catalogue, "cos", body.get("voice"), body["revision"])
+            return jsonify({"result": "voice_selected", **menu_view(catalogue, "cos", saved,
+                            model_route.last_turn(history, body.get("conversation")))})
+        except VoiceUnavailable as exc:
+            return jsonify({"error": "voice_unavailable", "message": exc.message}), 409
+        except SettingsConflict as exc:
+            return jsonify({"error": "settings_changed", "revision": exc.revision,
+                            "message": "The voice changed on another device. Reload to see it."}), 409
         except (OSError, ValueError):
             return unavailable()
 

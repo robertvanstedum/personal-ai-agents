@@ -132,6 +132,7 @@ def host(tmp_path, monkeypatch):
         if route["route_id"] in (ASTRA, SOL):
             route["offered"]["cos"] = "available"
     catalogue["roles"]["cos-conversation"]["route"] = ASTRA
+    catalogue["voice_routes"] = {"cos": {"openai": ASTRA, "xai": SOL}}     # a host mapping: each voice has a model here
     path = tmp_path / "routes.json"
     path.write_text(json.dumps(catalogue))
     monkeypatch.setenv(CATALOGUE_VAR, str(path))
@@ -144,33 +145,40 @@ def test_with_no_catalogue_nothing_changes(tmp_path, monkeypatch):
     assert model_route.for_turn(None, "any") is None and model_route.runtime_model(None) is None
 
 
-def test_the_default_is_a_and_a_choice_applies_to_its_conversation_only(host):
+def _voice(history, voice, owner="robert"):
+    store = model_route.settings(history)
+    return store.set_voice(owner, voice, store.get(owner)["revision"])
+
+
+def test_the_default_is_the_plan_and_the_owners_voice_applies_to_every_chat(host):
     history, cid, _ = host
     other = history.create("Other")["conversation_id"]
-    assert model_route.runtime_model(model_route.for_turn(history, cid)) == "openai/gpt-6-astra"
-    model_route.choose(history, cid, SOL, 0)
-    assert model_route.runtime_model(model_route.for_turn(history, cid)) == "openai/gpt-6-sol"
-    assert model_route.runtime_model(model_route.for_turn(history, other)) == "openai/gpt-6-astra"
+    assert model_route.runtime_model(model_route.for_turn(history, cid, owner="robert")) == "openai/gpt-6-astra"
+    _voice(history, "xai")
+    for chat in (cid, other, history.create("New")["conversation_id"]):
+        assert model_route.runtime_model(model_route.for_turn(history, chat, owner="robert")) == "openai/gpt-6-sol"
+    assert model_route.runtime_model(model_route.for_turn(history, cid, owner="someone-else")) == "openai/gpt-6-astra"
 
 
 def test_a_stale_page_changes_nothing(host):
+    from core.partner_settings import SettingsConflict
     history, cid, _ = host
-    model_route.choose(history, cid, SOL, 0)
-    with pytest.raises(model_route.RevisionConflict):
-        model_route.choose(history, cid, ASTRA, 0)
-    assert model_route.for_turn(history, cid)["route_id"] == SOL
+    _voice(history, "xai")
+    with pytest.raises(SettingsConflict):
+        model_route.settings(history).set_voice("robert", "openai", 0)
+    assert model_route.for_turn(history, cid, owner="robert")["route_id"] == SOL
 
 
-def test_an_unproved_route_cannot_be_chosen_and_a_withdrawn_one_refuses_the_turn(host):
+def test_a_withdrawn_voice_model_falls_back_to_the_plan_and_the_menu_says_so(host):
+    from core.model_routes.menu import menu_view
     history, cid, path = host
-    with pytest.raises(RouteRefused):
-        model_route.choose(history, cid, "plan-openai-low", 0)
-    model_route.choose(history, cid, SOL, 0)
+    _voice(history, "xai")
     catalogue = json.loads(path.read_text())
     next(r for r in catalogue["routes"] if r["route_id"] == SOL)["offered"]["cos"] = "Sign-in expired"
     path.write_text(json.dumps(catalogue))
-    with pytest.raises(RouteRefused, match="Sign-in expired"):
-        model_route.for_turn(history, cid)
+    assert model_route.for_turn(history, cid, owner="robert")["route_id"] == ASTRA      # never a cross pair: Voice shows OpenAI
+    view = menu_view(load_catalogue(path), "cos", model_route.settings(history).get("robert"))
+    assert view["voice"]["selected"] == "openai" and not next(o for o in view["voice"]["options"] if o["provider"] == "xai")["available"]
 
 
 def test_a_broken_catalogue_refuses_the_turn(host):
@@ -184,29 +192,43 @@ def test_a_receipt_keeps_what_was_selected_and_what_was_shown_apart(host):
     history, cid, _ = host
     route = model_route.for_turn(history, cid)
     model_route.record(history, cid, route, None)
-    assert model_route.view_for(history, cid)["last_turn"]["served"] is None
+    assert model_route.last_turn(history, cid)["served"] is None
     model_route.record(history, cid, route, {"provider": "openai", "model": "gpt-6-sol"})
-    assert model_route.view_for(history, cid)["last_turn"]["served_matches"] is False
+    assert model_route.last_turn(history, cid)["served_matches"] is False
     model_route.record(history, cid, route, {"provider": "openai", "model": "gpt-6-astra"})
-    assert model_route.view_for(history, cid)["last_turn"]["served_matches"] is True
+    assert model_route.last_turn(history, cid)["served_matches"] is True
 
 
-def test_the_page_api_shows_and_changes_the_choice_for_the_owner_only(host):
+def test_a_gateway_fallback_reaches_the_turn_receipt_and_the_last_answer_line(host):
+    """#658: the gateway's own receipt (fallback_position > 0) is kept with the turn and shown in plain words."""
+    from core.model_routes.last_answer import line
+    history, cid, path = host
+    route = model_route.for_turn(history, cid)
+    receipt = {"served_provider": "anthropic", "served_model": "anthropic/claude-sonnet-4-6", "fallback_position": 2}
+    served = model_route.with_gateway_fallback({"provider": "openai", "model": "gpt-6-astra"}, receipt)
+    model_route.record(history, cid, route, served)
+    assert model_route.last_turn(history, cid)["served"]["fallback_position"] == 2
+    assert line(json.loads(path.read_text()), model_route.last_turn(history, cid)) == "Last answer: Claude Sonnet 4.6 (fallback)"
+    assert model_route.with_gateway_fallback({"provider": "x"}, {"fallback_position": 0}) == {"provider": "x"}
+
+
+def test_the_page_api_shows_and_changes_the_voice_for_the_owner_only(host):
     history, cid, _ = host
     owner = {"who": "robert"}
     app = Flask(__name__)
     app.register_blueprint(create_blueprint(history, resolve_owner=lambda _: owner["who"]))
     client = app.test_client()
-    url = f"/ui/history/conversations/{cid}/route"
+    url = "/ui/history/partner-settings"
     view = client.get(url).get_json()
-    assert view["selected_route_id"] == ASTRA and view["selectable"] is True
-    assert client.post(url, json={"route_id": SOL, "revision": 0}).get_json()["selected_route_id"] == SOL
-    assert client.post(url, json={"route_id": ASTRA, "revision": 0}).status_code == 409
-    assert client.post(url, json={"route_id": "plan-openai-low", "revision": 1}).status_code == 409
-    assert client.post(url, json={"route_id": 5, "revision": 1}).status_code == 400
-    assert client.get("/ui/history/conversations/nope/route").status_code in (400, 404)
+    assert view["voice"]["selected"] == "openai" and view["model"]["text"] == "GPT-6 Astra · Plan" and view["partner"] == "cos"
+    changed = client.post(url, json={"voice": "xai", "revision": 0}).get_json()
+    assert changed["voice"]["selected"] == "xai" and changed["model"]["text"] == "GPT-6 Sol · Plan"
+    assert client.post(url, json={"voice": "openai", "revision": 0}).status_code == 409          # stale
+    assert client.post(url, json={"voice": "anthropic", "revision": 1}).status_code == 409       # no Claude in Voice
+    assert client.post(url, json={"voice": "xai", "revision": "1"}).status_code == 400
+    assert client.get(url + f"?conversation={cid}").get_json()["last_answer"] == ""
     owner["who"] = None
-    assert client.post(url, json={"route_id": ASTRA, "revision": 1}).status_code in (401, 403)
+    assert client.post(url, json={"voice": "openai", "revision": 1}).status_code in (401, 403)
 
 
 # ── The evidence ──
@@ -281,7 +303,10 @@ def page(monkeypatch, tmp_path):
     path = tmp_path / "routes.json"
     path.write_text(json.dumps(catalogue))
     monkeypatch.setenv(CATALOGUE_VAR, str(path))
+    catalogue["voice_routes"] = {"cos": {"openai": ASTRA, "xai": SOL}}
+    path.write_text(json.dumps(catalogue))
     cos = _load(monkeypatch, tmp_path, history_on=True)
+    monkeypatch.setattr(model_route, "_request_owner", lambda: "robert")
     seen = []
 
     def turn(text, **kw):
@@ -292,26 +317,23 @@ def page(monkeypatch, tmp_path):
     sys.modules.pop("domains.cos.chief_of_staff", None)
 
 
-def test_a_page_turn_takes_its_conversations_model_and_the_next_turn_on_the_thread_does_not_inherit_it(page):
+def test_a_page_turn_takes_the_owners_voice_model_and_the_next_turn_on_the_thread_does_not_inherit_it(page):
     cos, seen, _ = page
     cid = cos._history.ensure_default()["conversation_id"]
-    model_route.choose(cos._history, cid, SOL, 0)
+    _voice(cos._history, "xai")
     payload, status = cos._ui_turn({"text": "hello", "request_id": "r" * 32, "conversation_id": cid})
     assert status == 200 and seen == ["openai/gpt-6-sol"]
     assert openclaw_backend.turn_model.get() is None                    # what a Telegram or MC-lane turn would see next
-    assert model_route.view_for(cos._history, cid)["last_turn"]["route_id"] == SOL
-    assert model_route.view_for(cos._history, cid)["last_turn"]["served"] is None
+    assert model_route.last_turn(cos._history, cid)["route_id"] == SOL
+    assert model_route.last_turn(cos._history, cid)["served"] is None
 
 
-def test_a_page_turn_on_a_withdrawn_route_sends_nothing(page):
+def test_a_page_turn_with_a_broken_catalogue_sends_nothing(page):
     cos, seen, path = page
     cid = cos._history.ensure_default()["conversation_id"]
-    model_route.choose(cos._history, cid, SOL, 0)
-    catalogue = json.loads(path.read_text())
-    next(r for r in catalogue["routes"] if r["route_id"] == SOL)["offered"]["cos"] = "Sign-in expired"
-    path.write_text(json.dumps(catalogue))
+    path.write_text("{ not json")
     payload, status = cos._ui_turn({"text": "hello", "request_id": "s" * 32, "conversation_id": cid})
-    assert status == 400 and "Sign-in expired" in payload["reply"] and seen == []
+    assert status == 400 and "could not be read" in payload["reply"] and seen == []
     assert openclaw_backend.turn_model.get() is None
 
 
@@ -320,7 +342,17 @@ def test_a_plan_turn_reports_the_runtimes_record_at_once_rather_than_waiting_for
     waits = []
     monkeypatch.setattr(cos._routing_receipts, "wait_for", lambda *a, **k: waits.append(k) or None)
     monkeypatch.setattr(cos, "_bindings", type("B", (), {"served_for_turn": staticmethod(lambda t: {"provider": "openai", "model": "gpt-6-astra"})})())
-    assert cos._get_routing_receipt("t")["served_model"] == "gpt-6-astra" and waits == []
+    assert cos._get_routing_receipt("t")["served_model"] == "gpt-6-astra"
+    assert all(k.get("timeout_seconds") == 0 for k in waits)          # only a peek for a gateway fallback (#658), never a wait
+
+
+def test_a_gateway_receipt_with_a_fallback_wins_over_the_runtimes_record(page, monkeypatch):
+    cos, _, _ = page
+    receipt = {"receipt_id": "t", "served_provider": "anthropic", "served_model": "anthropic/claude-opus-5", "fallback_position": 1}
+    monkeypatch.setattr(cos._routing_receipts, "wait_for", lambda *a, **k: dict(receipt))
+    monkeypatch.setattr(cos, "_bindings", type("B", (), {"served_for_turn": staticmethod(lambda t: {"provider": "xai", "model": "grok"})})())
+    assert cos._get_routing_receipt("t")["fallback_position"] == 1
+    assert cos._turn_evidence("t")["model"] == "anthropic/claude-opus-5" and cos._turn_evidence("t")["fallback_position"] == 1
 
 
 def test_evidence_that_lands_during_the_wait_is_still_found(page, monkeypatch):
@@ -413,20 +445,12 @@ def test_the_pickers_write_needs_the_portals_csrf_and_is_forwarded_signed(monkey
     with client.session_transaction() as sess:
         sess["user"] = {"username": "robert", "tier": "owner", "display_name": "Robert", "auth_id": 2}
         sess[portal_app.COS_CSRF_SESSION_KEY] = "w" * 43
-    path = "/app/cos/ui/history/conversations/cosc-abc/route"
-    body = {"route_id": SOL, "revision": 0}
+    path = "/app/cos/ui/history/partner-settings"
+    body = {"voice": "xai", "revision": 0}
     assert client.post(path, json=body).status_code == 403 and forwarded == []
     good = {"X-CSRF-Token": "w" * 43, "Origin": cfg.BASE_URL.rstrip("/"), "Sec-Fetch-Site": "same-origin"}
     assert client.post(path, json=body, headers=good).status_code == 200
     assert forwarded[0][1]["verified_cos_voice_write"] is True
-
-
-# ── The page script, in a fake browser ──
-
-@pytest.mark.skipif(not shutil.which("node"), reason="needs node")
-def test_the_picker_script():
-    run = subprocess.run(["node", str(ROOT / "tests/cos/cos_route_picker.test.cjs")], capture_output=True, text=True, timeout=60)
-    assert run.returncode == 0, run.stdout + run.stderr
 
 
 # ── Plan failover, Robert's decision of 6 Nov 2026: the seven rules through the real adapter and binding store ──
@@ -646,14 +670,14 @@ def test_rule_5_the_choice_stays_the_receipt_says_api_and_the_next_turn_tries_th
     plain = cos._process_confer_turn
     cos._process_confer_turn = switch
     assert cos._ui_turn({"text": "hello", "request_id": "r" * 32, "conversation_id": cid})[1] == 200
-    shown = model_route.view_for(cos._history, cid)
-    assert shown["last_turn"]["route_id"] == "api-openai-strong" and shown["last_turn"]["billing_label"] == "API"
-    assert shown["last_turn"]["switched_from"] == ASTRA and shown["selected_route_id"] == ASTRA and shown["revision"] == 0
+    shown = model_route.last_turn(cos._history, cid)
+    assert shown["route_id"] == "api-openai-strong" and shown["billing_label"] == "API" and shown["switched_from"] == ASTRA
+    assert model_route.settings(cos._history).get("robert")["revision"] == 0          # the owner's choice is untouched
     assert openclaw_backend.turn_route.get() is None
     cos._process_confer_turn = plain
     assert cos._ui_turn({"text": "again", "request_id": "s" * 32, "conversation_id": cid})[1] == 200
     assert seen == ["openai/gpt-6-astra", "openai/gpt-6-astra"]
-    assert model_route.view_for(cos._history, cid)["last_turn"]["route_id"] == ASTRA
+    assert model_route.last_turn(cos._history, cid)["route_id"] == ASTRA
 
 
 def test_rule_6_no_declared_target_means_no_switch_and_it_says_so(failover):

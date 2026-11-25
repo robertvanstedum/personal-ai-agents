@@ -108,8 +108,11 @@ def _memo_duration_guard() -> DurationGuard:
     )
 
 
+STALE_PROVIDER = "Voice changed on another device. Reload to use it."
+
+
 def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_production, local_owner=None, consult_ledger=None,
-                               owner=None, admit=None, page_responses=None):
+                               owner=None, admit=None, page_responses=None, saved_provider=None):
     """
     get_persona: Callable[[str], dict | None] -- domain-owned allow-list.
         Returns {"name", "prompt_txt", "scenes": {key: text}, "voices":
@@ -136,6 +139,9 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         is then called as get_persona(name, actions=...): True for such a provider, else False, and a persona that still
         carries tools for a provider it does not name is refused (no action tool where the page cannot name the owner).
         None: German/Portuguese as before.
+    saved_provider: Callable[[id], str | None] -- the owner's Voice kept by MiniMoi for this partner (#659: one choice for
+        every device). Given and saved, the session is minted on it; a page asking for another provider (a stale page
+        after a change on another device) is refused with 409 and nothing is minted. None: as before.
     """
     bp = Blueprint(f"realtime_voice_bootstrap_{domain}", __name__)
 
@@ -229,6 +235,12 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         production = is_production()
         dev_override = request.args.get("provider") if not production else None
 
+        saved = saved_provider(user_id) if saved_provider is not None else None
+        if saved is not None:
+            if explicit_provider is not None and explicit_provider != saved:
+                _log_outcome(domain, user_id, explicit_provider, None, "stale_provider")
+                return jsonify({"ok": False, "error": STALE_PROVIDER, "provider": saved}), 409
+            explicit_provider, dev_override = saved, None
         try:
             provider = rv_config.resolve_provider(
                 explicit=explicit_provider,

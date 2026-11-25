@@ -51,9 +51,10 @@ def test_no_folder_writes_nothing(monkeypatch):
     assert call_record_folder(_Store(None, path=None)) is None
 
 
-def test_realtime_does_not_admit_the_direct_path():
-    assert voice_path({PATH_ENV: "realtime"}) == "realtime"
-    assert may_start({PATH_ENV: "realtime"}) is False
+def test_realtime_is_the_direct_path_now():
+    """#659 (Grok review 1): "realtime" maps to "direct" inside voice_path, so may_start admits it."""
+    assert voice_path({PATH_ENV: "realtime"}) == "direct"
+    assert may_start({PATH_ENV: "realtime"}) is True
     assert may_start({}) is False
 
 

@@ -81,10 +81,14 @@ function page({ caps = CAPS, path = '/ui/confer', managed = true, routes = {}, s
   for (const id of ids) node(id);
   const chat = fdoc.createElement('div');
   chat.scrollTop = 0; chat.scrollHeight = 100;
+  // The shared ⋯ menu's Voice (#661), holding the owner's server-kept choice: present when a scenario names one (`saved`);
+  // without it the page builds its own select, as a page without the menu would.
+  let shared = null;
+  if (saved) { shared = fdoc.createElement('select'); shared.value = saved; shared.dataset ??= {}; }
   const document = { body: { dataset: {} }, getElementById: (id) => (ids.includes(id) ? node(id) : null), createElement: fdoc.createElement,
-    createTextNode: fdoc.createTextNode, querySelector: () => ({ content: 'csrf-synthetic' }),
+    createTextNode: fdoc.createTextNode, querySelector: (s) => (s === '[data-partner-voice]' ? shared : { content: 'csrf-synthetic' }),
     addEventListener: (k, fn) => (docEvents[k] ||= []).push(fn), dispatch: (k, e) => (docEvents[k] || []).map((fn) => fn(e)) };
-  const store = new Map(saved ? [['minimoi.cos.voice.provider', saved]] : []);
+  const store = new Map();
   const window = { addEventListener: (k, fn) => { winEvents[k] = fn; },
     setTimeout: (fn, ms) => { timers.set(++serial, { fn, due: now + ms }); return serial; }, clearTimeout: (id) => timers.delete(id),
     setInterval: (fn, ms) => { timers.set(++serial, { fn, due: now + ms, every: ms }); return serial; }, clearInterval: (id) => timers.delete(id),
@@ -284,16 +288,13 @@ await scenario('admitted: one Voice button; the mode select and running transcri
 });
 // Adapted for v3 (confirm by voice; coordinator addition 1): both providers confirm by voice, so Grok is no longer labelled
 // "acts only through Check", before or during.
-await scenario('admitted: a provider the card names is offered, with no Check-only label, before and during', {
+await scenario('admitted: the shared menu\'s Voice (the owner\'s server-kept choice) starts the call, with no Check-only label', {
   caps: { ...CAPS, unvoiced: {} }, saved: 'xai' }, async (p) => {
-  const select = p.nodes('voice-provider').querySelector('[data-voice-provider]');
-  assert.deepEqual(select.elements.map((o) => o.textContent), ['OpenAI', 'Grok']);
-  assert.equal(select.value, 'xai');                                                // remembered under her own key
+  assert.equal(p.nodes('voice-provider').querySelector('[data-voice-provider]'), null);   // no second select: the menu's is the one
   await p.voice();
   assert.equal(p.c.args.provider, 'xai');
   assert.ok(!/acts only/.test(textOf(p.bar('[data-voice-notice]'))));            // no Check-only notice on Grok now
-  select.value = 'openai'; select.dispatch('change');
-  assert.equal(p.store.get('minimoi.cos.voice.provider'), 'openai');
+  assert.equal(p.store.size, 0);                                                    // nothing kept in the browser (#659)
 });
 
 // ── item 2: the live bar ────────────────────────────────────────────────────────────────────────────────────────────
