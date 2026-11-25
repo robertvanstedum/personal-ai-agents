@@ -60,6 +60,7 @@ OUTSIDE_WINDOW = "outside_window"
 OK, DISK_LOW, BUSY, EMBEDDER_UNAVAILABLE, PIN_MISMATCH, INCOMPATIBLE = (
     "ok", "disk_low", "index_busy", "embedder_unavailable", "pin_mismatch", "rebuild_needed")
 CAREER_MISMATCH = "career_mismatch"        # filtered vs unfiltered, or another filter digest: rebuild, never patch
+BUDGET_SPENT = "budget_spent"              # ``update(budget_s=)`` stopped between records: committed, the next run resumes (#660)
 # Held reasons that a code change (not a new record edition) can lift: never skipped as "unchanged".
 RECHECK_HELD = frozenset({policy.UNKNOWN_PROVIDER, policy.AWAITING_REPROCESS})
 
@@ -244,7 +245,10 @@ class _Run:
             reuse, vectors = {}, {}
             embedder_name, embedder_version = KEYWORD_ONLY_EMBEDDER
         else:
-            reuse = store.old_vectors(self.con, rid) or (store.old_vectors(self.donor, rid) if self.donor is not None else {})
+            # The donor lends what this index lacks; this index's own vectors win (#660: MC's index borrows the full index's).
+            kept = {c.text_hash for c in chunks}
+            reuse = {**(store.old_vectors(self.donor, rid, kept) if self.donor is not None else {}),
+                     **store.old_vectors(self.con, rid)}
             todo = [c for c in chunks if c.text_hash not in reuse]
             fresh = self.embedder.embed_documents([c.text for c in todo], chunker.EMBED_MAX_CHARS) if todo else []
             vectors = {c.text_hash: sqlite_vec.serialize_float32(v) for c, v in zip(todo, fresh)}
@@ -288,8 +292,9 @@ class _Run:
 
 
 def _sync(con, shelf_root: Path, embedder: Embedder | None, ident: Identity | None, now, only: Iterable[str] | None,
-          limit: int | None, keyword_only: bool = False, donor=None, career=None) -> dict:
+          limit: int | None, keyword_only: bool = False, donor=None, career=None, budget_s: float | None = None) -> dict:
     started = time.monotonic()
+    stop_at = None if budget_s is None else started + max(0.0, float(budget_s))
     run = _Run(con, shelf_root, embedder, ident, now, keyword_only, donor, career)
     entries = shelf_entries(shelf_root)
     if only is not None:
@@ -300,6 +305,9 @@ def _sync(con, shelf_root: Path, embedder: Embedder | None, ident: Identity | No
     try:
         for rid, rel, path in entries:
             batch_window.remaining()
+            if stop_at is not None and time.monotonic() >= stop_at:
+                con.commit()
+                return run.result(BUDGET_SPENT, started)
             run.record(rid, rel, path)
     except batch_window.BatchDeadline as exc:
         con.commit()
@@ -338,10 +346,14 @@ def _keyword_meta(con, now, career=None) -> None:
 
 def update(shelf_root: str | Path, embedder: Embedder | None, *, index_path: str | Path | None = None,
            min_free_bytes: int | None = fsio.DEFAULT_MIN_FREE_BYTES, now: Callable[[], datetime] | None = None,
-           only: Iterable[str] | None = None, limit: int | None = None, keyword_only: bool = False, career=None) -> dict:
+           only: Iterable[str] | None = None, limit: int | None = None, keyword_only: bool = False, career=None,
+           budget_s: float | None = None, donor_path: str | Path | None = None) -> dict:
     """Bring the index up to date with the shelf (creating it if missing). Returns counts and a result code.
     ``keyword_only``: no embedder (``None``), no vectors; the index must be (or is created) keyword-only.
-    ``career``: a ``career_filter.CareerFilter``; the index must be (or is created) filtered with exactly it."""
+    ``career``: a ``career_filter.CareerFilter``; the index must be (or is created) filtered with exactly it.
+    ``budget_s``: stop between records once this many seconds are spent (``budget_spent``; the next run resumes).
+    ``donor_path``: another vector index, opened read-only, that lends the vectors of chunk text it already embedded for the same
+    record, only when made with this embedder and chunker (MC's index borrows the full index's: #660)."""
     shelf_root = Path(shelf_root)
     index_path = Path(index_path) if index_path else default_index_path(shelf_root)
     now = now or (lambda: datetime.now(timezone.utc))
@@ -372,7 +384,12 @@ def update(shelf_root: str | Path, embedder: Embedder | None, *, index_path: str
                     store.set_meta(con, embedder=ident.name, embedder_digest=ident.digest, dims=ident.dims,
                                    policy_version=policy.POLICY_VERSION, chunker_version=chunker.CHUNKER_VERSION,
                                    built_at=_utc(now()), **career_meta(career))
-                return _sync(con, shelf_root, embedder, ident, now, only, limit, keyword_only, career=career)
+                donor = _donor(Path(donor_path), ident) if donor_path is not None and not keyword_only else None
+                try:
+                    return _sync(con, shelf_root, embedder, ident, now, only, limit, keyword_only, donor, career, budget_s)
+                finally:
+                    if donor is not None:
+                        donor.close()
             finally:
                 con.close()
     except IndexBusy:
@@ -457,4 +474,5 @@ def rebuild(shelf_root: str | Path, embedder: Embedder | None, *, index_path: st
 
 __all__ = ["update", "rebuild", "default_index_path", "index_lock", "check_compatible", "check_career", "career_meta",
            "shelf_entries", "OK", "DISK_LOW", "BUSY", "EMBEDDER_UNAVAILABLE", "PIN_MISMATCH", "INCOMPATIBLE", "CAREER_MISMATCH",
+           "BUDGET_SPENT",
            "RECHECK_HELD"]

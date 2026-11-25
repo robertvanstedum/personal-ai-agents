@@ -1,0 +1,92 @@
+name: Vault embedder image
+
+# The Vault's pinned embedder (#660, docker/vault-embedder/Dockerfile): Ollama with nomic-embed-text@0a109f422b47, the model baked in
+# and its digest checked at build. Production runs it pinned by digest (MINIMOI_VAULT_EMBEDDER_DIGEST in /opt/minimoi/.env), so this
+# builds and pushes that one image for a commit already on main and prints the digest. It never touches the host and restarts
+# nothing: a new embedder image is a deliberate .env change under the owner's go. By hand only (workflow_dispatch); no release runs it.
+#
+# The image goes in the existing minimoi/cos-scheduler repository under a vault-embedder- tag, like the rooms-worker-, agent-a- and
+# model-gateway- images, so it needs no new repository or permission.
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Full 40-character commit on main to build'
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  REPOSITORY: minimoi/cos-scheduler
+  REGISTRY: 332704997792.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: vault-embedder-image-${{ inputs.commit }}
+      cancel-in-progress: false
+    steps:
+      - name: The commit is a full hash
+        env:
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "commit must be a full 40-character hash"; exit 1; }
+          echo "TAG=vault-embedder-${COMMIT::7}" >> "$GITHUB_ENV"
+          echo "COMMIT=$COMMIT" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.COMMIT }}
+          fetch-depth: 0
+
+      - name: The commit is on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$COMMIT" origin/main || { echo "commit is not on main"; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build the embedder image (fails unless the model digest is the pinned one)
+        run: |
+          docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$COMMIT" \
+            -t vault-embedder-local docker/vault-embedder
+
+      - name: The image serves the pinned model, read-only, with no network
+        run: |
+          docker run -d --name embedder --network none --read-only --tmpfs /tmp:size=64m --cap-drop ALL \
+            --security-opt no-new-privileges vault-embedder-local
+          for _ in $(seq 1 60); do docker exec embedder ollama list >/dev/null 2>&1 && break; sleep 1; done
+          docker exec embedder ollama list | grep -Eq '^nomic-embed-text:latest[[:space:]]+0a109f422b47'
+          [[ "$(docker exec embedder id -u)" == "10001" ]] || { echo "the embedder must not run as root"; exit 1; }
+          docker rm -f embedder
+
+      - name: Push the tested image
+        id: pushed
+        run: |
+          docker tag vault-embedder-local "$REGISTRY/$REPOSITORY:$TAG"
+          docker push "$REGISTRY/$REPOSITORY:$TAG" | tee /tmp/push.out
+          digest=$(sed -n 's/.*digest: \(sha256:[a-f0-9]\{64\}\).*/\1/p' /tmp/push.out | tail -1)
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "no digest for the pushed image"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: The digest pulls, and print it
+        env:
+          DIGEST: ${{ steps.pushed.outputs.digest }}
+        run: |
+          image="$REGISTRY/$REPOSITORY@$DIGEST"
+          docker pull --platform linux/amd64 "$image"
+          revision=$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image")
+          [[ "$revision" == "$COMMIT" ]] || { echo "the digest was not built from this commit"; exit 1; }
+          echo "MINIMOI_VAULT_EMBEDDER_DIGEST=$DIGEST"
+          echo "\`MINIMOI_VAULT_EMBEDDER_DIGEST=$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"

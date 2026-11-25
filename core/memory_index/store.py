@@ -129,11 +129,12 @@ def delete_record_chunks(con: sqlite3.Connection, record_id: str, *, vectors: bo
     return len(ids)
 
 
-def old_vectors(con: sqlite3.Connection, record_id: str) -> dict[str, bytes]:
-    """text_hash -> stored vector for a record's current chunks (reused when only line numbers moved)."""
+def old_vectors(con: sqlite3.Connection, record_id: str, hashes=None) -> dict[str, bytes]:
+    """text_hash -> stored vector for a record's current chunks (reused when only line numbers moved). ``hashes``: only these
+    texts (a donor lends MC's index the vectors of the chunks the career filter kept, never the others: #660)."""
     rows = con.execute("SELECT c.text_hash, v.embedding FROM chunks c JOIN vec v ON v.id = c.id WHERE c.record_id=?",
                        (record_id,)).fetchall()
-    return {h: e for h, e in rows}
+    return {h: e for h, e in rows if hashes is None or h in hashes}
 
 
 __all__ = ["connect", "is_keyword_only", "get_meta", "set_meta", "delete_record_chunks", "old_vectors", "IndexMissing",

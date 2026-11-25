@@ -27,17 +27,23 @@ class NoModel:
         raise RuntimeError("dev_keyword_only_required")
 
 
+def embedder_factory():
+    """#660: the pinned embedder when ``MOI_OLLAMA_URL`` names it (the Ask service's default factory reads it); else ``NoModel``:
+    keyword-only, exactly as before."""
+    return None if os.environ.get("MOI_OLLAMA_URL") else NoModel
+
+
 def app_for(data: Path, profile: str | None = None):
     if profile == "mc":
         app = create_app(registry_path=data / "memory-ask/agents-mc.json", shelf_root=data / "memory",
                          index_path=data / "memory-index/memory-mc.sqlite", log_path=data / "memory-ask/queries-mc.jsonl",
-                         embedder_factory=NoModel, require_profile="mc")
+                         embedder_factory=embedder_factory(), require_profile="mc")
     elif profile:
         raise SystemExit("unknown DEV_VAULT_PROFILE")
     else:
         app = create_app(registry_path=data / "memory-ask/agents.json", shelf_root=data / "memory",
                          index_path=data / "memory-index/memory.sqlite", log_path=data / "memory-ask/queries.jsonl",
-                         embedder_factory=NoModel)
+                         embedder_factory=embedder_factory())
 
     @app.before_request
     def require_fresh_feed():
