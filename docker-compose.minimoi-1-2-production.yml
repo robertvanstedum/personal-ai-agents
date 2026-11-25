@@ -216,6 +216,9 @@ services:
       # MC's private working documents (#599), under /data/store/private-work-artifacts. A seat still needs
       # work_artifacts in bindings.json, and MC's policy its work_read_v1/work_save_v1 rules.
       PARTNERSHIP_WORK_ARTIFACTS: "1"
+      # CoS's private professional-initiative store (#680), under /data/store/professional-initiatives. CoS files
+      # and MC reads only with professional_initiatives in its bindings.json row.
+      PARTNERSHIP_PROFESSIONAL_INITIATIVES: "1"
       PYTHONPATH: /app
     volumes:
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/partnership", target: /data, bind: {create_host_path: false}}
