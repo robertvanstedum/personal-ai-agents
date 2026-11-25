@@ -645,7 +645,7 @@ class TurnBinder:
                                      session_user=session_user, lifetime_s=self.lifetime_s,
                                      owner_request_id=binding.get("owner_request_id"),
                                      source_ref=binding.get("history") if origin == "owner" else None,
-                                     owner_words=binding.get("owner_words") if origin == "service:telegram" else None,
+                                     owner_words=binding.get("owner_words") if origin in ("service:telegram", "meeting") else None,
                                      read_only=binding.get("read_only") is True and meeting_scope is None, **args)
         except NotBound:
             return None

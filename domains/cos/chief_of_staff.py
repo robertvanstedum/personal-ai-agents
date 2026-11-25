@@ -1004,7 +1004,7 @@ def _task_tools():
     from services.partnership_tasks.client import TaskClient, read_token
     return CosTaskTools(platform=TaskClient(url, lambda: read_token(platform_file)),
                         cos=TaskClient(url, lambda: read_token(cos_file)), history=_history,
-                        environment=environment, charter=_ea_charter())
+                        environment=environment, charter=_ea_charter(), bindings=_bindings, files=_cos_files)
 
 
 def _mc_send():

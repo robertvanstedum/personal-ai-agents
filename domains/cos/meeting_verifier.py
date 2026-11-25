@@ -80,7 +80,10 @@ class RecordsMeetingVerifier:
                             "coverage": snap.get("coverage")},
                 "trigger_text": trigger["text"], "claim_id": claim_id, "room_generation": snap["generation"],
                 "trigger_seq": snap.get("trigger_seq"),
+                # owner_words: the verified trigger text, kept with the binding so an owner-private meeting turn can
+                # cite Robert's words (Lane G: initiatives filed from Guildhall).
                 "binding": {"origin": "meeting", "principal": self.principal, "audience": room, "claim_id": claim_id,
+                            "owner_words": trigger["text"],
                             "room_generation": snap["generation"], "trigger_seq": snap.get("trigger_seq")}}
 
     def still_admitted(self, turn_id: str, claim_id: str, generation: str) -> bool:

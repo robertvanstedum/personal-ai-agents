@@ -5,7 +5,7 @@ from services.partnership_tasks.client import command
 
 
 def prepare_source(*, source, words, environment, scope):
-    if source.get('store') not in ('mc-floor', 'cos-history') or not isinstance(words, str) or not words.strip():
+    if source.get('store') not in ('mc-floor', 'cos-history', 'cos-meeting-owner') or not isinstance(words, str) or not words.strip():
         raise ValueError('kept owner source required')
     key = digest([source, words])[7:39]
     sid = 'SE-work-' + key
