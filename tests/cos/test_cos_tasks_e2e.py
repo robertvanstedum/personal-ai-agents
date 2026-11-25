@@ -143,7 +143,9 @@ def test_bad_or_identity_bearing_arguments_are_refused(rig, args, code):
     assert call(client, args)["code"] == code
 
 
-def test_a_meeting_turn_may_read_status_but_never_propose(rig):
+def test_a_meeting_turn_proposes_only_from_robert_s_verified_words(rig):
+    # Lane G: an owner-private meeting turn may propose, citing the verified trigger text the binding store keeps.
+    # A meeting binding without those words cannot.
     tasks, history, bindings, client = rig
     assert TurnBinder(bindings).begin(turn_id="m1", session_user=USER, agent_entry="cos-meeting", conversation_id="r",
                                       meeting_scope="owner_private",
@@ -153,7 +155,7 @@ def test_a_meeting_turn_may_read_status_but_never_propose(rig):
     h = {"Authorization": "Bearer " + TOKEN, "X-CoS-Session": "agent:cos-meeting:openai-user:" + USER,
          "X-CoS-Agent": "cos-meeting", "X-CoS-Run": RUN.format(7), "X-CoS-Tool-Call": "m-1", "X-CoS-Instance": "a" * 32}
     out = client.post("/internal/cos/v1/tools/cos_tasks", json={"arguments": PROPOSAL}, headers=h).json
-    assert out["code"] == "scope_read_only"
+    assert out["code"] == "propose_needs_an_owner_conversation_turn"   # no verified words here: refused
     h["X-CoS-Tool-Call"] = "m-2"
     out = client.post("/internal/cos/v1/tools/cos_tasks", json={"arguments": {"operation": "status",
                                                                                "task_id": "TK-none-0001"}}, headers=h).json

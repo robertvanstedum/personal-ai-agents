@@ -19,6 +19,7 @@ binding's turn. Neither ever comes from tool arguments (S3).
 from __future__ import annotations
 
 import os
+import secrets
 from core.canonical_json import digest
 from services.partnership_tasks.client import TaskServiceRefused, TaskServiceUnavailable, command
 
@@ -62,8 +63,20 @@ class CosTaskTools:
                  bindings=None, files=None):
         self.platform, self.cos, self.history = platform, cos, history
         self.bindings, self.files = bindings, files            # owner words of a meeting turn; the CoS inbox
+        self.meeting_proposals = {}                            # room -> the proposal its running turn made (Lane G)
         self.environment, self.scope = environment, scope
         self.charter, self.sleep = charter, sleep                # the EA's approved charter, or None: helpers off
+
+    def room_proposal(self, room):
+        """The card Records publishes for the proposal this meeting turn made, or None. The words are the stored task
+        terms and the digest is the one the owner's confirmation must name (never recomputed at approval)."""
+        made = self.meeting_proposals.pop(room, None)
+        if made is None:
+            return None
+        task = made["proposed"]["task"]
+        return {"code": "P-" + "".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(4)),
+                "source_ref": made["interpretation_id"], "payload_digest": digest(made["proposed"]),
+                "summary": f"Track: {task['outcome']}\nDone when: {task['done_when']}\nLead: {task['lead'].upper()}"}
 
     def serve(self, binding, op: str, args: dict) -> dict:
         if op not in ARGS:
@@ -77,7 +90,7 @@ class CosTaskTools:
         if op.startswith("initiative_"):
             return self._initiative(binding, op, args)
         if op == "propose":
-            if binding.scope != "owner":
+            if binding.scope not in ("owner", "meeting"):
                 return _refuse(403, "scope_read_only")
             return self._propose(binding, args)
         if op in ("ask_helper", "helper_result", "helper_review"):
@@ -245,8 +258,12 @@ class CosTaskTools:
             return {"status": 503, "body": {"error": "task_service_unconfirmed", "answer": exc.answer}}
 
     def _propose(self, binding, args):
-        ref = binding.source_ref
-        if binding.origin != "owner" or not isinstance(ref, dict):
+        # Lane G: an owner-private Guildhall turn may propose too. Its source is the verified trigger text the binding
+        # store kept (store cos-meeting-owner); its card is posted in the room and Robert answers "yes P-XXXX" there.
+        source, refused = self._owner_source(binding)
+        if refused:
+            if refused["body"]["error"] == "owner_words_not_found":
+                return refused
             return _refuse(403, "propose_needs_an_owner_conversation_turn")
         for key in ("outcome", "done_when"):
             if not isinstance(args[key], str) or not args[key].strip() or len(args[key]) > 500:
@@ -254,15 +271,12 @@ class CosTaskTools:
         lead, holder = args.get("lead", DEFAULT_SEAT), args.get("holder", DEFAULT_SEAT)
         if lead not in EXECUTOR_SEATS or holder not in EXECUTOR_SEATS:
             return _refuse(422, "lead_and_holder_must_be", seats=sorted(EXECUTOR_SEATS))
-        turn = self.history.turn(ref["conversation_id"], ref["turn_id"])
-        if turn is None or not isinstance(turn.get("user_text"), str) or not turn["user_text"].strip():
-            return _refuse(409, "owner_words_not_found")
-        key = digest(f"{self.environment}\0{ref['conversation_id']}\0{ref['turn_id']}")[7:47]
+        (src, words) = source
+        key = digest(f"{self.environment}\0{src['store']}\0{src['id']}")[7:47] if src["store"] != "cos-history" else \
+            digest(f"{self.environment}\0{src['id'].rpartition(':')[0]}\0{src['id'].rpartition(':')[2]}")[7:47]
         sid, iid = "SE-cos-" + key[:32], "IN-cos-" + key[:32]
         source_cmd = command("source_event.record", "source_event", sid,
-                             {"source": {"store": "cos-history", "id": f"{ref['conversation_id']}:{ref['turn_id']}",
-                                         "position": int(turn.get("seq") or 1)},
-                              "content": turn["user_text"][:8000], "correction_of": None},
+                             {"source": src, "content": words[:8000], "correction_of": None},
                              command_id="cmd-cos-src-" + key, environment=self.environment, scope=self.scope,
                              session_id=binding.turn_id)
         proposed = {"outcome": args["outcome"].strip(), "scope": self.scope, "recipients": ["principal"],
@@ -283,6 +297,14 @@ class CosTaskTools:
         except TaskServiceUnavailable as exc:
             return {"status": 503, "body": {"error": "task_service_unconfirmed", "answer": exc.answer}}
         if out.get("outcome") == "accepted":
+            if binding.scope == "meeting":
+                self.meeting_proposals[binding.audience] = {"interpretation_id": iid, "proposed": proposed}
+                return {"status": 200, "body": {
+                    "schema": SCHEMA, "interpretation_id": iid, "state": "awaiting_robert",
+                    "replayed": bool(out.get("replayed")),
+                    "message": "Proposed. Nothing starts until Robert approves it. The platform posts its card in this "
+                               "meeting with a code; tell him in one line he can approve it here with \"yes\" and the "
+                               "code, and never repeat the card yourself."}}
             return {"status": 200, "body": {
                 "schema": SCHEMA, "interpretation_id": iid, "state": "awaiting_robert",
                 "replayed": bool(out.get("replayed")),

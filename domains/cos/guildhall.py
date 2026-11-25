@@ -47,7 +47,7 @@ def admit_environment(environ, *, verifier):
 
 
 def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verify_members=None, stop_turn=None,
-            verifier=None):
+            verifier=None, room_proposal=None):
     """``verify_members(turn)`` returns the room's members from Records, or None; never the request body's.
     ``verifier`` (F2 step 4, ``meeting_verifier.RecordsMeetingVerifier``) supersedes it: the turn runs only when
     Records admits it, with the owner's text from the snapshot, the meeting binding and a once-a-second watch."""
@@ -113,6 +113,7 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
         context=(facts['context'] if facts is not None
                  else {k:value.get(k) for k in ('room','brief','transcript','coverage')})
         prompt=json.dumps(context,ensure_ascii=False)
+        binding=None
         try:
             if value['trigger']['text'].strip() == '/new':
                 from types import SimpleNamespace
@@ -131,12 +132,17 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
                                            (lambda turn,reason:stop_turn(turn,reason)) if stop_turn
                                            else (lambda turn,reason:None))
                             if facts is not None and binding is not None else (lambda:None))
+                if room_proposal is not None:room_proposal(value['room'])   # drop any card left by an earlier failed turn
                 try:
                     result=run_turn(text,meeting_context=prompt,channel='guildhall',conversation_id='guildhall:'+value['room']+':'+value['id'],request_id=value['id'],turn_id=value['id'],meeting_scope=scope,binding=binding)
                 finally:
                     stop_watch()
             answer={'text':result.reply,'turn_id':value['id'],'room':value['room']}
             if not isinstance(answer['text'],str) or not answer['text'].strip():raise ValueError('Empty reply')
+            # Lane G: a proposal this owner-private turn made goes to Records as a platform card (the stored task terms,
+            # with the digest Robert's room "yes" must match). Kept with the result, so a replay returns the same card.
+            card=room_proposal(value['room']) if room_proposal is not None and facts is not None and binding is not None else None
+            if card is not None:answer['room_proposal']=card
             with db() as c:c.execute('UPDATE turns SET state=?,result=? WHERE id=?',('done',json.dumps(answer),value['id']))
             return jsonify(answer)
         except Exception:

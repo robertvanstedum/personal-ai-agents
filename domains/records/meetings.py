@@ -119,6 +119,8 @@ def response_key(addressee, turn_id):
 
 def ensure_schema(db):
     db.executescript(SCHEMA)
+    from domains.records import room_approval
+    room_approval.ensure_schema(db)
     # Every room present at migration gets a generation (the fence, spec §3.2).
     for row in db.execute("SELECT id FROM rooms WHERE id NOT IN (SELECT room FROM room_generations)").fetchall():
         db.execute("INSERT INTO room_generations VALUES(?,?,?)", (row["id"], str(uuid4()), now()))
@@ -603,6 +605,16 @@ class Meetings:
                 db.execute("UPDATE teammates SET proven_at=?,updated=? WHERE principal=?",
                            (now(), now(), turn["addressee"]))
         archive_finished_proofs(db)    # #548: the proof room tidies itself away once answered
+        # Lane G: a partner's platform code may publish one proposal card with its reply, or record the outcome of an
+        # owner approval turn. Both are checked here, in the commit's transaction; a bad one refuses the whole reply.
+        from domains.records import room_approval
+        try:
+            if payload.get("room_proposal") is not None:
+                room_approval.publish(db, self.store, turn, event, payload["room_proposal"])
+            if payload.get("room_decision") is not None:
+                room_approval.decide(db, turn, payload["room_decision"])
+        except ValueError as exc:
+            raise Problem(f"The reply's proposal record was refused ({exc}); it was not added", 409)
 
     def on_human_message(self, db, room, event, target=None):
         """Schedule from Robert's message (spec §3.6). Deterministic; no model."""
@@ -610,6 +622,11 @@ class Meetings:
         if not meeting:
             return
         meeting = dict(meeting)
+        # Lane G: "yes P-XXXX" / "no P-XXXX" in an owner-private room goes to the partner that published that card,
+        # by the registry, never by who the text seems to name. Anything else routes as before.
+        from domains.records import room_approval
+        if room_approval.route(self, db, room, event, meeting, recipients_or_target=target):
+            return
         addressees, notes = self.route(db, room, event["body"], target, meeting)
         # Unaddressed room discussion must not duplicate an external action in
         # two tool-enabled agents. Both may discuss; only a named/selected
@@ -1453,7 +1470,9 @@ class Meetings:
                 mode = None
             if handoff["actor"] == "robert" and mode == "platform_acknowledgement":
                 handoff["actor"] = "platform"              # a platform post in his name is the platform's, not his (F1-d)
+        from domains.records import room_approval
         return {"discussion_reply": handoff,
+                "room_approval": room_approval.for_turn(db, t["id"]),
                 "standing_brief": {"text": approved["brief"], "hash": approved["brief_hash"]} if approved else None,
                 "attachment_delivery": "metadata_only",
                 "brief": {"title": session["title"], "purpose": session["purpose"],

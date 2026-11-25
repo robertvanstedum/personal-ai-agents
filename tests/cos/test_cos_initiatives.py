@@ -120,3 +120,24 @@ def test_work_save_refused_by_a_disabled_service_says_nothing_was_saved(tmp_path
                         "unresolved": []})
     assert out["status"] == "refused" and out["code"] == "work_artifacts_disabled", out
     assert out["message"].startswith("Nothing was saved:")
+
+
+def test_a_private_meeting_proposal_gets_a_room_card_with_the_confirm_digest(rig):
+    from core.canonical_json import digest
+    tasks, history, bindings, files, client, _ = rig
+    assert TurnBinder(bindings).begin(turn_id="m2", session_user=USER, agent_entry="cos-meeting", conversation_id="r",
+                                      meeting_scope="owner_private",
+                                      binding={"origin": "meeting", "principal": "robert", "audience": "room-1",
+                                               "claim_id": "c2", "room_generation": "g1",
+                                               "owner_words": "CoS, track a review checklist."})
+    assert bindings.attach_run("m2", RUN.format(8))
+    h = {"Authorization": "Bearer " + TOKEN, "X-CoS-Session": "agent:cos-meeting:openai-user:" + USER,
+         "X-CoS-Agent": "cos-meeting", "X-CoS-Run": RUN.format(8), "X-CoS-Tool-Call": "m-1", "X-CoS-Instance": "a" * 32}
+    out = client.post("/internal/cos/v1/tools/cos_tasks", headers=h, json={"arguments": {
+        "operation": "propose", "outcome": "A review checklist.", "done_when": "MC accepts it."}}).json
+    assert out["status"] == "done", out
+    tools = client.application.view_functions  # the listener; the tools object is reachable through the rig
+    iid = out["data"]["interpretation_id"]
+    interp = tasks.get("interpretation", iid, "tok-principal")
+    src = tasks.get("source_event", interp["source_event_ids"][0], "tok-principal")
+    assert src["source"]["store"] == "cos-meeting-owner" and src["content"] == "CoS, track a review checklist."

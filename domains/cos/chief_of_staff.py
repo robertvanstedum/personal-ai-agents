@@ -990,7 +990,23 @@ def _ea_charter():
         return None
 
 
+_task_tools_one = []
+
+
 def _task_tools():
+    """One instance per process: the tool listener serves it, and Guildhall reads the room card a meeting turn's
+    proposal left on it (Lane G)."""
+    if not _task_tools_one:
+        _task_tools_one.append(_make_task_tools())
+    return _task_tools_one[0]
+
+
+def _room_proposal(room):
+    tools = _task_tools()
+    return tools.room_proposal(room) if tools is not None else None
+
+
+def _make_task_tools():
     """B4: cos_tasks, when the task service is configured (PARTNERSHIP_TASKS_URL, the platform and cos seat token
     files, PARTNERSHIP_ENVIRONMENT) and CoS history is on. Both tokens stay in cos-scheduler. Otherwise None, and the
     listener refuses cos_tasks."""
@@ -2323,7 +2339,7 @@ def _start_cos():
                          data_dir=os.environ['COS_GUILDHALL_DIR'], run_turn=_process_confer_turn,
                          is_ready=lambda: _backend is not None,
                          stop_turn=lambda turn_id, reason='meeting_stop': _bindings is not None and _bindings.revoke(turn_id, reason),
-                         verifier=_meeting_verifier())
+                         verifier=_meeting_verifier(), room_proposal=_room_proposal)
 
     _start_tool_listener()
 
