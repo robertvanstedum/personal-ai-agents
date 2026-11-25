@@ -34,6 +34,7 @@ class Binding:
     revoked_at: str | None
     work_artifacts: frozenset = frozenset()
     helper_return_commit: bool = False
+    professional_initiatives: frozenset = frozenset()
 
     @property
     def is_owner(self) -> bool:
@@ -61,12 +62,16 @@ class Bindings:
             if rec.get("helper_return_commit") and (rec["seat"] not in ("mc", "cos")
                     or rec["origin"] != "agent" or set(rec["operations"]) != {"task.commit_helper_return"}):
                 raise ValueError("helper return requires a dedicated lead service binding")
+            pi = set(rec.get("professional_initiatives", []))
+            if pi and (rec["origin"] != "agent" or rec["seat"] not in ("mc", "cos") or ("file" in pi and rec["seat"] != "cos")):
+                raise ValueError("professional initiatives: read for MC or CoS agents, file for CoS only")
             if rec["token_sha256"] in self._by_hash:
                 raise ValueError("two bindings share one token")
             self._by_hash[rec["token_sha256"]] = Binding(
                 rec["binding_id"], rec["seat"], rec["principal"], rec["environment"], rec["origin"],
                 frozenset(rec["scopes"]), frozenset(rec["read_scopes"]), frozenset(rec["operations"]),
-                rec.get("expires_at"), rec.get("revoked_at"), frozenset(rec.get("work_artifacts", [])), rec.get("helper_return_commit", False))
+                rec.get("expires_at"), rec.get("revoked_at"), frozenset(rec.get("work_artifacts", [])), rec.get("helper_return_commit", False),
+                frozenset(rec.get("professional_initiatives", [])))
 
     @classmethod
     def load(cls, path: Path | str) -> "Bindings":

@@ -120,8 +120,8 @@ def test_every_route_but_health_requires_authentication(tmp_path):
         if rule.endpoint in ("static", "health"):
             continue
         path = rule.rule.replace("<target_type>", "task").replace("<target_id>", tid).replace(
-            "<start_type>", "task").replace("<start_id>", tid).replace("<task_id>", tid)
-        method = "POST" if "POST" in rule.methods else "GET"
+            "<start_type>", "task").replace("<start_id>", tid).replace("<task_id>", tid).replace("<sha256>", "0" * 64)
+        method = next(m for m in ("POST", "PUT", "GET") if m in rule.methods)
         r = c.c.open(path + ("?words=x" if path.endswith("history") else ""), method=method,
                      data="{}", content_type="application/json")
         assert r.status_code == 401, (rule.rule, r.status_code)

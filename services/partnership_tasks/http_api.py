@@ -1,5 +1,7 @@
 """The task service over HTTP, for Dev (B4 step 2). A thin transport: every decision stays in ``TaskService``.
 
+    POST /v1/professional-initiatives     {operation, scope, arguments}: file/attach/list/read/read_file (#680)
+    PUT  /v1/professional-initiatives/files/<sha256>?scope=   one raw packet file, staged for file/attach
     POST /v1/commands                     body: one command (contracts/partnership/v1 command)      -> its result
     POST /v1/receipts                     body: one command as the caller would send it            -> recorded/...
     GET  /v1/records/<type>/<id>          a record in the caller's read scope, else 404
@@ -34,6 +36,7 @@ from services.partnership_tasks.service import StoreUnavailable, TaskService
 from services.partnership_tasks.views import work_for
 
 MAX_BODY = 256 * 1024
+FILE_BODY = 6 * 1024 * 1024        # one initiative packet file (5 MB) plus headroom
 _log = logging.getLogger("partnership_tasks.http")
 
 
@@ -61,7 +64,8 @@ OWNER_HEADER = "X-Portal-Owner-Assertion"
 
 
 def create_app(svc: TaskService, *, owner_key=None, owner_env: str | None = None, owner_subject: str | None = None,
-               spend=None, work_artifacts_root=None) -> Flask:
+               spend=None, work_artifacts_root=None,
+               initiatives_root=None) -> Flask:
     """``owner_key`` (kid, secret), ``owner_env``, ``owner_subject`` ("owner:<portal id>") and ``spend`` (a nonce
     store) configure the owner rule (B4 design v0.2 §2, v0.3 R-N1/R-N3): a request made with an owner_session
     binding is accepted only with a portal-signed assertion for this exact method, route and body, naming the
@@ -131,6 +135,47 @@ def create_app(svc: TaskService, *, owner_key=None, owner_env: str | None = None
             return jsonify(error="work_arguments_invalid"), 400
         except (JournalError, OSError, RuntimeError):
             return jsonify(error="work_store_unavailable"), 503
+
+    @app.post("/v1/professional-initiatives")
+    def professional_initiatives():
+        t = authenticated()
+        if t is None:
+            return jsonify(error="not_authenticated"), 401
+        if initiatives_root is None:
+            return jsonify(error="professional_initiatives_disabled"), 503
+        from services.partnership_tasks import initiatives as PI
+        try:
+            return _json(PI.execute(svc, t, initiatives_root, body()))
+        except PI.Refused as exc:
+            return jsonify(error=exc.code), 422
+        except PermissionError:
+            return jsonify(error="initiative_scope_unavailable"), 403
+        except ValueError:
+            return jsonify(error="initiative_arguments_invalid"), 400
+        except (OSError, RuntimeError):
+            return jsonify(error="initiative_store_unavailable"), 503
+
+    @app.put("/v1/professional-initiatives/files/<sha256>")
+    def professional_initiative_file(sha256):
+        # One raw file per request, with its own limit; the JSON routes keep MAX_BODY (spec v0.2 change 7).
+        request.max_content_length = FILE_BODY
+        t = authenticated()
+        if t is None:
+            return jsonify(error="not_authenticated"), 401
+        if initiatives_root is None:
+            return jsonify(error="professional_initiatives_disabled"), 503
+        if request.mimetype != "application/octet-stream":
+            return jsonify(error="initiative_arguments_invalid"), 400
+        from services.partnership_tasks import initiatives as PI
+        try:
+            return _json(PI.stage_upload(svc, t, initiatives_root, request.args.get("scope", ""), sha256,
+                                         request.get_data(cache=False)))
+        except PI.Refused as exc:
+            return jsonify(error=exc.code), 422
+        except PermissionError:
+            return jsonify(error="initiative_scope_unavailable"), 403
+        except (OSError, RuntimeError):
+            return jsonify(error="initiative_store_unavailable"), 503
 
     @app.get("/healthz")
     def health():
@@ -303,7 +348,9 @@ def main(argv=None) -> int:
                      owner_subject=os.environ.get("PARTNERSHIP_OWNER_SUBJECT"),
                      spend=PA.NonceFile(nonce_file) if nonce_file else None,
                      work_artifacts_root=(Path(root) / "private-work-artifacts")
-                     if os.environ.get("PARTNERSHIP_WORK_ARTIFACTS") == "1" else None)
+                     if os.environ.get("PARTNERSHIP_WORK_ARTIFACTS") == "1" else None,
+                     initiatives_root=(Path(root) / "professional-initiatives")
+                     if os.environ.get("PARTNERSHIP_PROFESSIONAL_INITIATIVES") == "1" else None)
     server = make_server(os.environ.get("PARTNERSHIP_HOST", "0.0.0.0"), int(os.environ.get("PARTNERSHIP_PORT", "8772")),
                          app, threaded=False)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
