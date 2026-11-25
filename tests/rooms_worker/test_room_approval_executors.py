@@ -220,3 +220,79 @@ def test_the_cos_guildhall_prompt_speaks_to_robert_as_you_and_keeps_approval_in_
     src = inspect.getsource(confer_service)
     assert "Speak to Robert directly as 'you'" in src
     assert "Robert approves it here with" in src
+
+
+# ---- #681 D: verified copies of meeting files for MC and CoS -------------------------------------------------
+import base64  # noqa: E402
+import hashlib  # noqa: E402
+
+NOTES = b"# Meeting notes\nThe line MC quotes.\n"
+FACT = {"id": "doc-1", "name": "notes.md", "mime": "text/markdown", "sha256": hashlib.sha256(NOTES).hexdigest(),
+        "bytes": len(NOTES)}
+
+
+class FakeRecords:
+    def __init__(self, data=NOTES):
+        self.data, self.calls = data, []
+
+    def call(self, method, path, body=None, key=None):
+        self.calls.append((method, path, body))
+        return 200, {"base64": base64.b64encode(self.data).decode(), "sha256": hashlib.sha256(self.data).hexdigest()}
+
+
+def _file_bridge(tmp_path, records):
+    from minimoi_portal.guild_ui.mc_rooms_bridge import Bridge
+    b = Bridge.__new__(Bridge)
+    (tmp_path / "agent_requests").mkdir(mode=0o700)
+    b.environ = {"MINIMOI_MC_FILES_HOST_ROOT": "/host/guild/agent_requests"}
+    b.services = SimpleNamespace(store=SimpleNamespace(folder=str(tmp_path)))
+    b.principal, b.records = "robert", records
+    return b
+
+
+def _meeting_turn():
+    return {"id": TURN, "room": ROOM, "claim_id": "claim-1",
+            "transcript": [{"seq": 3, "kind": "document", "text": "(shared a file: notes.md)", "file": FACT}]}
+
+
+def test_mc_gets_a_verified_copy_of_a_meeting_file_at_a_host_path(tmp_path):
+    records = FakeRecords()
+    lines, gap = _file_bridge(tmp_path, records).meeting_files(_meeting_turn())
+    assert gap is None and lines[0].startswith("Files shared in this meeting")
+    assert "notes.md: /host/guild/agent_requests/" in lines[1]
+    assert records.calls == [("POST", f"/turns/{TURN}/documents/doc-1", {"claim_id": "claim-1"})]
+    copies = [p for p in (tmp_path / "agent_requests").rglob("*") if p.is_file() and p.read_bytes() == NOTES]
+    assert copies                                                       # the bytes are where MC's tools open them
+
+
+def test_a_changed_meeting_file_is_never_handed_to_mc(tmp_path):
+    lines, gap = _file_bridge(tmp_path, FakeRecords(b"tampered")).meeting_files(_meeting_turn())
+    assert lines == [] and "hash" in gap
+
+
+def test_cos_gets_meeting_files_in_its_inbox_once_per_room(tmp_path):
+    from domains.cos.files import CosFiles
+    from domains.cos.guildhall import install
+    for d in ("inbox", "outbox"):
+        (tmp_path / d).mkdir()
+    files = CosFiles(tmp_path / "inbox", tmp_path / "outbox", "/minimoi/cos/inbox", "/minimoi/cos/outbox")
+    fetched, runs = [], []
+    facts = {"members": [{"id": "robert"}, {"id": "mc"}, {"id": "cos"}], "owner_private": True,
+             "context": {"room": ROOM, "transcript": _meeting_turn()["transcript"]}, "trigger_text": "CoS, file it.",
+             "claim_id": "claim-1", "room_generation": "g1", "binding": {"origin": "meeting"}, "room_approval": None}
+    verifier = SimpleNamespace(admit=lambda value: facts, watch=lambda *a, **k: (lambda: None),
+                               document=lambda t, c, d: fetched.append(d) or ("notes.md", NOTES, FACT["sha256"]))
+    token = tmp_path / "tok"
+    token.write_text("x" * 48)
+    app = Flask(__name__)
+    install(app, token_file=token, data_dir=tmp_path / "ledger", verifier=verifier, files=files,
+            run_turn=lambda text, **kw: runs.append(text) or SimpleNamespace(reply="Filed."))
+    c, h = app.test_client(), {"Authorization": "Bearer " + "x" * 48}
+    for turn_id in (TURN, str(uuid4())):
+        body = {"id": turn_id, "room": ROOM, "addressee": "cos", "claim_id": "claim-1",
+                "trigger": {"actor": "robert", "kind": "message", "origin": None, "text": "CoS, file it."}}
+        assert c.post("/internal/guildhall/turn", json=body, headers=h).status_code == 200
+    assert fetched == ["doc-1"]                                          # saved once for the room, reused after
+    assert "files shared in this meeting (file ids for initiative_attach: f" in runs[0]
+    assert "The line MC quotes." in runs[0] and runs[0].startswith("CoS, file it.")
+    assert len(list((tmp_path / "inbox").iterdir())) == 1

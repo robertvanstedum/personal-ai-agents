@@ -131,3 +131,52 @@ def test_a_room_with_a_guest_cannot_publish(env):
     env.worker.run_once()
     assert not _registry(env)
     assert not [e for e in env.events() if e["kind"] == "proposal"]
+
+
+# ---- #681 D: a file shared in the meeting reaches the addressed teammate ------------------------------------
+import base64  # noqa: E402
+import hashlib  # noqa: E402
+
+
+def _share(e, name="notes.md", data=b"# Meeting notes\nLine one is the line MC quotes.\n"):
+    status, body = e.call("POST", f"/rooms/{e.room}/documents", {"name": name, "base64": base64.b64encode(data).decode()})
+    assert status in (200, 201), body
+    return body["result"]["id"], data
+
+
+def _running(e, text="MC, read the notes."):
+    e.say(text)
+    turn = e.worker.work.call("POST", "/turns/claim", {"addressees": ["mc"]}, key="claim-1")[1]["turn"]
+    assert e.worker.work.call("POST", f"/turns/{turn['id']}/start", {"claim_id": turn["claim_id"]}, key="start-1")[0] == 200
+    return turn
+
+
+def test_the_claimed_turn_can_read_a_file_shared_in_its_private_room(env):
+    env.prove(); env.join()
+    doc, data = _share(env)
+    turn = _running(env)
+    fact = next(r["file"] for r in turn["transcript"] if r.get("file"))
+    assert fact["id"] == doc and fact["sha256"] == hashlib.sha256(data).hexdigest()
+    status, body = env.worker.work.call("POST", f"/turns/{turn['id']}/documents/{doc}", {"claim_id": turn["claim_id"]}, key="d1")
+    assert status == 200 and base64.b64decode(body["base64"]) == data and body["sha256"] == fact["sha256"]
+
+
+def test_a_stale_claim_another_room_or_a_member_credential_gets_no_file(env):
+    env.prove(); env.join()
+    doc, _ = _share(env)
+    turn = _running(env)
+    assert env.worker.work.call("POST", f"/turns/{turn['id']}/documents/{doc}", {"claim_id": "stale"}, key="d2")[0] == 409
+    status, other = env.call("POST", "/rooms", dict(title="Other", purpose="x", recording_acknowledged=True))
+    status, body = env.call("POST", f"/rooms/{other['result']['id']}/documents", {"name": "x.txt", "base64": base64.b64encode(b"x").decode()})
+    assert env.worker.work.call("POST", f"/turns/{turn['id']}/documents/{body['result']['id']}", {"claim_id": turn["claim_id"]}, key="d3")[0] == 404
+    # The teammate's own member credential is not a work credential.
+    assert env.worker.mc.call("POST", f"/turns/{turn['id']}/documents/{doc}", {"claim_id": turn["claim_id"]}, key="d4")[0] == 403
+
+
+def test_a_room_with_a_guest_hands_no_file(env):
+    env.prove(); env.join()
+    doc, _ = _share(env)
+    assert env.call("POST", "/principals", {"id": "guest", "label": "Guest"})[0] == 201
+    assert env.call("POST", f"/rooms/{env.room}/members", {"actor": "guest", "role": "observer"})[0] == 200
+    turn = _running(env)
+    assert env.worker.work.call("POST", f"/turns/{turn['id']}/documents/{doc}", {"claim_id": turn["claim_id"]}, key="d5")[0] == 403

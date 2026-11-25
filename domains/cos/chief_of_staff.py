@@ -2341,7 +2341,7 @@ def _start_cos():
                          is_ready=lambda: _backend is not None,
                          stop_turn=lambda turn_id, reason='meeting_stop': _bindings is not None and _bindings.revoke(turn_id, reason),
                          verifier=_meeting_verifier(), room_proposal=_room_proposal,
-                         approve_room=room_approvals_from_environ(os.environ))
+                         approve_room=room_approvals_from_environ(os.environ), files=_cos_files)
 
     _start_tool_listener()
 

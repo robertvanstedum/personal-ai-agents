@@ -1252,6 +1252,27 @@ class Meetings:
             raise Problem("The lease expired (stale_claim)", 409)
         return t
 
+    def turn_document(self, auth, turn_id, doc_id, payload):
+        """Lane G (#681 D): one file shared in this turn's room, for the installation that holds the turn's live claim.
+        Only while the turn runs, only in an owner-private room, only a document of that room. An observe credential
+        (cos-scheduler's) may read it too: it is the same installation that claimed the turn. Returns the bytes as
+        base64 with the stored hash; the caller checks the hash again before it hands the file on."""
+        import base64
+        from domains.records import room_approval
+        with self.store.connect() as db:
+            bound = self.require_work(db, auth, observe=True)
+            t = self.bound_turn(db, auth, turn_id, bound, (payload or {}).get("claim_id"))
+            if t["claimed_by"] != auth["installation_id"] or t["state"] not in ("running", "recovering"):
+                raise Problem("Turn not found", 404)
+            if not room_approval.owner_private(db, t["room"]):
+                raise Problem("Files are handed only into an owner-private meeting", 403)
+            d = db.execute("SELECT id,name,mime,sha256,content FROM documents WHERE id=? AND room=?",
+                           (doc_id, t["room"])).fetchone()
+            if d is None or len(d["content"]) > 8 * 1024 * 1024:
+                raise Problem("Document not found", 404)
+            return {"id": d["id"], "name": d["name"], "mime": d["mime"], "sha256": d["sha256"],
+                    "bytes": len(d["content"]), "base64": base64.b64encode(d["content"]).decode()}
+
     def admission(self, db, t):
         """Dispatch admission D (spec §3.4). The failing check's name, or None."""
         if db.execute("SELECT 1 FROM discussion_turns WHERE turn_id=?", (t["id"],)).fetchone():

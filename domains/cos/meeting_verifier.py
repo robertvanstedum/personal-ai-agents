@@ -88,6 +88,27 @@ class RecordsMeetingVerifier:
                             "owner_words": trigger["text"],
                             "room_generation": snap["generation"], "trigger_seq": snap.get("trigger_seq")}}
 
+    def document(self, turn_id: str, claim_id: str, doc_id: str) -> tuple[str, bytes, str] | None:
+        """(name, bytes, sha256) of one file shared in this turn's owner-private room, or None. Records serves it only
+        for this installation's live claim; the hash is checked here again (Lane G, #681 D)."""
+        import base64
+        import hashlib
+        try:
+            r = self.session.request(
+                "POST", f"{self.base}/api/v1/turns/{turn_id}/documents/{doc_id}",
+                data=json.dumps({"claim_id": claim_id}),
+                headers={"Authorization": "Bearer " + self._bearer(), "Idempotency-Key": str(uuid4()),
+                         "Content-Type": "application/json", "Accept": "application/json"},
+                timeout=(3, 30), allow_redirects=False)
+            if r.status_code != 200:
+                return None
+            body = r.json()
+            data = base64.b64decode(body["base64"])
+        except (requests.RequestException, ValueError, KeyError, TypeError):
+            return None
+        sha = hashlib.sha256(data).hexdigest()
+        return (body.get("name") or "file", data, sha) if sha == body.get("sha256") else None
+
     def still_admitted(self, turn_id: str, claim_id: str, generation: str) -> bool:
         try:
             body = self._heartbeat(turn_id, claim_id, snapshot=False)

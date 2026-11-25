@@ -47,7 +47,7 @@ def admit_environment(environ, *, verifier):
 
 
 def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verify_members=None, stop_turn=None,
-            verifier=None, room_proposal=None, approve_room=None):
+            verifier=None, room_proposal=None, approve_room=None, files=None):
     """``verify_members(turn)`` returns the room's members from Records, or None; never the request body's.
     ``verifier`` (F2 step 4, ``meeting_verifier.RecordsMeetingVerifier``) supersedes it: the turn runs only when
     Records admits it, with the owner's text from the snapshot, the meeting binding and a once-a-second watch."""
@@ -58,6 +58,40 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
     def db():return sqlite3.connect(dbpath,timeout=10)
     with db() as c:
         c.execute('CREATE TABLE IF NOT EXISTS turns(id TEXT PRIMARY KEY,digest TEXT NOT NULL,state TEXT NOT NULL,result TEXT)')
+        c.execute('CREATE TABLE IF NOT EXISTS room_files(room TEXT NOT NULL,sha256 TEXT NOT NULL,file_id TEXT NOT NULL,PRIMARY KEY(room,sha256))')
+
+    def meeting_files(value, facts):
+        """Lane G (#681 D): the files shared in this owner-private meeting, saved once per room into the CoS inbox
+        (hash-checked twice), as DATA lines for this turn. Returns '' when there are none or files are off."""
+        if files is None or verifier is None or not hasattr(verifier, 'document'):
+            return ''
+        seen, ids, missing = set(), [], 0
+        for row in (facts['context'].get('transcript') or []):
+            f = row.get('file') if isinstance(row, dict) else None
+            if not isinstance(f, dict) or not f.get('id') or f['id'] in seen:
+                continue
+            seen.add(f['id'])
+            with db() as c:
+                kept = c.execute('SELECT file_id FROM room_files WHERE room=? AND sha256=?', (value['room'], f.get('sha256'))).fetchone()
+            if kept:
+                ids.append(kept[0]); continue
+            got = verifier.document(value['id'], facts['claim_id'], f['id'])
+            if got is None or got[2] != f.get('sha256'):
+                missing += 1; continue
+            meta = files.save_upload(got[0], got[1])
+            with db() as c:
+                c.execute('INSERT OR IGNORE INTO room_files VALUES(?,?,?)', (value['room'], got[2], meta['file_id']))
+            ids.append(meta['file_id'])
+        ids = ids[-5:]
+        text = ''
+        if ids:
+            text = files.compose_turn('', ids).replace(
+                '[Platform: Robert sent the attached file(s) without a message.]', '').replace(
+                'files Robert attached to this message', 'files shared in this meeting (file ids for initiative_attach: '
+                + ', '.join(ids) + ')').strip()
+        if missing:
+            text += f"\n[Platform: {missing} file(s) shared in this meeting could not be copied for you; say so if asked.]"
+        return text
     dbpath.chmod(0o600)
     bp=Blueprint('cos_guildhall',__name__)
     @bp.before_request
@@ -142,6 +176,9 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
                                            else (lambda turn,reason:None))
                             if facts is not None and binding is not None else (lambda:None))
                 if room_proposal is not None:room_proposal(value['room'])   # drop any card left by an earlier failed turn
+                if binding is not None and facts is not None:
+                    shared=meeting_files(value,facts)
+                    if shared:text=text+'\n\n'+shared
                 try:
                     result=run_turn(text,meeting_context=prompt,channel='guildhall',conversation_id='guildhall:'+value['room']+':'+value['id'],request_id=value['id'],turn_id=value['id'],meeting_scope=scope,binding=binding)
                 finally:
