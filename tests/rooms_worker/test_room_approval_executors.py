@@ -172,3 +172,51 @@ def test_cos_scheduler_answers_an_approval_turn_without_the_model(tmp_path):
     assert r.json["room_decision"] == {"code": "P-CD34", "state": "confirmed",
                                        "receipt": "Confirmed P-CD34: TK-cos-abcd is tracked, led by MC."}
     assert r.json["text"].startswith("Confirmed P-CD34")
+
+
+# ---- #681 C and E: refusals reach Robert; teammates speak to him ----------------------------------------------
+def test_a_refused_step_adds_a_platform_line_under_the_reply():
+    from minimoi_portal.guild_ui.mc_rooms_bridge import refusal_lines
+    trace = {"steps": {"v": 1, "items": [
+        {"tool": "minimoi_issue_create", "label": "Used issue create (refused)", "ok": False, "outcome": "refused"},
+        {"tool": "minimoi_recall", "label": "Searched past conversations", "ok": True},
+        {"tool": "minimoi_work_save", "label": "Saved a working document (not confirmed)", "ok": False, "outcome": "unknown"}]}}
+    assert refusal_lines(trace) == ["Platform: Used issue create was refused, so nothing was done.",
+                                    "Platform: Saved a working document could not be confirmed; do not repeat it yet."]
+    assert refusal_lines({}) == [] and refusal_lines(None) == []
+
+
+def test_the_collector_keeps_the_runs_steps_for_the_room():
+    from minimoi_portal.guild_ui.mc.internal_stream import collect
+    from minimoi_portal.guild_ui.mc.stream import Delta, Finish, RunStarted, Step
+
+    class Backend:
+        kind = "openclaw"
+
+        def stream_turn(self, req):
+            yield RunStarted("run-1")
+            yield Step(1, "minimoi_issue_create", "start")
+            yield Step(1, "minimoi_issue_create", "end", False, 12, "refused")
+            yield Delta("I could not open it.")
+            yield Finish("stop")
+    req = SimpleNamespace(correlation_id="c1")
+    out = collect(Backend(), req, on_run=lambda run: True, record_usage=lambda *a, **k: None)
+    assert out.status == "answered"
+    assert out.trace["steps"]["items"][0]["outcome"] == "refused"
+
+
+def test_the_discussion_prompt_speaks_to_robert_and_names_the_way_to_tools():
+    import inspect
+    from services.rooms_worker import discussion
+    src = inspect.getsource(discussion)
+    assert "speak to him directly as 'you'" in src
+    assert "naming you (for" in src and "gives you your tools" in src
+    assert "Robert must name or select one teammate" not in src
+
+
+def test_the_cos_guildhall_prompt_speaks_to_robert_as_you_and_keeps_approval_in_the_room():
+    import inspect
+    from domains.cos import confer_service
+    src = inspect.getsource(confer_service)
+    assert "Speak to Robert directly as 'you'" in src
+    assert "Robert approves it here with" in src

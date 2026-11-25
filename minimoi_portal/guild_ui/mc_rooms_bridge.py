@@ -34,6 +34,23 @@ def result(outcome, detail, text=''):
     return {'outcome': outcome, 'detail': detail, 'text': text, 'usage': None}
 
 
+def refusal_lines(trace):
+    """One platform line per step that did not succeed, from the run's step record (labels only, never arguments or
+    results). #681 C: a refusal reached MC but never Robert; now the room shows it under MC's reply."""
+    from .mc.turn_steps import outcome_of
+    items = ((trace or {}).get("steps") or {}).get("items") or []
+    lines = []
+    for item in items:
+        outcome = outcome_of(item)
+        if outcome is None:
+            continue
+        what = {"refused": "was refused, so nothing was done", "unknown": "could not be confirmed; do not repeat it yet",
+                "failed": "did not finish"}[outcome]
+        label = str(item.get("label") or "A step").split(" (")[0]
+        lines.append(f"Platform: {label} {what}.")
+    return lines
+
+
 def identifiers(body):
     if not isinstance(body, dict) or set(body) != {'room', 'turn_id', 'claim_id', 'correlation_id'}:
         raise ValueError('identifiers_required')
@@ -274,7 +291,11 @@ class Bridge:
                     kept = floor.add_note(operation + '-reply', scrub(answer.text), MASTER_CRAFTSMAN)
                     if kept.outcome != 'kept':
                         raise ValueError('reply_not_saved')
-                    output = result('done', 'done', scrub(answer.text))
+                    said = scrub(answer.text)
+                    lines = refusal_lines(getattr(answer, 'trace', None))
+                    if lines:
+                        said = said.rstrip() + '\n\n' + '\n'.join(lines)
+                    output = result('done', 'done', said)
                     try:
                         offer = self.published_proposal(conv['id'])
                     except Exception:
