@@ -403,7 +403,7 @@ export function initMcVoice(page) {
     };
     transcriptPaint=paintTranscript;transcriptReveal=revealSaved;
     let terminal=false,failed=false;
-    selector.disabled=true;choice.disabled=false;
+    if(selector)selector.disabled=true;choice.disabled=false;
     $('[data-mc-voice-transcript]').hidden=true;$('[data-mc-voice-transcript-text]').textContent='';
     say('Connecting voice…');
     try {
@@ -417,7 +417,7 @@ export function initMcVoice(page) {
           if(state==='ending'&&!failed)setPhase('ending');
           if(state==='ended'){
             terminal=true;endedAttempt=mine;controller=null;starting=false;paint(false);
-            selector.disabled=false;choice.disabled=false;
+            if(selector)selector.disabled=false;choice.disabled=false;
             revealSaved();
             // #420 on every MC voice path (UI review #5): the ended line clears after about five seconds or at the next send.
             if(!showingError)say('Voice ended. Agent work already accepted may still finish.',{transient:true});
@@ -460,9 +460,11 @@ export function initMcVoice(page) {
           paintTranscript();
         }});
       controller={stop:reason=>c.endSession(reason)};
-      await c.startSession({provider:selector.value,conversation_id:cid});
+      // The managed path is OpenAI only (the controller refuses any other provider before a request): it never reads the
+      // shared Voice, which may say Grok, so the server's own refusal (an unresolved earlier session or action) still shows.
+      await c.startSession({provider:'openai',conversation_id:cid});
     } catch (_) {if(current()){stop('failed',{quiet:true});say(restartBlocked?'The earlier voice session needs verification before another can start. Typing still works.':'Voice could not start. No new session was confirmed; typing still works.',{loud:true,error:true});}}
-    finally {if(current())starting=false;if(!busy()){selector.disabled=false;choice.disabled=false;}}
+    finally {if(current())starting=false;if(!busy()){if(selector)selector.disabled=false;choice.disabled=false;}}
   }
 
   $('[data-mc-voice-transcript-choice]')?.addEventListener?.('change',()=>{
