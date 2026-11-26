@@ -81,3 +81,33 @@ def test_a_keyword_donor_lends_nothing_and_is_harmless(tmp_path):
     assert indexer.update(shelf.root, None, index_path=kw, min_free_bytes=None, keyword_only=True)["code"] == "ok"
     out = indexer.update(shelf.root, FakeEmbedder(), index_path=tmp_path / "b.sqlite", min_free_bytes=None, donor_path=kw)
     assert out["code"] == "ok" and out["reused_vectors"] == 0
+
+
+def test_donor_check_embeds_a_sample_and_refuses_a_copy_that_disagrees(tmp_path, monkeypatch):
+    """The one-time copy (#660): with ``donor_check`` the first lent vectors, then every N-th, are embedded here and must agree."""
+    shelf, _ = world(tmp_path)
+    full = tmp_path / "full.sqlite"
+    assert indexer.update(shelf.root, FakeEmbedder(), index_path=full, min_free_bytes=None)["code"] == "ok"
+    monkeypatch.setattr(indexer, "DONOR_CHECK_FIRST", 2)
+    monkeypatch.setattr(indexer, "DONOR_CHECK_EVERY", 3)
+    emb = FakeEmbedder()
+    out = indexer.update(shelf.root, emb, index_path=tmp_path / "b.sqlite", min_free_bytes=None, donor_path=full, donor_check=True)
+    n = out["donor_vectors"]
+    assert out["code"] == "ok" and out.get("embedded_chunks", 0) == 0
+    assert out["donor_checked"] == emb.texts == 2 + len([i for i in range(3, n + 1) if i % 3 == 0])
+
+    class Skewed(FakeEmbedder):
+        def _embed(self, texts):
+            return [[0.0, 5.0] + v[2:] for v in super()._embed(texts)]
+    bad = tmp_path / "bad.sqlite"
+    assert indexer.update(shelf.root, Skewed(), index_path=bad, min_free_bytes=None)["code"] == "ok"
+    out = indexer.update(shelf.root, FakeEmbedder(), index_path=tmp_path / "c.sqlite", min_free_bytes=None, donor_path=bad, donor_check=True)
+    assert out["code"] == indexer.DONOR_MISMATCH
+
+
+def test_donor_check_refuses_a_copy_it_cannot_use(tmp_path):
+    shelf, _ = world(tmp_path)
+    full = tmp_path / "other.sqlite"
+    assert indexer.update(shelf.root, FakeEmbedder(digest="0a109f422b47" + "e" * 52), index_path=full, min_free_bytes=None)["code"] == "ok"
+    out = indexer.update(shelf.root, FakeEmbedder(), index_path=tmp_path / "b.sqlite", min_free_bytes=None, donor_path=full, donor_check=True)
+    assert out["code"] == indexer.DONOR_UNUSABLE
