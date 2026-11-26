@@ -26,7 +26,8 @@ RUN set -eu; \
     if ls -d /opt/ollama/lib/ollama/*/ >/dev/null 2>&1; then echo "unexpected library folder kept" >&2; exit 1; fi
 # The model by content, not by tag. The pinned manifest is committed beside this file (its bytes hash to the pin; the registry
 # serves manifests by tag only, and `ollama pull` would re-serialize it so /api/tags reported another digest for the same
-# weights). Every blob it names is fetched by its own digest and checked.
+# weights). Every blob it names is fetched by its own digest and checked. Ollama 0.40 also wants its newer manifest folders to
+# exist; they stay empty, and the model is served from the legacy manifest, as on the workstation.
 COPY nomic-embed-text.manifest.json /tmp/manifest.json
 RUN set -eu; \
     reg=https://registry.ollama.ai/v2/library/nomic-embed-text; \
@@ -36,6 +37,7 @@ RUN set -eu; \
     for d in $(grep -o 'sha256:[0-9a-f]\{64\}' "$m/latest" | sort -u); do \
       h=${d#sha256:}; curl -fsSL -o "/models/blobs/sha256-$h" "$reg/blobs/$d"; echo "$h  /models/blobs/sha256-$h" | sha256sum -c -; \
     done; \
+    mkdir -p /models/manifests-v2 /models/metadata; \
     chmod -R a+rX,go-w /models
 
 FROM ubuntu:noble-20261024.1@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
