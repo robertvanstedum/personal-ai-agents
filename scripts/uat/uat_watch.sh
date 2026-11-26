@@ -74,11 +74,15 @@ ls -1d "$UAT_ROOT"/20[0-9][0-9][01][0-9][0-3][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9
   | LC_ALL=C sort | head -n -"$KEEP" | xargs -r rm -rf --
 
 # optional: the report as a comment on the open release PR
-if [ -n "${GH_TOKEN:-}" ] && command -v gh >/dev/null 2>&1 && [ -s "$OUT/report.md" ] && [ ! -e "$OUT/STALE" ]; then
+# The repo is PUBLIC: never post agent replies or evidence. Only the pass/fail table (everything before the first
+# "## " section after the table) goes out, and only when UAT_POST_PR=1 is set explicitly.
+if [ "${UAT_POST_PR:-0}" = "1" ] && [ -n "${GH_TOKEN:-}" ] && command -v gh >/dev/null 2>&1 && [ -s "$OUT/report.md" ] && [ ! -e "$OUT/STALE" ]; then
+  awk 'NR>1 && /^## /{exit} {print}' "$OUT/report.md" > "$OUT/summary_public.md"
+  printf '\n_Automatic staging UAT. Evidence stays on the staging host: %s_\n' "$OUT" >> "$OUT/summary_public.md"
   pr=$(gh pr list --repo "$GH_REPO" --state open --json number,title \
         --jq '[.[] | select(.title | startswith("Release"))][0].number // empty' 2>/dev/null || true)
   if [ -n "$pr" ]; then
-    gh pr comment "$pr" --repo "$GH_REPO" --body-file "$OUT/report.md" >/dev/null 2>&1 \
+    gh pr comment "$pr" --repo "$GH_REPO" --body-file "$OUT/summary_public.md" >/dev/null 2>&1 \
       && echo "report posted on PR #$pr" || echo "could not post the report on PR #$pr"
   fi
 fi

@@ -1169,7 +1169,10 @@ def base_url_allowed(url: str) -> bool:
     if not m:
         return False
     host = m.group(1).lower()
-    return host in ("dev.minimoi.ai", "localhost", "127.0.0.1") or host.endswith(".localhost")
+    local = host in ("localhost", "127.0.0.1") or host.endswith(".localhost")
+    if local:
+        return True
+    return host == "dev.minimoi.ai" and url.lower().startswith("https://")   # the token never travels in cleartext
 
 
 def new_run_id() -> str:
@@ -1180,6 +1183,7 @@ def parse_args(argv):
     p = argparse.ArgumentParser(description="Automatic staging UAT for mini-moi (never against production).")
     p.add_argument("--base-url", default=DEFAULT_BASE_URL)
     p.add_argument("--token-env", default=DEFAULT_TOKEN_ENV, help="name of the env var holding the UAT token")
+    p.add_argument("--token-file", default=None, help="file holding the UAT token (preferred: keeps it out of the env)")
     p.add_argument("--out", default=None, help="output directory (default ./uat-runs/<run id>)")
     p.add_argument("--only", default=None, help="comma list of case ids, e.g. A1,B2")
     p.add_argument("--list", action="store_true", help="print the cases and exit")
@@ -1201,11 +1205,18 @@ def main(argv=None) -> int:
             print(f"{c.id:<4} {kind:<7} {c.title}")
         return 0
     if not base_url_allowed(args.base_url):
-        print(f"error: refusing to run against {args.base_url}: staging (dev.) or a local host only", file=sys.stderr)
+        print(f"error: refusing to run against {args.base_url}: https://dev.minimoi.ai or a local host only", file=sys.stderr)
         return 2
-    token = os.environ.get(args.token_env) or ""
+    if args.token_file:
+        try:
+            token = Path(args.token_file).read_text(encoding="ascii").strip()
+        except OSError as e:
+            print(f"error: cannot read the token file: {e.__class__.__name__}", file=sys.stderr)
+            return 2
+    else:
+        token = os.environ.get(args.token_env) or ""
     if not token:
-        print(f"error: the token env var {args.token_env} is empty", file=sys.stderr)
+        print("error: no UAT token (empty --token-file or token env var)", file=sys.stderr)
         return 2
     run_id = args.run_id or new_run_id()
     out_dir = Path(args.out) if args.out else Path("uat-runs") / run_id

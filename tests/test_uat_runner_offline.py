@@ -311,3 +311,19 @@ def test_fixtures_exist_and_carry_the_text():
     with zipfile.ZipFile(fx / "b2_reading_list.docx") as z:
         assert "[Content_Types].xml" in z.namelist() and want in z.read("word/document.xml").decode()
     assert "weekly review" in (fx / "b3_initiative_notes.md").read_text().lower()
+
+
+def test_staging_must_be_https_so_the_token_never_travels_in_cleartext():
+    assert not uat.base_url_allowed("http://dev.minimoi.ai")
+    assert not uat.base_url_allowed("https://minimoi.ai") and not uat.base_url_allowed("https://www.minimoi.ai")
+    assert uat.base_url_allowed("https://dev.minimoi.ai/")
+
+
+def test_token_file_is_read_and_never_reported(tmp_path, monkeypatch):
+    tok = tmp_path / "tok"
+    tok.write_text("ab" * 32 + "\n", encoding="ascii")
+    monkeypatch.delenv("MINIMOI_UAT_TOKEN", raising=False)
+    rc = uat.main(["--base-url", "http://127.0.0.1:9", "--token-file", str(tok), "--only", "A4", "--out", str(tmp_path / "o")])
+    assert rc in (0, 1)
+    for name in ("report.json", "report.md"):
+        assert ("ab" * 32) not in (tmp_path / "o" / name).read_text(encoding="utf-8")

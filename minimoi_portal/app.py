@@ -79,7 +79,12 @@ def _init_sentry():
             except Exception:
                 return
         # Guild Shop floor API bodies (notes, post-its) never go to Sentry.
-        from minimoi_portal.guild_mounts import sentry_before_send
+        from minimoi_portal.guild_mounts import sentry_before_send as _guild_before_send
+        from minimoi_portal.uat_signin import scrub_sentry_event as _uat_scrub
+
+        def sentry_before_send(event, hint):          # the UAT token header never reaches Sentry, on any path
+            event = _uat_scrub(event)
+            return _guild_before_send(event, hint) if event is not None else None
         sentry_sdk.init(
             dsn=dsn,
             integrations=[FlaskIntegration()],

@@ -6,8 +6,8 @@
 # * The runner runs inside the official Playwright Python image (pinned below), with the repo mounted read-only and
 #   only the run's output folder writable.
 # * The sign-in token comes from SSM (/minimoi/staging/uat_signin_token, SecureString). It is passed to the container
-#   as an environment variable by NAME only (docker run -e MINIMOI_UAT_TOKEN), so it never appears on a command line,
-#   in `ps`, or in this script's output.
+#   as a read-only 0600 file mounted at /run/uat_token, so it never appears on a command line, in `ps`, in
+#   `docker inspect`, or in this script's output. TODO before enabling the watcher: pin IMAGE by digest.
 # * Output: /opt/minimoi-staging/uat/<UTC run id>/ (report.md, report.json, screenshots/, runner.log, exit_code).
 # * Exit code: the runner's (0 green, 1 a case failed or errored, 2 configuration), 75 if another run holds the lock.
 set -euo pipefail
@@ -26,6 +26,10 @@ case "$BASE_URL" in
   *) echo "refusing: UAT runs against staging (https://dev.minimoi.ai) only, not $BASE_URL" >&2; exit 2 ;;
 esac
 
+for a in "$@"; do
+  case "$a" in --base-url*|--token-env*|--token-file*|--out*|--run-id*) echo "refusing: $a is set by this script" >&2; exit 2 ;; esac
+done
+
 mkdir -p "$UAT_ROOT"
 # The watcher already holds the lock (UAT_LOCK_HELD=1); a hand run takes it here so two runs never overlap.
 if [ "${UAT_LOCK_HELD:-0}" != "1" ]; then
@@ -41,7 +45,12 @@ MINIMOI_UAT_TOKEN="$(aws ssm get-parameter --name "$SSM_NAME" --with-decryption 
 if [ -z "$MINIMOI_UAT_TOKEN" ] || [ "$MINIMOI_UAT_TOKEN" = "None" ]; then
   echo "the UAT token in SSM is empty" >&2; exit 2
 fi
-export MINIMOI_UAT_TOKEN
+# The token reaches the container as a read-only 0600 file, not an env var, so it is not in `docker inspect` or
+# /proc/<pid>/environ. The file lives under a private temp dir and is removed on exit.
+TOKDIR="$(mktemp -d)"; chmod 700 "$TOKDIR"
+trap 'rm -rf "$TOKDIR"' EXIT
+( umask 077; printf '%s' "$MINIMOI_UAT_TOKEN" > "$TOKDIR/token" )
+unset MINIMOI_UAT_TOKEN
 
 echo "UAT run $RUN_ID → $OUT (image $IMAGE, repo $REPO_DIR @ $(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo '?'))"
 
@@ -50,16 +59,15 @@ docker run --rm --init --ipc=host \
   --name "minimoi-uat-$RUN_ID" \
   --user "$(id -u):$(id -g)" \
   -e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1 -e UAT_RUN_ID="$RUN_ID" \
-  -e MINIMOI_UAT_TOKEN \
+  -v "$TOKDIR/token:/run/uat_token:ro" \
   -v "$REPO_DIR:/repo:ro" \
   -v "$OUT:/out" \
   -w /tmp \
   "$IMAGE" \
-  python3 /repo/tests/uat/staging_uat.py --base-url "$BASE_URL" --token-env MINIMOI_UAT_TOKEN \
+  python3 /repo/tests/uat/staging_uat.py --base-url "$BASE_URL" --token-file /run/uat_token \
     --run-id "$RUN_ID" --out /out "$@" 2>&1 | tee "$OUT/runner.log"
 rc=${PIPESTATUS[0]}
 set -e
-unset MINIMOI_UAT_TOKEN
 
 echo "$rc" > "$OUT/exit_code"
 echo "UAT run $RUN_ID finished: exit $rc, report $OUT/report.md"
