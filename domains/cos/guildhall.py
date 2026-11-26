@@ -15,6 +15,7 @@ import sqlite3
 from pathlib import Path
 from uuid import UUID
 from flask import Blueprint, jsonify, request
+from domains.cos.files import FileRefused
 
 
 def validate(turn):
@@ -78,7 +79,10 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
             got = verifier.document(value['id'], facts['claim_id'], f['id'])
             if got is None or got[2] != f.get('sha256'):
                 missing += 1; continue
-            meta = files.save_upload(got[0], got[1])
+            try:
+                meta = files.save_upload(got[0], got[1])
+            except FileRefused:                 # e.g. empty, or over CoS's own upload limit: say so, keep the turn
+                missing += 1; continue
             with db() as c:
                 c.execute('INSERT OR IGNORE INTO room_files VALUES(?,?,?)', (value['room'], got[2], meta['file_id']))
             ids.append(meta['file_id'])

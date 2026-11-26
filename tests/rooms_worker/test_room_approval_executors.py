@@ -52,7 +52,9 @@ def test_mc_room_yes_runs_the_craft_handler_in_the_proposals_conversation(monkey
 
 
 @pytest.mark.parametrize("state,decided", [("cancelled", "cancelled"), ("needs_code", "refused"),
-                                           ("not_shown", "refused"), ("expired", "failed"), ("failed", "failed")])
+                                           ("not_shown", "refused"), ("expired", "failed"), ("failed", "failed"),
+                                           ("stale", "refused"), ("unknown", "failed"), ("partial", "confirmed"),
+                                           ("rejected", "failed")])
 def test_mc_room_outcomes_map_to_registry_decisions(monkeypatch, state, decided):
     handler = SimpleNamespace(handle=lambda kind, **kw: {"reply": "words", "operation": {"state": state}})
     out = _bridge(monkeypatch, handler, Floor()).approve(_approval_turn(), "op")
@@ -320,3 +322,33 @@ def test_cos_gets_meeting_files_in_its_inbox_once_per_room(tmp_path):
     assert "files shared in this meeting (file ids for initiative_attach: f" in runs[0]
     assert "The line MC quotes." in runs[0] and runs[0].startswith("CoS, file it.")
     assert len(list((tmp_path / "inbox").iterdir())) == 1
+
+
+@pytest.mark.parametrize("data", [b"", b"x" * 6 * 1024 * 1024])
+def test_a_file_cos_cannot_keep_is_named_and_the_turn_still_answers(tmp_path, data):
+    """Records accepts up to 8 MB; CoS keeps up to 5 MB and no empty file. Such a file is reported, never the whole turn lost."""
+    from domains.cos.files import CosFiles
+    from domains.cos.guildhall import install
+    for d in ("inbox", "outbox"):
+        (tmp_path / d).mkdir()
+    files = CosFiles(tmp_path / "inbox", tmp_path / "outbox", "/minimoi/cos/inbox", "/minimoi/cos/outbox")
+    sha = hashlib.sha256(data).hexdigest()
+    fact = dict(FACT, sha256=sha, bytes=len(data))
+    runs = []
+    facts = {"members": [{"id": "robert"}, {"id": "mc"}, {"id": "cos"}], "owner_private": True,
+             "context": {"room": ROOM, "transcript": [{"seq": 3, "kind": "document", "text": "(shared a file)", "file": fact}]},
+             "trigger_text": "CoS, read it.", "claim_id": "claim-1", "room_generation": "g1", "binding": {"origin": "meeting"},
+             "room_approval": None}
+    verifier = SimpleNamespace(admit=lambda value: facts, watch=lambda *a, **k: (lambda: None),
+                               document=lambda t, c, d: ("big.txt", data, sha))
+    token = tmp_path / "tok"
+    token.write_text("x" * 48)
+    app = Flask(__name__)
+    install(app, token_file=token, data_dir=tmp_path / "ledger", verifier=verifier, files=files,
+            run_turn=lambda text, **kw: runs.append(text) or SimpleNamespace(reply="Noted."))
+    body = {"id": TURN, "room": ROOM, "addressee": "cos", "claim_id": "claim-1",
+            "trigger": {"actor": "robert", "kind": "message", "origin": None, "text": "CoS, read it."}}
+    r = app.test_client().post("/internal/guildhall/turn", json=body, headers={"Authorization": "Bearer " + "x" * 48})
+    assert r.status_code == 200, r.json
+    assert "1 file(s) shared in this meeting could not be copied for you" in runs[0]
+    assert list((tmp_path / "inbox").iterdir()) == []
