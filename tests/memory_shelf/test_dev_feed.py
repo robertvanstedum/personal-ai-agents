@@ -326,6 +326,7 @@ def test_with_the_embedder_dev_builds_meaning_indexes_and_never_re_embeds_unchan
                 jobs_root=data / "jobs", min_free=0, mc_index_path=data / "memory-index" / "memory-mc.sqlite")
     first_emb = Recording()
     report = run(**args, embedder=first_emb)
+    assert report["meaning_seed"]["code"] == "ok"                       # a small shelf: the seed completes in the first slice
     assert report["state"] == "ok" and report["mc_index"]["code"] == "ok" and report["mc_index"]["kind"] == "meaning", report
     assert report["mc_index"]["embedded_chunks"] == 0                    # MC borrowed every kept vector from the full index
     assert first_emb.seen
@@ -337,3 +338,25 @@ def test_with_the_embedder_dev_builds_meaning_indexes_and_never_re_embeds_unchan
                             embedder=Recording(), caller=caller)
     assert meaning["status"]["meaning"] == "ok" and meaning["meaning"]
     assert not any("resume" in h["passage"].lower() for h in meaning["meaning"])
+
+
+def test_an_unfinished_meaning_seed_keeps_dev_keyword_only_and_resumes(tmp_path, monkeypatch):
+    """#660: while the seed slice runs out of time, the published indexes stay keyword-only and the feed stays healthy; the
+    next run resumes the seed (nothing embedded twice) and only then turns meaning."""
+    from core.memory_index import indexer
+    from core.memory_index.embedder import PIN_DIGEST_FULL
+    from scripts.memory import dev_feed
+    from tests.memory_index.helpers import FakeEmbedder
+    root, turns, row = source(tmp_path)
+    mc_root = tmp_path / "mc"
+    mc_export(mc_root)
+    data = tmp_path / "vault"
+    args = dict(cos_root=root, mc_root=mc_root, shelf_root=data / "memory", index_path=data / "memory-index" / "memory.sqlite",
+                jobs_root=data / "jobs", min_free=0, mc_index_path=data / "memory-index" / "memory-mc.sqlite")
+    monkeypatch.setattr(dev_feed, "SEED_BUDGET_S", 0)                    # no time at all: the slice ends before any record
+    first = run(**args, embedder=FakeEmbedder(digest=PIN_DIGEST_FULL))
+    assert first["state"] == "ok" and first["meaning_seed"]["code"] == indexer.BUDGET_SPENT
+    assert first["mc_index"].get("kind") == "keyword"
+    monkeypatch.setattr(dev_feed, "SEED_BUDGET_S", 150)
+    second = run(**args, embedder=FakeEmbedder(digest=PIN_DIGEST_FULL))
+    assert second["state"] == "ok" and second["meaning_seed"]["code"] == "ok" and second["mc_index"]["kind"] == "meaning"

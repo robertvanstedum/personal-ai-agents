@@ -74,6 +74,9 @@ def verify(shelf_root, index_path, limit=20):
         con.close()
 
 
+SEED_BUDGET_S = 150          # #660: one time-boxed slice of the meaning seed per run (the CPU embeds ~1 chunk/s on Dev)
+
+
 def _embedder(url):
     if not url:
         return None
@@ -126,6 +129,7 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
         counts, errors, receipts = Counter(), Counter(), []
         mc_built = {"code": "not_configured"} if not mc_index_path else {"code": "not_run"}
         emb = embedder if embedder is not None else _embedder(embedder_url)     # #660: meaning indexes when configured
+        seed_report = None
         shelf = Shelf(shelf_root, min_free_bytes=min_free, min_free_fraction=None)
         candidate = Path(index_path).with_name(".dev-feed-" + secrets.token_hex(8) + ".sqlite")
         try:
@@ -201,11 +205,21 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
             # set. Removed/private/refused records remain evidence on the shelf,
             # but cannot remain in retrieval. Atomic publication avoids a window
             # in which an update temporarily reintroduces historical exclusions.
-            # With the embedder (#660) the previous published index lends the vectors of unchanged text: each run builds a fresh
-            # candidate, so without a donor it would embed the whole shelf every five minutes.
-            donor = Path(index_path) if emb is not None and Path(index_path).is_file() else None
-            indexed = indexer.update(shelf_root, emb, index_path=candidate, keyword_only=emb is None, min_free_bytes=min_free,
-                                     only=[r["record_id"] for r in receipts], donor_path=donor)
+            # With the embedder (#660), as production's seed: a persistent seed index gains vectors one time-boxed slice per run
+            # (each record its own transaction, never deleted), and the published index stays keyword-only until the seed covers
+            # every admitted record. Then each fresh candidate borrows the seed's vectors, so only new text is ever embedded.
+            ids = [r["record_id"] for r in receipts]
+            meaning, donor = False, None
+            if emb is not None:
+                seed_path = Path(index_path).with_name(".meaning-seed.sqlite")
+                seed = indexer.update(shelf_root, emb, index_path=seed_path, only=ids, min_free_bytes=min_free,
+                                      budget_s=SEED_BUDGET_S)
+                seed_report = {k: seed.get(k) for k in ("code", "embedded_chunks", "reused_vectors", "seconds")}
+                meaning, donor = seed.get("code") == "ok", seed_path
+                if seed.get("code") not in ("ok", indexer.BUDGET_SPENT):
+                    errors["meaning_seed_" + str(seed.get("code"))[:24]] += 1
+            indexed = indexer.update(shelf_root, emb if meaning else None, index_path=candidate, keyword_only=not meaning,
+                                     min_free_bytes=min_free, only=ids, donor_path=donor if meaning else None)
             if indexed.get("code") != "ok" or indexed.get("held"):
                 errors["index_not_ready"] += 1
             con = store.connect(candidate, readonly=True)
@@ -223,7 +237,8 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
             os.replace(candidate, index_path)
             if mc_index_path and not errors:
                 mc_built = build_mc_index(shelf_root, mc_index_path, [r["record_id"] for r in receipts],
-                                          career_rules_private, min_free, embedder=emb, donor_path=Path(index_path))
+                                          career_rules_private, min_free, embedder=emb if meaning else None,
+                                          donor_path=Path(index_path))
         except Exception:
             # No raw exceptions or content in operational status.
             errors["run_failed"] += 1
@@ -236,6 +251,7 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
         report = {"schema": "minimoi.dev-memory-feed/1", "at": utc().isoformat(), "state": state,
                   "coverage": "cos_turns_and_mc_exports_only", "counts": dict(counts), "errors": dict(errors),
                   "index": indexed, "verification": checked, "receipts": receipts, "mc_index": mc_built,
+                  "meaning_seed": seed_report,
                   "pruning": "disabled_no_source_or_edition_deletion"}
         status.write_json_atomic(jobs_root, "dev-memory-feed-report.json", report)
         status.finish_run(jobs_root, JOB, running, state=state, now=utc(), exit_code=int(bool(errors)),
