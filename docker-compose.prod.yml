@@ -539,8 +539,9 @@ services:
   # Production Vault: keyword search over the applied snapshot at /opt/minimoi/vault/current.
   # vault-sync and vault-apply carry that copy; production_refresh.py is retired (13 Nov). Behind the `vault` profile,
   # so ordinary releases never create it until activation sets COMPOSE_PROFILES=vault.
-  # Same portal image (the repository copy); no sqlite-vec, so meaning search reports
-  # vector_unavailable. Reachable only on the internal network, never published.
+  # Same portal image (the repository copy, with sqlite-vec). Keyword and meaning search (#660): the query is embedded by
+  # vault-embedder over vault-embed-internal; until vault-apply promotes the meaning seed the serving index is keyword-only and
+  # no embedder is ever called. Reachable only on the internal networks, never published.
   # The build supervisor (#365): check-ins every 15 min, decisions to Robert on the approvals bot, his replies back
   # with receipts. The portal image, its own command (like vault-ask); started only by `supervisor_ec2.sh on`, then
   # recreated with each portal release. Reads the database and the public GitHub API; holds only the approvals bot
@@ -588,7 +589,8 @@ services:
     environment:
       - MINIMOI_ROLE=production
       - PYTHONDONTWRITEBYTECODE=1
-      - MOI_OLLAMA_URL=http://127.0.0.1:9         # no embedder in production: refuse fast, never reach out
+      - MOI_OLLAMA_URL=http://vault-embedder:11434  # the pinned embedder (#660); identity-checked before any query is embedded
+      - MOI_OLLAMA_IDLE_KEEP_ALIVE=15m             # keep the model loaded between queries (the embedder's own memory limit holds)
     volumes:
       - type: bind
         source: ${MINIMOI_ROOT:-/opt/minimoi}/vault
@@ -603,10 +605,11 @@ services:
           create_host_path: false
     networks:
       - vault-internal
+      - vault-embed-internal
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
-    mem_limit: 512m
+    mem_limit: 768m                               # #660: room for the page cache over ~440 MB of vectors (the process itself ~30 MB)
     cpus: 0.5
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
@@ -636,7 +639,8 @@ services:
     environment:
       - MINIMOI_ROLE=production
       - PYTHONDONTWRITEBYTECODE=1
-      - MOI_OLLAMA_URL=http://127.0.0.1:9         # no embedder in production: refuse fast, never reach out
+      - MOI_OLLAMA_URL=http://vault-embedder:11434  # the pinned embedder (#660); identity-checked before any query is embedded
+      - MOI_OLLAMA_IDLE_KEEP_ALIVE=15m
     volumes:
       - type: bind
         source: ${MINIMOI_ROOT:-/opt/minimoi}/vault
@@ -663,10 +667,11 @@ services:
           create_host_path: false
     networks:
       - vault-mc-internal
+      - vault-embed-internal
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
-    mem_limit: 384m
+    mem_limit: 640m                               # #660: as vault-ask, over MC's slightly smaller index
     cpus: 0.5
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
@@ -675,6 +680,35 @@ services:
       interval: 60s
       timeout: 5s
       retries: 3
+
+  # The Vault's pinned embedder (#660): Ollama with nomic-embed-text@0a109f422b47 (768 dims), the model baked into the image at
+  # build (docker/vault-embedder/Dockerfile), so the running container needs no internet. Pinned by digest: the image workflow
+  # (.github/workflows/vault-embedder-image.yml) prints it and the activation writes MINIMOI_VAULT_EMBEDDER_DIGEST to .env (the
+  # zero placeholder never resolves, so a forgotten digest fails at pull). No release builds, starts or recreates it.
+  # Only on vault-embed-internal (no route out): vault-ask, vault-ask-mc and the host's index steps (vault-apply's, the seed's,
+  # vault-mc-index's) are its only clients, and every client checks the model's full digest and a known-answer vector first.
+  vault-embedder:
+    profiles: [vault, vault-mc]
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler@${MINIMOI_VAULT_EMBEDDER_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    container_name: minimoi-vault-embedder
+    restart: unless-stopped
+    networks:
+      - vault-embed-internal
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: 1.5
+    pids_limit: 128
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD-SHELL, "ollama list | grep -Eq '^nomic-embed-text:latest[[:space:]]+0a109f422b47'"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   mc-observations:
@@ -699,6 +733,11 @@ networks:
     internal: true
   # Only the portal (MC's tools door) and vault-ask-mc (#594): no route out, no other service, never MC's container.
   vault-mc-internal:
+    internal: true
+  # Only the embedder and its clients (#660): vault-ask, vault-ask-mc, and the host's index-step containers, which join it by
+  # this fixed name (docker run --network minimoi-vault-embed). No route out.
+  vault-embed-internal:
+    name: minimoi-vault-embed
     internal: true
   # Only cos-agent-a and the three services it talks to. A normal bridge (CoS fetches pages and signs in to its plan);
   # the host's DOCKER-USER rule drops 192.168.250.2 -> 169.254.169.254. Every member has a fixed address

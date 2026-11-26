@@ -74,8 +74,21 @@ def verify(shelf_root, index_path, limit=20):
         con.close()
 
 
-def build_mc_index(shelf_root, mc_index_path, record_ids, career_rules_private=None, min_free=MIN_FREE) -> dict:
-    """Index ``record_ids`` into a fresh career-filtered candidate, verify it, publish it over ``mc_index_path``."""
+SEED_BUDGET_S = 150          # #660: one time-boxed slice of the meaning seed per run (the CPU embeds ~1 chunk/s on Dev)
+
+
+def _embedder(url):
+    if not url:
+        return None
+    from core.memory_index.embedder import OllamaEmbedder
+    return OllamaEmbedder(url)
+
+
+def build_mc_index(shelf_root, mc_index_path, record_ids, career_rules_private=None, min_free=MIN_FREE, embedder=None,
+                   donor_path=None) -> dict:
+    """Index ``record_ids`` into a fresh career-filtered candidate, verify it, publish it over ``mc_index_path``. With ``embedder``
+    (#660) a meaning index whose kept chunks borrow the just-published full index's vectors (``donor_path``); the career filter runs
+    before any vector is taken, so no career turn is embedded or kept."""
     try:
         career = career_filter.load(None, career_rules_private)
     except career_filter.FilterError as exc:
@@ -83,16 +96,17 @@ def build_mc_index(shelf_root, mc_index_path, record_ids, career_rules_private=N
     target = Path(mc_index_path)
     candidate = target.with_name(".dev-feed-mc-" + secrets.token_hex(8) + ".sqlite")
     try:
-        out = indexer.update(shelf_root, None, index_path=candidate, keyword_only=True, min_free_bytes=min_free,
-                             only=list(record_ids), career=career)
+        out = indexer.update(shelf_root, embedder, index_path=candidate, keyword_only=embedder is None, min_free_bytes=min_free,
+                             only=list(record_ids), career=career, donor_path=donor_path if embedder is not None else None)
         if out.get("code") != "ok":
             return {"code": out.get("code")}
-        reason = mc_index.verify(candidate, career)
+        reason = mc_index.verify(candidate, career, "keyword" if embedder is None else "meaning")
         if reason:
             return {"code": reason}
         os.replace(candidate, target)
         return {"code": "ok", "indexed": out.get("indexed", 0), "held": out.get("held", {}),
-                "career_turns_excluded": out.get("career_turns_excluded", 0), "career_filter": career.digest[:12]}
+                "career_turns_excluded": out.get("career_turns_excluded", 0), "career_filter": career.digest[:12],
+                "kind": "keyword" if embedder is None else "meaning", "embedded_chunks": out.get("embedded_chunks", 0)}
     except Exception:
         return {"code": "mc_index_failed"}
     finally:
@@ -101,7 +115,7 @@ def build_mc_index(shelf_root, mc_index_path, record_ids, career_rules_private=N
 
 
 def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FREE, mc_index_path=None,
-        career_rules_private=None):
+        career_rules_private=None, embedder_url=None, embedder=None):
     jobs_root = Path(jobs_root)
     jobs_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     # Never overwrite another live run's status or take its lock.
@@ -114,6 +128,8 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
         started = time.monotonic()
         counts, errors, receipts = Counter(), Counter(), []
         mc_built = {"code": "not_configured"} if not mc_index_path else {"code": "not_run"}
+        emb = embedder if embedder is not None else _embedder(embedder_url)     # #660: meaning indexes when configured
+        seed_report = None
         shelf = Shelf(shelf_root, min_free_bytes=min_free, min_free_fraction=None)
         candidate = Path(index_path).with_name(".dev-feed-" + secrets.token_hex(8) + ".sqlite")
         try:
@@ -189,8 +205,21 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
             # set. Removed/private/refused records remain evidence on the shelf,
             # but cannot remain in retrieval. Atomic publication avoids a window
             # in which an update temporarily reintroduces historical exclusions.
-            indexed = indexer.update(shelf_root, None, index_path=candidate, keyword_only=True, min_free_bytes=min_free,
-                                     only=[r["record_id"] for r in receipts])
+            # With the embedder (#660), as production's seed: a persistent seed index gains vectors one time-boxed slice per run
+            # (each record its own transaction, never deleted), and the published index stays keyword-only until the seed covers
+            # every admitted record. Then each fresh candidate borrows the seed's vectors, so only new text is ever embedded.
+            ids = [r["record_id"] for r in receipts]
+            meaning, donor = False, None
+            if emb is not None:
+                seed_path = Path(index_path).with_name(".meaning-seed.sqlite")
+                seed = indexer.update(shelf_root, emb, index_path=seed_path, only=ids, min_free_bytes=min_free,
+                                      budget_s=SEED_BUDGET_S)
+                seed_report = {k: seed.get(k) for k in ("code", "embedded_chunks", "reused_vectors", "seconds")}
+                meaning, donor = seed.get("code") == "ok", seed_path
+                if seed.get("code") not in ("ok", indexer.BUDGET_SPENT):
+                    errors["meaning_seed_" + str(seed.get("code"))[:24]] += 1
+            indexed = indexer.update(shelf_root, emb if meaning else None, index_path=candidate, keyword_only=not meaning,
+                                     min_free_bytes=min_free, only=ids, donor_path=donor if meaning else None)
             if indexed.get("code") != "ok" or indexed.get("held"):
                 errors["index_not_ready"] += 1
             con = store.connect(candidate, readonly=True)
@@ -208,7 +237,8 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
             os.replace(candidate, index_path)
             if mc_index_path and not errors:
                 mc_built = build_mc_index(shelf_root, mc_index_path, [r["record_id"] for r in receipts],
-                                          career_rules_private, min_free)
+                                          career_rules_private, min_free, embedder=emb if meaning else None,
+                                          donor_path=Path(index_path))
         except Exception:
             # No raw exceptions or content in operational status.
             errors["run_failed"] += 1
@@ -221,6 +251,7 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
         report = {"schema": "minimoi.dev-memory-feed/1", "at": utc().isoformat(), "state": state,
                   "coverage": "cos_turns_and_mc_exports_only", "counts": dict(counts), "errors": dict(errors),
                   "index": indexed, "verification": checked, "receipts": receipts, "mc_index": mc_built,
+                  "meaning_seed": seed_report,
                   "pruning": "disabled_no_source_or_edition_deletion"}
         status.write_json_atomic(jobs_root, "dev-memory-feed-report.json", report)
         status.finish_run(jobs_root, JOB, running, state=state, now=utc(), exit_code=int(bool(errors)),
@@ -237,6 +268,7 @@ def main():
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--mc-index-path", type=Path, help="also publish MC's career-filtered index here (#594)")
     parser.add_argument("--career-rules-private", type=Path, help="the host's private career rules (0600, never in git)")
+    parser.add_argument("--embedder-url", help="#660: the pinned embedder (http://vault-embedder:11434): meaning indexes")
     args = parser.parse_args()
     os.umask(0o077)
     result = run(**vars(args))

@@ -112,13 +112,13 @@ def test_service_writes_its_query_log_where_told(monkeypatch, tmp_path):
 def test_compose_vault_service_is_profile_gated_internal_and_read_only():
     spec = yaml.safe_load((ROOT / "docker-compose.prod.yml").read_text())
     vault = spec["services"]["vault-ask"]
-    assert vault["profiles"] == ["vault"] and "ports" not in vault and vault["networks"] == ["vault-internal"]
+    assert vault["profiles"] == ["vault"] and "ports" not in vault and vault["networks"] == ["vault-internal", "vault-embed-internal"]
     assert vault["read_only"] is True and vault["cap_drop"] == ["ALL"]
     data = next(v for v in vault["volumes"] if v["target"] == "/vault")
     assert data["read_only"] is True and data["bind"] == {"create_host_path": False}
     log = next(v for v in vault["volumes"] if v["target"] != "/vault")
     assert not log["target"].startswith("/vault/") and log.get("read_only") is not True     # writable, outside the RO tree
-    assert "MOI_OLLAMA_URL=http://127.0.0.1:9" in vault["environment"]
+    assert "MOI_OLLAMA_URL=http://vault-embedder:11434" in vault["environment"]            # #660: the pinned embedder
     assert spec["networks"]["vault-internal"] == {"internal": True}
     on_network = [n for n, s in spec["services"].items() if "vault-internal" in (s.get("networks") or [])]
     assert sorted(on_network) == ["cos-scheduler", "vault-ask"]
@@ -145,3 +145,27 @@ def test_scoped_portal_release_recreates_vault_ask_only_once_it_exists():
     check = text.index('if [[ "$VAULT_RECREATED" == "1" ]]')
     assert text.index('expected_image portal', check) < text.index('docker image prune -af')
     assert text.index('wait_for_container_health minimoi-vault-ask', check) < text.index('docker image prune -af')
+
+
+def test_the_embedder_is_internal_limited_pinned_and_its_only_clients_are_the_vault():
+    """#660: one small container in both vault profiles, no port, only on its internal network, limits, image by digest."""
+    spec = yaml.safe_load((ROOT / "docker-compose.prod.yml").read_text())
+    emb = spec["services"]["vault-embedder"]
+    assert emb["profiles"] == ["vault", "vault-mc"] and "ports" not in emb and "expose" not in emb
+    assert emb["networks"] == ["vault-embed-internal"]
+    assert spec["networks"]["vault-embed-internal"] == {"name": "minimoi-vault-embed", "internal": True}
+    assert emb["mem_limit"] == "1g" and emb["memswap_limit"] == "1g" and emb["cpus"] == 1.5 and emb["pids_limit"] == 128
+    assert emb["read_only"] is True and emb["cap_drop"] == ["ALL"] and emb["security_opt"] == ["no-new-privileges:true"]
+    assert "@${MINIMOI_VAULT_EMBEDDER_DIGEST:-sha256:" + "0" * 64 + "}" in emb["image"] and ":latest" not in emb["image"]
+    assert "0a109f422b47" in " ".join(emb["healthcheck"]["test"])
+    on_network = sorted(n for n, s in spec["services"].items() if "vault-embed-internal" in (s.get("networks") or []))
+    assert on_network == ["vault-ask", "vault-ask-mc", "vault-embedder"]
+    for name in ("vault-ask", "vault-ask-mc"):
+        assert "MOI_OLLAMA_URL=http://vault-embedder:11434" in spec["services"][name]["environment"]
+    assert "127.0.0.1:9" not in (ROOT / "docker-compose.prod.yml").read_text()             # the dead URL is gone
+
+
+def test_staging_names_the_embedder_with_its_local_image():
+    staging = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())
+    assert staging["services"]["vault-embedder"]["image"].startswith("minimoi-staging/vault-embedder:")
+    assert staging["services"]["vault-embedder"]["pull_policy"] == "never"

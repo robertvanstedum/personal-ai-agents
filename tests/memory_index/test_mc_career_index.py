@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -251,3 +252,116 @@ def test_the_index_runner_can_follow_the_running_portal_image():
         apply.make_index_runner("docker-container:minimoi-portal",
                                 run=lambda argv, **kw: subprocess.CompletedProcess(argv, 1, stdout="", stderr="no such"))
     assert exc.value.code == "index_runner_container_unavailable"
+
+
+# ── meaning search (#660): the career filter first, the full index of the same release lends its vectors ──────────────────
+class Recording:
+    """FakeEmbedder with the pinned digest that records every text it is asked to embed."""
+
+    def __new__(cls, **kw):
+        from core.memory_index.embedder import PIN_DIGEST_FULL
+        from .helpers import FakeEmbedder
+
+        class _R(FakeEmbedder):
+            def _embed(self, texts):
+                self.seen.extend(texts)
+                return super()._embed(texts)
+        emb = _R(digest=PIN_DIGEST_FULL, **kw)
+        emb.seen = []
+        return emb
+
+
+CAREER_WORDS = ("resume", "cover letter", "recruiter", "hiring manager", "job search", "linkedin")
+
+
+def vector_hashes(index):
+    con = store.connect(index, readonly=True)
+    try:
+        return {r[0] for r in con.execute("SELECT c.text_hash FROM chunks c JOIN vec v ON v.id = c.id")}
+    finally:
+        con.close()
+
+
+def career_hashes(shelf):
+    """The text hashes of every chunk on the shelf whose text is career talk (the FTS table is contentless: hash, not text)."""
+    from core.memory_index import chunker
+    out = set()
+    for rid, _rel, path in indexer.shelf_entries(shelf.root):
+        _meta, chunks = chunker.chunk_record(path.read_bytes())
+        out |= {c.text_hash for c in chunks if any(w in c.text.lower() for w in CAREER_WORDS)}
+    return out
+
+
+def test_mc_stays_keyword_while_the_full_index_is_keyword(tmp_path):
+    shelf, _ = shelf_world(tmp_path)
+    f = career_filter.load()
+    full = tmp_path / "full.sqlite"
+    assert indexer.update(shelf.root, None, index_path=full, keyword_only=True, min_free_bytes=0)["code"] == "ok"
+    emb = Recording()
+    out = mc_index.build(shelf.root, tmp_path / "mc.sqlite", f, release="r1", embedder=emb, donor_path=full)
+    assert out["code"] == "ok" and out["kind"] == "keyword" and out["meaning"] == "meaning_waits_for_full_index"
+    assert emb.seen == [] and mc_index.verify(tmp_path / "mc.sqlite", f) is None
+
+
+def test_mc_turns_meaning_from_the_donor_and_never_embeds_or_holds_a_career_turn(tmp_path):
+    shelf, ids = shelf_world(tmp_path)
+    f = career_filter.load()
+    full, mc = tmp_path / "full.sqlite", tmp_path / "mc.sqlite"
+    assert indexer.update(shelf.root, Recording(), index_path=full, min_free_bytes=0)["code"] == "ok"      # CoS's index: everything
+    assert mc_index.build(shelf.root, mc, f, release="r1")["code"] == "ok"                                  # keyword, published
+    emb = Recording()
+    out = mc_index.build(shelf.root, mc, f, release="r1", embedder=emb, donor_path=full)                   # same release, new kind
+    assert out["code"] == "ok" and out["kind"] == "meaning" and out["swapped"]
+    assert out.get("embedded_chunks", 0) == 0 and emb.seen == []          # every kept vector came from the donor
+    assert mc_index.verify(mc, f, "meaning") is None and mc_index.verify(mc, f) == "verify_not_keyword_only"
+    career = career_hashes(shelf)
+    assert career and vector_hashes(mc) and not (vector_hashes(mc) & career)   # no career text has a vector in MC's index
+    assert vector_hashes(full) & career                                       # (the full index, CoS's, does)
+    hits = search.search("runner image provider table", shelf_root=shelf.root, embedder=Recording(), index_path=mc, caller=RAW, k=5)
+    assert hits["status"]["meaning"] == "ok" and {h["record_id"] for h in hits["meaning"]} <= {ids["mixed"], ids["plain"]}
+    assert mc_index.build(shelf.root, mc, f, release="r1", embedder=Recording(), donor_path=full)["code"] == "noop"
+
+
+def test_new_kept_text_the_donor_lacks_is_embedded_but_career_text_never_is(tmp_path):
+    shelf, ids = shelf_world(tmp_path)
+    f = career_filter.load()
+    full, mc = tmp_path / "full.sqlite", tmp_path / "mc.sqlite"
+    assert indexer.update(shelf.root, Recording(), index_path=full, min_free_bytes=0)["code"] == "ok"
+    # The donor is a release behind: a new edition with one more engineering turn and one more career turn.
+    add_record(shelf, "codex", "c-plain", [
+        ("human", "Add the quartz telemetry probe to the health job."),
+        ("assistant", "Done: the quartz probe reports every five minutes."),
+        ("human", "Also chart the probe latency on the operations page."),
+        ("assistant", "Charted."),
+        ("human", "Separately, " + CAREER),
+        ("assistant", "Send them over.")], normalizer=5)
+    emb = Recording()
+    out = mc_index.build(shelf.root, mc, f, release="r2", embedder=emb, donor_path=full)
+    assert out["code"] == "ok" and out["kind"] == "meaning"
+    sent = " ".join(emb.seen).lower()
+    assert "latency" in sent or "charted" in sent or out.get("embedded_chunks", 0) == 0
+    assert not any(w in sent for w in CAREER_WORDS)
+
+
+def test_the_cli_takes_the_donor_from_the_one_resolved_release(tmp_path, monkeypatch, capsys):
+    shelf, _ = shelf_world(tmp_path / "rel-1")
+    release = tmp_path / "vault" / "releases" / "r-1"
+    release.mkdir(parents=True)
+    os.rename(shelf.root, release / "shelf")
+    (release / "index").mkdir()
+    assert indexer.update(release / "shelf", Recording(), index_path=release / "index" / "memory.sqlite", min_free_bytes=0)["code"] == "ok"
+    os.symlink("releases/r-1", tmp_path / "vault" / "current")
+    seen = {}
+    real = mc_index.build
+
+    def spy(shelf_root, out_path, career, **kw):
+        seen.update(shelf=Path(shelf_root), **kw)
+        return real(shelf_root, out_path, career, **{**kw, "embedder": Recording()})
+    monkeypatch.setattr(mc_index, "build", spy)
+    rc = mc_index.main(["build", "--shelf", str(tmp_path / "vault" / "current" / "shelf"), "--out", str(tmp_path / "mc" / "mc.sqlite"),
+                        "--release-from", str(tmp_path / "vault" / "current"), "--embedder-url", "http://vault-embedder:11434"])
+    assert rc == 0
+    assert seen["donor_path"] == release.resolve() / "index" / "memory.sqlite" and seen["shelf"] == release.resolve() / "shelf"
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1])["kind"] == "meaning"
+    assert mc_index.main(["build", "--shelf", "x", "--out", "y", "--release-from", str(tmp_path / "vault" / "current"),
+                          "--donor", "z"]) == mc_index.EXIT_REFUSED

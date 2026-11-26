@@ -297,3 +297,66 @@ def test_ask_keeps_answering_from_the_published_index_while_a_feed_run_is_in_pro
     status.write_status(data / "jobs", "dev-memory-feed.json", stale)
     refused = ask()
     assert refused.status_code == 503 and refused.get_json() == {"error": "feed_not_ready"}
+
+
+def test_with_the_embedder_dev_builds_meaning_indexes_and_never_re_embeds_unchanged_text(tmp_path):
+    """#660 on Dev: the feed builds meaning indexes for CoS and MC; each 5-minute run borrows the last published index's
+    vectors, so unchanged text is never embedded again; MC's index still never holds a career turn."""
+    from core.memory_index.embedder import PIN_DIGEST_FULL
+    from tests.memory_index.helpers import FakeEmbedder
+
+    class Recording(FakeEmbedder):
+        def __init__(self):
+            super().__init__(digest=PIN_DIGEST_FULL)
+            self.seen = []
+
+        def _embed(self, texts):
+            self.seen.extend(texts)
+            return super()._embed(texts)
+
+    root, turns, row = source(tmp_path)
+    career = dict(row, seq=2, turn_id="t-0123456789abcdee", user_text="Rewrite my resume for the recruiter call",
+                  reply_text="Here is a tighter resume summary", status="answered", answered_at=AT)
+    with turns.open("a") as f:
+        f.write(json.dumps(career) + "\n")
+    mc_root = tmp_path / "mc"
+    mc_export(mc_root)
+    data = tmp_path / "vault"
+    args = dict(cos_root=root, mc_root=mc_root, shelf_root=data / "memory", index_path=data / "memory-index" / "memory.sqlite",
+                jobs_root=data / "jobs", min_free=0, mc_index_path=data / "memory-index" / "memory-mc.sqlite")
+    first_emb = Recording()
+    report = run(**args, embedder=first_emb)
+    assert report["meaning_seed"]["code"] == "ok"                       # a small shelf: the seed completes in the first slice
+    assert report["state"] == "ok" and report["mc_index"]["code"] == "ok" and report["mc_index"]["kind"] == "meaning", report
+    assert report["mc_index"]["embedded_chunks"] == 0                    # MC borrowed every kept vector from the full index
+    assert first_emb.seen
+    second = Recording()
+    assert run(**args, embedder=second)["state"] == "ok"
+    assert second.seen == []                                              # nothing new: nothing embedded
+    caller = policy.Caller(tier="all", scopes=("robert",))
+    meaning = search.search("Please arrange the blue heron meeting", shelf_root=args["shelf_root"], index_path=args["mc_index_path"],
+                            embedder=Recording(), caller=caller)
+    assert meaning["status"]["meaning"] == "ok" and meaning["meaning"]
+    assert not any("resume" in h["passage"].lower() for h in meaning["meaning"])
+
+
+def test_an_unfinished_meaning_seed_keeps_dev_keyword_only_and_resumes(tmp_path, monkeypatch):
+    """#660: while the seed slice runs out of time, the published indexes stay keyword-only and the feed stays healthy; the
+    next run resumes the seed (nothing embedded twice) and only then turns meaning."""
+    from core.memory_index import indexer
+    from core.memory_index.embedder import PIN_DIGEST_FULL
+    from scripts.memory import dev_feed
+    from tests.memory_index.helpers import FakeEmbedder
+    root, turns, row = source(tmp_path)
+    mc_root = tmp_path / "mc"
+    mc_export(mc_root)
+    data = tmp_path / "vault"
+    args = dict(cos_root=root, mc_root=mc_root, shelf_root=data / "memory", index_path=data / "memory-index" / "memory.sqlite",
+                jobs_root=data / "jobs", min_free=0, mc_index_path=data / "memory-index" / "memory-mc.sqlite")
+    monkeypatch.setattr(dev_feed, "SEED_BUDGET_S", 0)                    # no time at all: the slice ends before any record
+    first = run(**args, embedder=FakeEmbedder(digest=PIN_DIGEST_FULL))
+    assert first["state"] == "ok" and first["meaning_seed"]["code"] == indexer.BUDGET_SPENT
+    assert first["mc_index"].get("kind") == "keyword"
+    monkeypatch.setattr(dev_feed, "SEED_BUDGET_S", 150)
+    second = run(**args, embedder=FakeEmbedder(digest=PIN_DIGEST_FULL))
+    assert second["state"] == "ok" and second["meaning_seed"]["code"] == "ok" and second["mc_index"]["kind"] == "meaning"
