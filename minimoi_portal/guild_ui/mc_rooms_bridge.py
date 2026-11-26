@@ -35,6 +35,32 @@ def result(outcome, detail, text=''):
     return {'outcome': outcome, 'detail': detail, 'text': text, 'usage': None}
 
 
+def _is_docx(name) -> bool:
+    return str(name).lower().endswith('.docx')
+
+
+_DOCX_READER = None
+
+
+def _docx_rendering(data: bytes) -> bytes:
+    """The Word file's text as scripts/mc_host/inspect.py's bounded reader projects it (no DTDs or entities, zip-bomb
+    and size bounds), as UTF-8 bytes. A file it refuses gets a one-line note instead, so the original copy still goes
+    to MC and MC can say plainly why it cannot quote it, rather than the whole meeting's files being withheld."""
+    global _DOCX_READER
+    if _DOCX_READER is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'minimoi_fixed_host_inspector', Path(__file__).resolve().parents[2] / 'scripts' / 'mc_host' / 'inspect.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _DOCX_READER = module
+    try:
+        return _DOCX_READER.docx_text(data).encode('utf-8')
+    except _DOCX_READER.Refused as exc:
+        return (f'This Word file could not be turned into text ({exc.args[0] if exc.args else "refused"}). '
+                'Nothing from it can be quoted; ask for it as a text or Markdown file.\n').encode('utf-8')
+
+
 def refusal_lines(trace):
     """One platform line per step that did not succeed, from the run's step record (labels only, never arguments or
     results). #681 C: a refusal reached MC but never Robert; now the room shows it under MC's reply."""
@@ -167,9 +193,19 @@ class Bridge:
                     raise mc_files.EvidenceRefused('changed', 'A meeting file did not match its recorded hash.')
                 if len(data) > FILE_MAX_BYTES:
                     raise mc_files.EvidenceRefused('too_big', 'A meeting file is over 8 MB.')
-                out.append(('doc', f['id'], f.get('name') or 'file', data))
+                name = f.get('name') or 'file'
+                out.append(('doc', f['id'], name, data))
+                if agent is not None and _is_docx(name):
+                    # Containerized MC reads only inside its workspace, where its host reader refuses every path (the
+                    # .openclaw state folder is denied by design). A Word file gets a plain-text rendering beside it,
+                    # made by the same bounded reader MC's host tool uses, so MC opens it like any text file (B2, 26 Nov).
+                    out.append(('text', f['id'], name + '.txt', _docx_rendering(data)))
             return out
-        wanted = [['doc', f['id']] for f in facts]
+        wanted = []
+        for f in facts:
+            wanted.append(['doc', f['id']])
+            if agent is not None and _is_docx(f.get('name') or 'file'):
+                wanted.append(['text', f['id']])
         rid = mc_files.request_id('guildhall', turn['room'], self.principal, turn['id'], wanted)
         try:
             if agent is not None:                          # containerized MC: copies owned by its user, inside its workspace
@@ -189,7 +225,11 @@ class Bridge:
                 path = os.path.join(agent[1], rid, os.path.basename(row['path']))
             else:
                 path = os.path.join(host, core_files.FOLDER, rid, os.path.basename(row['path']))
-            lines.append(f"- {row['name']}: {path} (sha256 {row['sha256'][:16]}…, {row['bytes']} bytes)")
+            if row.get('kind') == 'text':
+                lines.append(f"- {row['name']}: {path} (plain-text rendering of the Word file above; read this one, "
+                             f"not the .docx; {row['bytes']} bytes)")
+            else:
+                lines.append(f"- {row['name']}: {path} (sha256 {row['sha256'][:16]}…, {row['bytes']} bytes)")
         return lines, None
 
     # ---- approvals in the room ------------------------------------------------------------------------------
