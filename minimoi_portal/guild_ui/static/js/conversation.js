@@ -1365,7 +1365,8 @@ export function initConversation(p) {
     import(`/founders-ui/partner-menu.js${revision ? `?v=${encodeURIComponent(revision)}` : ''}`).then(({ initPartnerMenu }) => {
       const partnerMenu = initPartnerMenu({ root: $('[data-partner-menu]'), settingsUrl: '/mc/partner-settings',
         request: (method, path, body) => (method === 'GET' ? apiGet(path) : apiPost(path, body)),
-        conversationId: () => page?.conversation?.id });
+        conversationId: () => page?.conversation?.id,
+        onVoice: (voice) => document.dispatchEvent(new CustomEvent('partner:voice', { detail: voice })) });
       if (partnerMenu) {
         const opts = $('[data-mc-options]');
         if (opts) opts.addEventListener('toggle', () => { if (opts.open) partnerMenu.load(); });

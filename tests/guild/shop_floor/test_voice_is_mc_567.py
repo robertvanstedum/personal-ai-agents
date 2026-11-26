@@ -30,8 +30,8 @@ MAC = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KH
 
 
 @pytest.mark.parametrize("value,path", [(None, "chained"), ("", "chained"), ("chained", "chained"), ("CHAINED", "chained"),
-                                        ("direct", "direct"), (" Direct ", "direct"), ("realtime", "direct"),
-                                        ("REALTIME", "direct"), ("nope", "chained")])   # #659: the walk is retired into direct
+                                        ("direct", "direct"), (" Direct ", "direct"), ("realtime", "realtime"),
+                                        ("REALTIME", "realtime"), ("nope", "chained")])
 def test_mcs_voice_path_is_chained_unless_direct_is_asked_for(value, path):
     env = {} if value is None else {direct.PATH_ENV: value}
     assert direct.voice_path(env) == path
