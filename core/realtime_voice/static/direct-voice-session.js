@@ -87,7 +87,8 @@ export const GOODBYE_LINE = `Say only this, then stop: "${GOODBYE}"`;
 export const CHAT_LINE = 'Nothing from his last words is waiting to be done. Answer only the words he just spoke. Do not repeat, ' +
   'resume, or summarise your previous answer unless he asked you to. Do not ask him to confirm anything, and do not say ' +
   'anything is or will be done. Do not mention requests, the work side, or anything not coming through, unless he clearly ' +
-  'asked you to do something; only then say briefly that typing it in the chat will do it.';
+  'asked you to do something; only then say briefly that it did not come through as a request and ask him to say it ' +
+  'again in one short sentence. He may be on a phone: never tell him to type it.';
 // #653 (Robert, 16 Nov 2026, by phone): while one lookup ran, the voice said "Let me check with Master Craftsman" four times
 // in two minutes, twice back to back, a garbled line among what it answered. While a check of his is still out (sent, or
 // answered pending and not yet back), each chat response is told this beside CHAT_LINE (OpenAI: the page makes every response).
