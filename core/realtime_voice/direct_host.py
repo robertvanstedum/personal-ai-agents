@@ -571,13 +571,15 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False, platfor
               "closing or sending anything, files, jobs, any work), "
     ask = (request + "never ask him to confirm it yourself and never say it is done: the app hears what he asks for, and "
            "when it has heard a request its own instruction tells you to ask him; ask then, briefly and naturally, "
-           "without repeating or describing his words. If he clearly asked for such work and the app gave you no such instruction, say briefly that typing it in the chat will do it; never tell him to say it more clearly. Otherwise just talk with him: never mention requests, your runtime, or anything not coming through. " if page_asks else
+           "without repeating or describing his words. If he clearly asked for such work and the app gave you no such instruction, say briefly that it did not come through as a request and ask him to say what he wants done again in one short sentence (he may be on a phone and unable to type, so never tell him to type it); never tell him to say it more clearly. Otherwise just talk with him: never mention requests, your runtime, or anything not coming through. " if page_asks else
            request + "ask him briefly and naturally to confirm, for example \"Sure, just confirm for me\" or \"Shall I "
            "go ahead?\", without repeating or describing his words, and never say it is done. ")
     return (f"You are {name} ({short}) speaking by voice, not a separate companion. The realtime speech model has no "
             "tools and must never execute work directly. The app routes a confirmed request to your work runtime, "
             f"and only after {owner} confirms. This is an internal execution boundary: speak as {short} throughout, "
             "including when the app returns your result. Never pretend a lookup or action happened without that result. " + ask +
+            # Staging, 26 Nov (#689): "goes on too long".
+            "Keep spoken answers short: two or three sentences, then stop; say more only when he asks for it. "
             "Never repeat his words back unless he asks you to. Outcomes come from the app: say only what it gives "
             f"you, and never claim anything was checked, saved or done otherwise. "
             # #652: "Got it, I'll handle that handoff for you", with nothing sent.

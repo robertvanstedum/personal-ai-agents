@@ -20,8 +20,14 @@ _ONE = re.compile(
 _IT = re.compile(r"^(?:please\s+)?(?:tell|send|message)\s+(?:it|that|them)\b(?:\s+now)?(?:\s+to)?\s*(?P<body>.+?)\s*$", re.I | re.S)
 _PER = re.compile(r"^per robert[.!]?\s*$", re.I)
 _CODE = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+# The card id as typed or as speech-to-text writes it (staging, 26 Nov: "Yes, S U 4 W S" sent nothing): a comma or stop
+# after the word, and spaces, dashes or dots between the characters. Still exactly S plus the four characters of one id;
+# nothing fuzzy, and a remark after the id still does not approve.
+_GAP = r"[\s.\-]*"
+_CH = "[" + _CODE + "]"
 _REPLY = re.compile(
-    r"^(?P<word>yes|no|edit)\s+S-(?P<code>[" + _CODE + r"]{4})(?P<rest>.*)$", re.I | re.S)
+    r"^(?P<word>yes|no|edit)[,.!:]?\s+S" + _GAP + "(?P<c1>" + _CH + ")" + _GAP + "(?P<c2>" + _CH + ")" + _GAP
+    + "(?P<c3>" + _CH + ")" + _GAP + "(?P<c4>" + _CH + r")(?![" + _CODE + r"])(?P<rest>.*)$", re.I | re.S)
 _NAMED = re.compile(r"\b(?:grok|claude code|claude|codex)\b", re.I)
 
 
@@ -102,7 +108,7 @@ def parse_reply(text: str):
     match = _REPLY.match(text.strip())
     if match is None:
         return None
-    code = "S-" + match["code"].upper()
+    code = "S-" + "".join(match[k] for k in ("c1", "c2", "c3", "c4")).upper()
     word = match["word"].lower()
     rest = match["rest"] or ""
     if word == "edit":

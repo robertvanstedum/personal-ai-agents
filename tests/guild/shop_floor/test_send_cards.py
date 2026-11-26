@@ -49,5 +49,30 @@ class ProposeTests(unittest.TestCase):
         self.assertIsNone(store.replace("c-abc", card["id"], "again"))
 
 
+class SpokenCodeTests(unittest.TestCase):
+    """Staging, 26 Nov: a spoken "Yes, S U 4 W S" sent nothing. The id as speech writes it matches; only that exact id."""
+
+    def test_the_id_as_typed_or_spoken_matches_exactly(self):
+        for said in ("yes S-U4WS", "Yes, S U 4 W S", "yes, S-U4WS", "yes s u 4 w s", "Yes S-U-4-W-S.", "YES. S.U.4.W.S!",
+                     "yes SU4WS", "yes S - U4WS"):
+            self.assertEqual(parse_reply(said), ("yes", "S-U4WS", ""), said)
+        self.assertEqual(parse_reply("No, S U 4 W S"), ("no", "S-U4WS", ""))
+        self.assertEqual(parse_reply("edit S U 4 W S: new words"), ("edit", "S-U4WS", "new words"))
+
+    def test_nothing_near_the_id_approves(self):
+        for said in ("yes S U 4 W", "yes S-U4W", "yes S U 4 W S 7", "yes S-U4WSX", "yes U4WS", "yes S-U4WS, but wait",
+                     "yes S O 4 W S", "yesS-U4WS", "yes please S-U4WS", "maybe S-U4WS"):
+            parsed = parse_reply(said)
+            self.assertTrue(parsed is None or parsed[0] == "unclear", (said, parsed))
+
+    def test_a_second_yes_finds_nothing_waiting(self):
+        import tempfile
+        store = Store(tempfile.mkdtemp())
+        [card] = store.issue("c-abc", propose("Tell grok to finish build"))
+        self.assertEqual(parse_reply("Yes, S " + " ".join(card["id"][2:]))[1], card["id"])
+        store.mark("c-abc", card["id"], "sent")
+        self.assertEqual(store.get("c-abc", card["id"])["state"], "sent")      # api.py: not pending, so nothing is sent again
+
+
 if __name__ == "__main__":
     unittest.main()

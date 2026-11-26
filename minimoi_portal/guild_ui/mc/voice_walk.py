@@ -94,6 +94,11 @@ def instructions(release: str | None = None, root: str | None = None, briefing: 
         "'Task:' and stop.",
         "Do not say that you noted it. The server tells you when the register has a receipt.",
         "A fragment is not a turn. Do not act on half a sentence.",
+        # Staging, 26 Nov (#689): the walk went on too long, and answered an issue question from the waiting notices.
+        "Keep spoken answers short: two or three sentences, then stop. Say more only when he asks for it.",
+        "A question about an issue, a ticket or a bug (by number or by subject) is for the issues tool. The waiting "
+        "notices in the briefing are not issues: never answer an issue question from them.",
+        "He may be on a phone: never tell him to type something.",
         "",
         "Briefing (orientation, with the time it was read):",
         brief,

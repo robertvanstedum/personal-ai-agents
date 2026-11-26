@@ -1118,3 +1118,17 @@ def test_l_n5_a_host_in_writing_hook_that_raises_is_a_refusal_before_anything_ru
     assert body["spoken"] == "Do that in writing."
     assert "consult_request:t0" not in records_of(r, sid) and not r.host.turns
     assert "in_writing" in caplog.text
+
+
+def test_voice_keeps_answers_short_and_never_tells_a_phone_user_to_type():
+    """Staging, 26 Nov (#689): CoS voice said "Typing it in the chat will do it" to the owner on his phone, and went on
+    too long. Both page plumbings, and the page's own reminder line, now ask for one short sentence instead."""
+    from pathlib import Path
+    from core.realtime_voice import direct_host
+    person = {"name": "Test Person", "short": "TP", "notes": ("save a note:",)}
+    for page_asks in (True, False):
+        rules = direct_host.direct_rules(person, page_asks=page_asks)
+        assert "typing it in the chat" not in rules and "Keep spoken answers short: two or three sentences" in rules
+    assert "never tell him to type it" in direct_host.direct_rules(person, page_asks=True)
+    js = (Path(direct_host.__file__).parent / "static/direct-voice-session.js").read_text()
+    assert "typing it in the chat" not in js and "never tell him to type it" in js
