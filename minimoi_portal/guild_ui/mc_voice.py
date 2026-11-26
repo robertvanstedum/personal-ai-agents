@@ -209,6 +209,7 @@ def _bootstrap_walk(principal, guard, device):
     from .mc.voice_calls import voice_calls_of
     from .mc.voice_calls import call_record_folder
     from .mc.voice_walk import instructions, open_call, open_session, read_tools, talking_reservation
+    from core.realtime_voice.direct_host import clock_line
     asked = (request.get_json(silent=True) or {}).get("provider") or "openai"
     if asked != "openai":
         return jsonify({"ok": False, "error": WALK_OPENAI_ONLY}), 409
@@ -226,7 +227,8 @@ def _bootstrap_walk(principal, guard, device):
         with budget.admit(kind=kind, domain="mc", principal=principal, required=True, amount_micro=amount,
                           entry_id=budget.direct_entry_id(session)):
             credential = openai_realtime.mint_ephemeral_credential(
-                instructions=instructions(),
+                # A5 (staging, 26 Nov): the walk knew no time; it carries the owner's clock as its briefing, like the direct path.
+                instructions=instructions(briefing=clock_line()),
                 voice=voice,
                 turn_detection=conversation_turn_detection("openai"),
                 transcription_language="en",
