@@ -3,7 +3,7 @@
 #   docker build -t <tag> docker/vault-embedder            (the context is this folder only)
 #
 # Pinned three ways: the base image by digest, Ollama's release tarball by its published sha256, and the model by its manifest
-# digest. The build FAILS if any of them differs, so the running container needs no internet and can serve nothing else. Only the
+# (committed here, nomic-embed-text.manifest.json) and each blob's digest. The build FAILS if any of them differs, so the running container needs no internet and can serve nothing else. Only the
 # CPU back ends are unpacked (the tarball's CUDA and Vulkan libraries are 2.3 GB of its 2.4 GB); the image is ~400 MB, and the
 # build needs ~1.5 GB of temporary disk for the tarball. Clients still check the model's full digest and a known-answer vector
 # before they embed anything (core/memory_index/embedder.py, embedder_probe.json).
@@ -24,15 +24,19 @@ RUN set -eu; \
     rm -f /tmp/ollama.tar.zst; \
     ls /opt/ollama/lib/ollama | grep -q '^libggml-cpu'; \
     if ls -d /opt/ollama/lib/ollama/*/ >/dev/null 2>&1; then echo "unexpected library folder kept" >&2; exit 1; fi
-ENV OLLAMA_MODELS=/models OLLAMA_HOST=127.0.0.1:11434 HOME=/tmp/fetch-home
+# The model by content, not by tag. The pinned manifest is committed beside this file (its bytes hash to the pin; the registry
+# serves manifests by tag only, and `ollama pull` would re-serialize it so /api/tags reported another digest for the same
+# weights). Every blob it names is fetched by its own digest and checked.
+COPY nomic-embed-text.manifest.json /tmp/manifest.json
 RUN set -eu; \
-    /opt/ollama/bin/ollama serve >/tmp/serve.log 2>&1 & pid=$!; \
-    for _ in $(seq 1 60); do /opt/ollama/bin/ollama list >/dev/null 2>&1 && break; sleep 1; done; \
-    /opt/ollama/bin/ollama pull nomic-embed-text:latest; \
-    kill "$pid"; wait "$pid" || true; \
-    got=$(sha256sum /models/manifests/registry.ollama.ai/library/nomic-embed-text/latest | cut -d' ' -f1); \
-    if [ "$got" != "$PIN" ]; then echo "nomic-embed-text digest $got is not the pinned $PIN" >&2; exit 1; fi; \
-    chmod -R a+rX,go-w /models; rm -rf /tmp/fetch-home /tmp/serve.log
+    reg=https://registry.ollama.ai/v2/library/nomic-embed-text; \
+    m=/models/manifests/registry.ollama.ai/library/nomic-embed-text; mkdir -p "$m" /models/blobs; \
+    echo "$PIN  /tmp/manifest.json" | sha256sum -c -; \
+    cp /tmp/manifest.json "$m/latest"; \
+    for d in $(grep -o 'sha256:[0-9a-f]\{64\}' "$m/latest" | sort -u); do \
+      h=${d#sha256:}; curl -fsSL -o "/models/blobs/sha256-$h" "$reg/blobs/$d"; echo "$h  /models/blobs/sha256-$h" | sha256sum -c -; \
+    done; \
+    chmod -R a+rX,go-w /models
 
 FROM ubuntu:noble-20261024.1@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
