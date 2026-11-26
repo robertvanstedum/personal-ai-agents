@@ -56,6 +56,8 @@ def test_the_menu_is_the_shared_one_in_the_shared_order(turned, provider, monkey
 def test_menu_labels_are_short(turned, provider, monkeypatch):
     _on(monkeypatch)
     body = _composer(turned.owner()).select_one(".mc-options-body")
+    for state in body.select(".partner-menu-lock[hidden], .mc-walk-note[hidden]"):   # state lines, shown only when true
+        state.decompose()
     words = body.get_text(" ", strip=True)
     for long in ("Show live transcript", "Download saved voice transcript", "Voice provider "):
         assert long not in words
@@ -89,3 +91,15 @@ def test_the_page_wires_the_options_menu_tested_in_mc_options_menu_mjs():
     js = (Path(__file__).resolve().parents[3] / "minimoi_portal/guild_ui/static/js/conversation.js").read_text()
     init = js[js.index("export function initConversation(p) {"):]
     assert "wireOptionsMenu($('[data-mc-options]'), document);" in init     # behaviour: tests/mc_options_menu.mjs
+
+
+def test_the_walk_menu_never_promises_a_grok_call(turned, provider, monkeypatch):
+    """Owner, 26 Nov ("B but keep the walk"): production's MC voice is the walk, OpenAI only. With Grok chosen the menu says
+    the call stays on OpenAI, and the call says it again; typed MC still follows the choice."""
+    from pathlib import Path
+    _on(monkeypatch)
+    note = _composer(turned.owner()).select_one("[data-mc-walk-note]")
+    assert note is not None and note.has_attr("hidden") and note.get_text(strip=True) == "Calls stay on OpenAI."
+    js = (Path(__file__).resolve().parents[3] / "minimoi_portal/guild_ui/static/js/mc_voice.js").read_text()
+    assert "note.hidden = !(walk && $('[data-partner-voice]')?.value === 'xai')" in js
+    assert "const WALK_OPENAI = 'MC voice calls stay on OpenAI.';" in js and "if (walk) { await startWalk(mine, current); return; }" in js

@@ -605,22 +605,13 @@ PATHS = ("direct", "chained", "realtime")
 def voice_path(environ) -> str:
     """MC's voice path.
 
-    "chained" is the default (speech to text, a full MC turn, the reply read aloud). "direct" is the one realtime path
-    (#659, 25 Nov): the chosen provider's voice answers light talk, and a consult runs the real MC turn on the owner's
-    Voice's model, so deep work stays on the same provider. "realtime" was the walk (OpenAI only, three read tools); it
-    is retired into the direct path, so a host that still says "realtime" gets "direct" (here, before may_start reads
-    it). Anything else stays "chained".
+    "chained" is the default (speech to text, a full MC turn, the reply read aloud).
+    "direct" is the realtime path with consults and actions (#659): built, off in production.
+    "realtime" is the walk (spec v1.1): the model is MC, OpenAI only, three read tools.
+    Production compose sets "realtime" (owner, 26 Nov: "B but keep the walk"). Anything else stays "chained".
     """
     value = str(environ.get(PATH_ENV, "") or "").strip().lower()
-    if value == "realtime":
-        if not _WALK_WARNED:
-            _WALK_WARNED.append(True)
-            log.warning("MINIMOI_MC_VOICE_PATH=realtime: the walk is retired; MC voice takes the direct path")
-        return "direct"
     return value if value in PATHS else "chained"
-
-
-_WALK_WARNED: list = []
 
 
 def install(app, mount, *, environ, budget=None, clock=time.time, summary_http=None):

@@ -447,6 +447,9 @@ body.gu[data-page="floor"] .mc-pill { display: none; }
   .mc-panel[data-mode="inpage"] { height: auto; min-height: 55vh; border-width: 1px 0 0; border-radius: 0; }
   .mc-panel[data-mode="inpage"] .mc-suggest { display: none; }
   body.gu[data-page="floor"] .mc-dock-bottom { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--gu-zone-conv); border-top: 1px solid var(--gu-zone-edge); padding: 6px 0; max-height: 70vh; overflow-y: auto; }
+  /* The ⋯ menu opens upward out of the dock; the dock's scroll box cut it at the dock's top edge, hiding Dictate, Voice and
+     Model on a phone (staging, 26 Nov). While the menu is open the dock does not clip. */
+  body.gu[data-page="floor"] .mc-dock-bottom:has(.mc-options[open]) { overflow: visible; }
   body.gu[data-page="floor"] .mc-phone-bar { position: static; padding: 0; background: transparent; }
 }
 
