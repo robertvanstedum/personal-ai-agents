@@ -79,9 +79,35 @@ class RecordsMeetingVerifier:
                 "context": {"room": room, "brief": snap.get("brief"), "transcript": snap.get("transcript"),
                             "coverage": snap.get("coverage")},
                 "trigger_text": trigger["text"], "claim_id": claim_id, "room_generation": snap["generation"],
+                # Lane G: an owner approval turn names the registry row of a card CoS published in this room.
+                "room_approval": snap.get("room_approval"),
                 "trigger_seq": snap.get("trigger_seq"),
+                # owner_words: the verified trigger text, kept with the binding so an owner-private meeting turn can
+                # cite Robert's words (Lane G: initiatives filed from Guildhall).
                 "binding": {"origin": "meeting", "principal": self.principal, "audience": room, "claim_id": claim_id,
+                            "owner_words": trigger["text"],
                             "room_generation": snap["generation"], "trigger_seq": snap.get("trigger_seq")}}
+
+    def document(self, turn_id: str, claim_id: str, doc_id: str) -> tuple[str, bytes, str] | None:
+        """(name, bytes, sha256) of one file shared in this turn's owner-private room, or None. Records serves it only
+        for this installation's live claim; the hash is checked here again (Lane G, #681 D)."""
+        import base64
+        import hashlib
+        try:
+            r = self.session.request(
+                "POST", f"{self.base}/api/v1/turns/{turn_id}/documents/{doc_id}",
+                data=json.dumps({"claim_id": claim_id}),
+                headers={"Authorization": "Bearer " + self._bearer(), "Idempotency-Key": str(uuid4()),
+                         "Content-Type": "application/json", "Accept": "application/json"},
+                timeout=(3, 30), allow_redirects=False)
+            if r.status_code != 200:
+                return None
+            body = r.json()
+            data = base64.b64decode(body["base64"])
+        except (requests.RequestException, ValueError, KeyError, TypeError):
+            return None
+        sha = hashlib.sha256(data).hexdigest()
+        return (body.get("name") or "file", data, sha) if sha == body.get("sha256") else None
 
     def still_admitted(self, turn_id: str, claim_id: str, generation: str) -> bool:
         try:

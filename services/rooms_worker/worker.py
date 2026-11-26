@@ -248,6 +248,12 @@ class Worker:
             if result["outcome"] == "done" and result["text"].strip():
                 payload = adapter.reply_payload(turn, result["text"], correlation, result["usage"],
                                                 agent_id=self.agent_id, runtime=getattr(transport, "runtime", self.runtime))
+                # Lane G: the partner's platform code may hand Records a proposal card to publish, or the outcome of an
+                # owner approval turn. Journaled with the reply, so a recovery delivery sends exactly the same.
+                if not turn.get("discussion_reply"):
+                    for extra in ("room_proposal", "room_decision"):
+                        if isinstance(result.get(extra), dict):
+                            payload[extra] = result[extra]
                 self.journal.generated(journal_key(turn["id"]), payload)
                 return payload
             if result["outcome"] == "done":

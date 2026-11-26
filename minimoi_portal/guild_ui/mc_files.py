@@ -68,6 +68,35 @@ def cos_owner(environ=None) -> tuple[int, int] | None:
     return out[0], out[1]
 
 
+# Master Craftsman in its own container (AWS staging, production) cannot open the portal's ledger folder: its chat agent reads
+# only inside its workspace. Its copies go to ONE folder under the portal's shared data mount, owned by MC's runtime user, which
+# MC's container mounts read-only inside that workspace. Named for the portal and for MC separately (two containers, two paths).
+ENV_AGENT_DIR = "MINIMOI_MC_AGENT_FILES_DIR"              # as the PORTAL sees it, e.g. /app/runtime/guild/mc-agent-evidence
+ENV_AGENT_MC_DIR = "MINIMOI_MC_AGENT_FILES_MC_DIR"        # as MC sees it, e.g. /home/node/.openclaw/workspace-mc/mc-evidence
+ENV_AGENT_UID = "MINIMOI_MC_AGENT_FILES_UID"
+ENV_AGENT_GID = "MINIMOI_MC_AGENT_FILES_GID"
+AGENT_FOLDER = "mc-agent-evidence"
+
+
+def agent_dirs(environ=None) -> tuple[str, str, tuple[int, int]] | None:
+    """(portal folder, MC folder, (uid, gid)) for containerized MC, or None (off). All four values are required; the portal folder
+    must end in ``mc-agent-evidence`` and the MC folder in ``mc-evidence``; both absolute, normalized and free of NUL."""
+    environ = {} if environ is None else environ
+    ids = []
+    for name in (ENV_AGENT_UID, ENV_AGENT_GID):
+        value = environ.get(name)
+        if not isinstance(value, str) or not value.isascii() or not value.isdecimal() or len(value) > 10 or not 0 < int(value) < 2**31:
+            return None
+        ids.append(int(value))
+    out = []
+    for name, leaf in ((ENV_AGENT_DIR, AGENT_FOLDER), (ENV_AGENT_MC_DIR, COS_FOLDER)):
+        value = environ.get(name)
+        if not isinstance(value, str) or not value or "\x00" in value or not os.path.isabs(value) or os.path.normpath(value) != value or os.path.basename(value) != leaf:
+            return None
+        out.append(value)
+    return out[0], out[1], (ids[0], ids[1])
+
+
 def request_id(channel: str, scope: str, principal: str, turn_id: str, wanted) -> str:
     """``r-<24 hex>``: domain-separated, bound to the channel, the conversation or room, the owner, the SERVER's turn id and the exact files chosen."""
     blob = json.dumps([DOMAIN, channel, scope, principal, turn_id, [list(w) for w in wanted]], separators=(",", ":"), ensure_ascii=True)

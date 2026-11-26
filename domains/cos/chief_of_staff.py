@@ -994,7 +994,23 @@ def _ea_charter():
         return None
 
 
+_task_tools_one = []
+
+
 def _task_tools():
+    """One instance per process: the tool listener serves it, and Guildhall reads the room card a meeting turn's
+    proposal left on it (Lane G)."""
+    if not _task_tools_one:
+        _task_tools_one.append(_make_task_tools())
+    return _task_tools_one[0]
+
+
+def _room_proposal(room):
+    tools = _task_tools()
+    return tools.room_proposal(room) if tools is not None else None
+
+
+def _make_task_tools():
     """B4: cos_tasks, when the task service is configured (PARTNERSHIP_TASKS_URL, the platform and cos seat token
     files, PARTNERSHIP_ENVIRONMENT) and CoS history is on. Both tokens stay in cos-scheduler. Otherwise None, and the
     listener refuses cos_tasks."""
@@ -1008,7 +1024,7 @@ def _task_tools():
     from services.partnership_tasks.client import TaskClient, read_token
     return CosTaskTools(platform=TaskClient(url, lambda: read_token(platform_file)),
                         cos=TaskClient(url, lambda: read_token(cos_file)), history=_history,
-                        environment=environment, charter=_ea_charter())
+                        environment=environment, charter=_ea_charter(), bindings=_bindings, files=_cos_files)
 
 
 def _mc_send():
@@ -2333,12 +2349,14 @@ def _start_cos():
 
     if os.environ.get('MINIMOI_GUILDHALL_COS') == '1':
         from domains.cos.guildhall import admit_environment, install as install_guildhall
+        from domains.cos.room_approval_client import from_environ as room_approvals_from_environ
         admit_environment(os.environ, verifier=_meeting_verifier())
         install_guildhall(app, token_file=os.environ['COS_GUILDHALL_TOKEN_FILE'],
                          data_dir=os.environ['COS_GUILDHALL_DIR'], run_turn=_process_confer_turn,
                          is_ready=lambda: _backend is not None,
                          stop_turn=lambda turn_id, reason='meeting_stop': _bindings is not None and _bindings.revoke(turn_id, reason),
-                         verifier=_meeting_verifier())
+                         verifier=_meeting_verifier(), room_proposal=_room_proposal,
+                         approve_room=room_approvals_from_environ(os.environ), files=_cos_files)
 
     _start_tool_listener()
 

@@ -859,6 +859,8 @@ def attach(app, blueprint_name, services):
                      craft_prefix=app.extensions[blueprint_name].get("url_prefix", ""))
     from .cos_delivery import attach as attach_cos_delivery
     attach_cos_delivery(listener, app, app.extensions[blueprint_name], services, environ, cfg)   # off unless MINIMOI_COS_TO_MC is on
+    from .cos_room_approvals import attach as attach_cos_room_approvals
+    attach_cos_room_approvals(listener, environ)          # off unless MINIMOI_COS_ROOM_APPROVALS is on
     thread = serve(listener, host=host, port=cfg["port"])
     app.extensions["mc_tools_listener"] = thread
     _log.info("mc tools: listener on %s:%s (agents %s)", host, cfg["port"], ",".join(cfg["agents"]))

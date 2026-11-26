@@ -397,6 +397,17 @@
         "helper_return_commit": {
           "type": "boolean",
           "description": "Dedicated lead-return service only. Absent grants none; requires agent MC/CoS and only task.commit_helper_return operation."
+        },
+        "professional_initiatives": {
+          "description": "Private professional-initiative store permissions; absent grants none. read for MC or CoS agents, file for CoS only. Never task or action authority.",
+          "type": "array",
+          "items": {
+            "enum": [
+              "read",
+              "file"
+            ]
+          },
+          "uniqueItems": true
         }
       }
     },
