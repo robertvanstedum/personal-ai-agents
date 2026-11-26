@@ -265,6 +265,30 @@ def test_mc_gets_a_verified_copy_of_a_meeting_file_at_a_host_path(tmp_path):
     assert copies                                                       # the bytes are where MC's tools open them
 
 
+def test_containerized_mc_gets_its_copy_in_its_own_workspace_folder(tmp_path):
+    import os
+    import stat
+    from minimoi_portal.guild_ui import mc_files
+    from minimoi_portal.guild_ui.mc_rooms_bridge import Bridge
+    b = Bridge.__new__(Bridge)
+    uid, gid = os.getuid() or 1000, os.getgid() or 1000
+    b.environ = {"MINIMOI_MC_AGENT_FILES_DIR": str(tmp_path / "mc-agent-evidence"),
+                 "MINIMOI_MC_AGENT_FILES_MC_DIR": "/home/node/.openclaw/workspace-mc/mc-evidence",
+                 "MINIMOI_MC_AGENT_FILES_UID": str(uid), "MINIMOI_MC_AGENT_FILES_GID": str(gid)}
+    b.services = SimpleNamespace(store=None)                             # no ledger folder: the container mode stands alone
+    b.principal, b.records = "robert", FakeRecords()
+    lines, gap = b.meeting_files(_meeting_turn())
+    assert gap is None and "notes.md: /home/node/.openclaw/workspace-mc/mc-evidence/r-" in lines[1]
+    [copy] = [p for p in (tmp_path / "mc-agent-evidence").rglob("*") if p.is_file() and p.read_bytes() == NOTES]
+    st = copy.stat()
+    assert (st.st_uid, st.st_gid, stat.S_IMODE(st.st_mode)) == (uid, gid, 0o600)
+    assert copy.parent.name == lines[1].split("/mc-evidence/")[1].split("/")[0]
+    # Anything malformed keeps it off: never a guessed path.
+    for bad in ({"MINIMOI_MC_AGENT_FILES_UID": "0"}, {"MINIMOI_MC_AGENT_FILES_MC_DIR": "/home/node/elsewhere"},
+                {"MINIMOI_MC_AGENT_FILES_DIR": "relative/mc-agent-evidence"}):
+        assert mc_files.agent_dirs(dict(b.environ, **bad)) is None
+
+
 def test_a_changed_meeting_file_is_never_handed_to_mc(tmp_path):
     lines, gap = _file_bridge(tmp_path, FakeRecords(b"tampered")).meeting_files(_meeting_turn())
     assert lines == [] and "hash" in gap
