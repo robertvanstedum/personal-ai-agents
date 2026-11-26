@@ -11,11 +11,14 @@ room, or one not verified, is closed (no tools, no owner context). Until F2 step
 import hashlib
 import hmac
 import json
+import logging
 import sqlite3
 from pathlib import Path
 from uuid import UUID
 from flask import Blueprint, jsonify, request
 from domains.cos.files import FileRefused
+
+_log = logging.getLogger('cos.guildhall')
 
 
 def validate(turn):
@@ -195,8 +198,14 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
             if card is not None:answer['room_proposal']=card
             with db() as c:c.execute('UPDATE turns SET state=?,result=? WHERE id=?',('done',json.dumps(answer),value['id']))
             return jsonify(answer)
-        except Exception:
-            # Never expose provider errors or retry a possibly action-bearing turn.
+        except Exception as exc:
+            # Never expose provider errors or retry a possibly action-bearing turn. The log names only the exception
+            # class and where it was raised (no message text, which can carry provider or file content): staging B3,
+            # 26 Nov, failed before any model call and left nothing to diagnose from.
+            import traceback
+            last=traceback.extract_tb(exc.__traceback__)[-1:] or [None]
+            where=f'{Path(last[0].filename).name}:{last[0].lineno}:{last[0].name}' if last[0] else 'unknown'
+            _log.warning('guildhall cos turn %s uncertain: %s at %s', value['id'], type(exc).__name__, where)
             with db() as c:c.execute('UPDATE turns SET state=? WHERE id=?',('uncertain',value['id']))
             return jsonify(error='CoS outcome uncertain; no automatic retry'),502
     app.register_blueprint(bp)
