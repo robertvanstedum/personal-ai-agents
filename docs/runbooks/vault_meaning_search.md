@@ -42,7 +42,7 @@ Dependencies, in order:
 
 ## Dev and staging (the AWS staging host)
 
-- Build the image on the host: `docker build -t minimoi-staging/vault-embedder:pinned docker/vault-embedder`, then `docker builder prune` (the builder stage pulls the 3.4 GB upstream image).
+- Build the image on the host: `docker build -t minimoi-staging/vault-embedder:pinned docker/vault-embedder`, then `docker builder prune -f` (the fetch stage downloads the 1.5 GB release tarball, checks its sha256 and unpacks only the CPU libraries).
 - Start it from the staging compose (`vault` profile): `vault-embedder`.
 - Dev feed: `dev_cycle.py … --embedder-url http://vault-embedder:11434 --embed-network minimoi-vault-embed` (the feed worker joins the network; each run borrows the last published index's vectors, so unchanged text is never embedded again).
 - Dev Ask containers (`minimoi-dev-vault`, `minimoi-dev-vault-mc`): join `minimoi-vault-embed` with `MOI_OLLAMA_URL=http://vault-embedder:11434` and `MOI_OLLAMA_IDLE_KEEP_ALIVE=15m`.

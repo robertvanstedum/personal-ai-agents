@@ -2,34 +2,44 @@
 #
 #   docker build -t <tag> docker/vault-embedder            (the context is this folder only)
 #
-# Every base is pinned by digest. The model is pulled here, at build, and the build FAILS unless its manifest digest is exactly the
-# pinned one, so the running container needs no internet and can serve nothing else. Only the CPU back ends are kept: the upstream
-# image is ~3.4 GB because of its GPU libraries; this one is ~350 MB. Clients still check the model's full digest and a known-answer
-# vector before they embed anything (core/memory_index/embedder.py, embedder_probe.json).
+# Pinned three ways: the base image by digest, Ollama's release tarball by its published sha256, and the model by its manifest
+# digest. The build FAILS if any of them differs, so the running container needs no internet and can serve nothing else. Only the
+# CPU back ends are unpacked (the tarball's CUDA and Vulkan libraries are 2.3 GB of its 2.4 GB); the image is ~400 MB, and the
+# build needs ~1.5 GB of temporary disk for the tarball. Clients still check the model's full digest and a known-answer vector
+# before they embed anything (core/memory_index/embedder.py, embedder_probe.json).
 
-# Ollama 0.40.17: the version the workstation's Ollama runs, so production vectors match the workstation index.
-FROM ollama/ollama:0.40.17@sha256:ccc42bcd3d5fcf7ab0d532b300382154e1a4da56fc666bdb313b78ebdd912754 AS model
+FROM ubuntu:noble-20261024.1@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS fetch
+# Ollama 0.40.17: the version the workstation's Ollama runs, so these vectors match the workstation index.
+ARG OLLAMA_VERSION=0.40.17
+ARG OLLAMA_SHA256=1df9d6228bac5a22e420b242708c0d10e5b886db97bab99d446a41760f4e79af
 ARG PIN=0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f
-ENV OLLAMA_MODELS=/models OLLAMA_HOST=127.0.0.1:11434
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl zstd && rm -rf /var/lib/apt/lists/*
 RUN set -eu; \
-    ollama serve >/tmp/serve.log 2>&1 & pid=$!; \
-    for _ in $(seq 1 60); do ollama list >/dev/null 2>&1 && break; sleep 1; done; \
-    ollama pull nomic-embed-text:latest; \
+    curl -fsSL -o /tmp/ollama.tar.zst "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst"; \
+    echo "${OLLAMA_SHA256}  /tmp/ollama.tar.zst" | sha256sum -c -; \
+    mkdir -p /opt/ollama; \
+    zstd -dc /tmp/ollama.tar.zst | tar -x -C /opt/ollama --exclude='lib/ollama/cuda_*' --exclude='lib/ollama/vulkan' \
+        --exclude='lib/ollama/rocm*' --exclude='lib/ollama/mlx*'; \
+    rm -f /tmp/ollama.tar.zst; \
+    ls /opt/ollama/lib/ollama | grep -q '^libggml-cpu'; \
+    if ls -d /opt/ollama/lib/ollama/*/ >/dev/null 2>&1; then echo "unexpected library folder kept" >&2; exit 1; fi
+ENV OLLAMA_MODELS=/models OLLAMA_HOST=127.0.0.1:11434 HOME=/tmp/fetch-home
+RUN set -eu; \
+    /opt/ollama/bin/ollama serve >/tmp/serve.log 2>&1 & pid=$!; \
+    for _ in $(seq 1 60); do /opt/ollama/bin/ollama list >/dev/null 2>&1 && break; sleep 1; done; \
+    /opt/ollama/bin/ollama pull nomic-embed-text:latest; \
     kill "$pid"; wait "$pid" || true; \
     got=$(sha256sum /models/manifests/registry.ollama.ai/library/nomic-embed-text/latest | cut -d' ' -f1); \
     if [ "$got" != "$PIN" ]; then echo "nomic-embed-text digest $got is not the pinned $PIN" >&2; exit 1; fi; \
-    mkdir -p /out/lib; \
-    find /usr/lib/ollama -maxdepth 1 \( -type f -o -type l \) -exec cp -a {} /out/lib/ \; ; \
-    ls /out/lib | grep -q '^libggml-cpu' ; \
-    chmod -R a+rX,go-w /models
+    chmod -R a+rX,go-w /models; rm -rf /tmp/fetch-home /tmp/serve.log
 
 FROM ubuntu:noble-20261024.1@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN useradd --system --uid 10001 --no-create-home --home-dir /tmp/home --shell /usr/sbin/nologin embedder
-COPY --from=model /usr/bin/ollama /usr/bin/ollama
-COPY --from=model /out/lib/ /usr/lib/ollama/
-COPY --from=model /models /models
+COPY --from=fetch /opt/ollama/bin/ollama /usr/bin/ollama
+COPY --from=fetch /opt/ollama/lib/ollama/ /usr/lib/ollama/
+COPY --from=fetch /models /models
 ENV OLLAMA_HOST=0.0.0.0:11434 \
     OLLAMA_MODELS=/models \
     HOME=/tmp/home \
