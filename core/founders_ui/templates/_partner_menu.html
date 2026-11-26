@@ -1,0 +1,15 @@
+{#- The one ⋯ menu body for Master Craftsman and Chief of Staff (#661): the same controls, order and words on both pages,
+    in MC's look. Dictate and Private are the page's own buttons (their handlers stay the page's), passed in and placed
+    here. Voice, Model, the Last-answer line and the footnote belong to partner-menu.js, which reads and saves the owner's
+    choice on the server (partner-settings): the same on every device and in every new conversation. -#}
+{% macro partner_menu(partner, dictate='', private='') -%}
+<div class="partner-menu" data-partner-menu data-partner="{{ partner }}">
+  {{ dictate }}
+  <label class="partner-menu-voice" data-partner-voice-row hidden><span>Voice</span> <select data-partner-voice aria-label="Voice"><option value="openai">OpenAI</option><option value="xai">Grok</option></select></label>
+  <p class="partner-menu-model" data-partner-model-row hidden><span>Model</span> <span data-partner-model></span></p>
+  {{ private }}
+  <p class="partner-menu-last" data-partner-last aria-live="polite" hidden></p>
+  <p class="partner-menu-note" data-partner-note role="status" aria-live="polite" hidden></p>
+  <p class="partner-menu-foot">Voice is AI-generated.</p>
+</div>
+{%- endmacro %}

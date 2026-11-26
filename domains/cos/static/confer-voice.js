@@ -69,7 +69,6 @@ const REASONS = {
   late_result: () => 'A check finished after the voice ended: open to see its result.',
 };
 const PHASES = { connecting: 'Connecting…', listening: 'Listening', working: 'Working on it…', speaking: 'Speaking…' };
-const PROVIDER_KEY = 'minimoi.cos.voice.provider';     // her own key: MC's choice (minimoi.voice.provider) is not hers
 const READ_WAIT_MS = 10000;                             // a records read; past it nothing is shown, and nothing is claimed
 const DECISION_WAIT_MS = 15000;                         // a decision is one store write
 const ASK_WAIT_MS = 45000;                              // an ask may join an attempt the server bounds itself
@@ -435,23 +434,25 @@ export function conferVoice(d) {
   const status = (text) => { els.status.textContent = text; wrote = text; };
   const unstatus = () => { if (wrote !== null && els.status.textContent === wrote) els.status.textContent = ''; wrote = null; };
 
-  // ── the provider choice, in the meta row: remembered under her own key ──
+  // ── the provider choice: the shared ⋯ menu's Voice (els.voice; core/founders_ui/static/partner-menu.js), the owner's,
+  // kept by MiniMoi for every device (#659); the server binds the call to it. A page without the menu gets its own
+  // select here, chosen per visit and never remembered in the browser.
   const unvoiced = direct.unvoiced && typeof direct.unvoiced === 'object' ? direct.unvoiced : {};
-  const select = make('select', { class: 'voice-provider-choice', 'data-voice-provider': '', 'aria-label': 'Voice provider' });
   const offered = (Array.isArray(direct.providers) ? direct.providers : []).filter((p) => p && typeof p.provider === 'string');
-  for (const p of offered) {
-    const name = p.label || p.provider;
-    const refused = typeof unvoiced[p.provider] === 'string' ? unvoiced[p.provider] : null;
-    const option = make('option', { value: p.provider, ...(refused ? { title: refused } : {}) },
-      refused ? `${name} · ${NO_VOICE_CHOSEN}` : name);      // v3: both providers confirm by voice; none is "Check only"
-    option.disabled = Boolean(refused);
-    select.append(option);
-  }
   const usable = offered.filter((p) => typeof unvoiced[p.provider] !== 'string').map((p) => p.provider);
-  let saved = null;
-  try { saved = d.storage?.getItem(PROVIDER_KEY) ?? null; } catch (e) { /* the choice is simply not remembered */ }
-  select.value = [saved, direct.default_provider].find((p) => usable.includes(p)) || usable[0] || offered[0]?.provider || '';
-  select.addEventListener('change', () => { try { d.storage?.setItem(PROVIDER_KEY, select.value); } catch (e) { /* not remembered */ } });
+  const shared = els.voice || null;
+  const select = shared || make('select', { class: 'voice-provider-choice', 'data-voice-provider': '', 'aria-label': 'Voice provider' });
+  if (!shared) {
+    for (const p of offered) {
+      const name = p.label || p.provider;
+      const refused = typeof unvoiced[p.provider] === 'string' ? unvoiced[p.provider] : null;
+      const option = make('option', { value: p.provider, ...(refused ? { title: refused } : {}) },
+        refused ? `${name} · ${NO_VOICE_CHOSEN}` : name);      // v3: both providers confirm by voice; none is "Check only"
+      option.disabled = Boolean(refused);
+      select.append(option);
+    }
+    select.value = [direct.default_provider].find((p) => usable.includes(p)) || usable[0] || offered[0]?.provider || '';
+  }
 
   // ── the live bar: voice on, elapsed, Check with CoS, End; Sum up and Keep talking when offered; one notice line ──
   const bar = els.live;
@@ -494,7 +495,9 @@ export function conferVoice(d) {
     b.setAttribute('aria-pressed', String(active));
     b.classList?.toggle('recording', active);
     b.disabled = ending;
-    select.disabled = active || ending || !usable.length;
+    if (!shared) select.disabled = active || ending || !usable.length;
+    else if (active || ending) { select.disabled = true; if (select.dataset) select.dataset.callLive = 'true'; }   // a live call keeps its provider
+    else if (select.dataset && select.dataset.callLive) { delete select.dataset.callLive; select.disabled = false; }
   }
   function paintLive(who, text) {
     const clean = String(text || '').split(/(?<=[.!?])\s+/).map((part) => part.replace(
@@ -590,8 +593,7 @@ export function conferVoice(d) {
 
   // Show this path: the provider choice in the meta row, the button painted, the needs-attention list read once.
   function show() {
-    els.provider.textContent = '';
-    els.provider.append(select);
+    if (!shared) { els.provider.textContent = ''; els.provider.append(select); }
     paint();
   }
   return {

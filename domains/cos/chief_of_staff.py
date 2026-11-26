@@ -857,6 +857,10 @@ def _get_routing_receipt(receipt_id: str) -> dict | None:
     while True:
         served = _bindings.served_for_turn(receipt_id) if _bindings is not None else None
         if served:
+            # #658: a gateway receipt already here keeps its fallback position, so a role fallback is not dropped.
+            gateway = _routing_receipts.wait_for(receipt_id, timeout_seconds=0)
+            if gateway and isinstance(gateway.get("fallback_position"), int) and gateway["fallback_position"] > 0:
+                return gateway
             return {"logical_model": None, "served_provider": served["provider"], "served_model": served["model"],
                     "fallback_position": None, "fallback_reason": None}
         left = deadline - time.monotonic()
@@ -1778,7 +1782,7 @@ def _ui_turn(body: dict, binding: dict | None = None) -> tuple[dict, int]:
             payload = result.public_dict()
             if routed is not None:
                 model_route.record(_history, kept["conversation_id"], route_state.get("deepened") or route_state.get("switched") or routed,
-                                   _bindings.served_for_turn(_receipt_turn_id(kept["turn_id"])) if _bindings is not None else None)
+                                   _turn_evidence(_receipt_turn_id(kept["turn_id"])))
             if before is not None:
                 delivered = _cos_files.delivered_since(before)
                 if delivered:
@@ -1857,7 +1861,7 @@ def _voice_owner_turn(text: str, *, conversation: str, request_id: str, on_dispa
         )
         if routed is not None:
             model_route.record(_history, kept["conversation_id"], route_state.get("deepened") or route_state.get("switched") or routed,
-                               _bindings.served_for_turn(_receipt_turn_id(kept["turn_id"])) if _bindings is not None else None)
+                               _turn_evidence(_receipt_turn_id(kept["turn_id"])))
         if kept:
             _history_answer(kept, result.public_dict(), "html_voice", text, [])
     except BaseException as exc:
@@ -1909,6 +1913,17 @@ def _is_confer_operation(text: str) -> bool:
     """/new, notes and reminders are operations with their own records, not conversation turns."""
     return text.casefold() == "/new" or parse_explicit_note(text) is not None \
         or parse_explicit_reminder(text) is not None
+
+
+def _turn_evidence(receipt_id: str) -> dict | None:
+    """What served a page turn, for its receipt: the runtime's record, plus a gateway fallback from the gateway's own
+    receipt when one is already here (#658). Never waits: the turn has ended."""
+    served = _bindings.served_for_turn(receipt_id) if _bindings is not None else None
+    try:
+        receipt = _routing_receipts.wait_for(receipt_id, timeout_seconds=0) if receipt_id else None
+    except Exception:
+        receipt = None
+    return model_route.with_gateway_fallback(served, receipt)
 
 
 def _receipt_turn_id(turn_id: str) -> str:

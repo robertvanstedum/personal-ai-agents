@@ -257,50 +257,39 @@ def test_the_request_sent_to_the_provider_forbids_any_provider_response(turned, 
     assert seen["headers"]["OpenAI-Safety-Identifier"] and "robert" not in seen["headers"]["OpenAI-Safety-Identifier"]       # hashed, not the name
 
 
-def test_the_talking_call_uses_the_persona_voice_and_refuses_a_silent_grok_swap(turned, provider, monkeypatch):
-    """#662 interim: the walk speaks the pinned card's OpenAI voice, and a Grok request is refused in words."""
-    import json
+def test_the_walk_no_longer_starts_and_no_voice_literal_is_left(turned, provider, monkeypatch):
+    """#659/#662 (25 Nov): the walk is retired into the direct path. A host still saying "realtime" mints no talking
+    session here (the direct path's own bootstrap, on the owner's chosen provider and the card's voice, does)."""
     from pathlib import Path
     from core.realtime_voice.providers import openai_realtime
     from minimoi_portal.guild_ui import mc_voice
     _on(monkeypatch)
     monkeypatch.setenv("MINIMOI_MC_VOICE_PATH", "realtime")
     minted = {}
-    monkeypatch.setattr(openai_realtime, "mint_ephemeral_credential",
-                        lambda **kw: minted.update(kw) or {"ok": True, "provider": "openai", "client_secret": "ek", "expires_at": 1, "model": "stand-in"})
-    card = json.loads(Path(mc_voice.__file__).resolve().parents[2].joinpath(
-        "services/mc_operations/personas/mc-chat/pin.json").read_text())
-    release = card["release"]
-    voice = json.loads(Path(mc_voice.__file__).resolve().parents[2].joinpath(
-        f"services/mc_operations/personas/mc-chat/releases/{release}/voice.json").read_text())["voices"]["openai"]
+    monkeypatch.setattr(openai_realtime, "mint_ephemeral_credential", lambda **kw: minted.update(kw) or {"ok": True})
+    monkeypatch.setattr(openai_realtime, "mint_confer_transcription_credential",
+                        lambda **kw: {"ok": True, "provider": "openai", "client_secret": "ek", "expires_at": 1})
     source = Path(mc_voice.__file__).read_text()
-    assert 'voice="marin"' not in source and "voice='marin'" not in source
+    assert "voice=" not in source and "_bootstrap_walk" not in source
     client = turned.owner()
-    token = turned.csrf(client)
-    refused = client.post(f"{API}/mc/voice/bootstrap", json={"provider": "xai"}, headers=write_headers(token))
-    assert refused.status_code == 409 and refused.get_json()["error"] == "MC voice runs on OpenAI for now."
-    assert minted == {}
-    ok = client.post(f"{API}/mc/voice/bootstrap", json={"provider": "openai"}, headers=write_headers(token))
-    assert ok.status_code == 200 and minted["voice"] == voice
+    body = client.post(f"{API}/mc/voice/bootstrap", json={"provider": "openai"}, headers=write_headers(turned.csrf(client))).get_json()
+    assert minted == {} and "voice_session_id" not in body and body.get("voice_path") != "realtime"
 
 
-def test_a_talking_call_settles_at_end_to_the_minutes_it_ran_for_its_owner_only(turned, provider, monkeypatch):
-    """#578 S5: the talking call reserves an hour at the realtime rate under its own ledger id; End brings it down to the
-    one-minute minimum here, bound to its owner by the ledger row (not the in-memory table, which a restart empties)."""
+def test_a_walk_call_open_at_deploy_still_settles_at_end_for_its_owner_only(turned, provider, monkeypatch):
+    """Codex review 7: a talking call already open when the walk's start went away can still End, settled to the minutes
+    it ran, bound to its owner by the ledger row (not the in-memory table, which a restart empties)."""
     from core.realtime_voice import budget
-    from core.realtime_voice.providers import openai_realtime
     from minimoi_portal.guild_ui.mc import voice_walk
     _on(monkeypatch)
-    monkeypatch.setenv("MINIMOI_MC_VOICE_PATH", "realtime")
-    monkeypatch.setattr(openai_realtime, "mint_ephemeral_credential",
-                        lambda **kw: {"ok": True, "provider": "openai", "client_secret": "ek_test_secret", "expires_at": 1, "model": "stand-in"})
     client = turned.owner()
     token = turned.csrf(client)
-    body = client.post(f"{API}/mc/voice/bootstrap", json={}, headers=write_headers(token)).get_json()
-    assert body["ok"] and body["voice_path"] == "realtime"
-    session = body["voice_session_id"]
+    session = "a" * 32
+    kind, amount = voice_walk.talking_reservation(60)
+    with budget.admit(kind=kind, domain="mc", principal="robert", required=True, amount_micro=amount,
+                      entry_id=budget.direct_entry_id(session)):
+        pass
     assert budget.default_budget().status()["reserved_usd"] == pytest.approx(6.0)
-    voice_walk._SESSIONS.pop(session, None)                        # the portal restarted mid-call
     out = client.post(f"{API}/mc/voice/walk/end", json={"session": session, "turns": []}, headers=write_headers(token)).get_json()
     assert out["settled"] is True
     assert budget.default_budget().status()["reserved_usd"] == pytest.approx(0.10)

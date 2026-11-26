@@ -312,6 +312,13 @@ class _MasterCraftsman(DirectVoiceAdapter):
         from .mc.voice_calls import voice_calls_of
         voice_calls_of(self.config.get("services")).record(path="direct", provider=provider, device=device, session=sid)
 
+    def saved_voice(self, user_id):
+        """The owner's Voice for MC, kept by MiniMoi (#659): the call is minted on it, so its consults (MC turns on the
+        owner's Voice's model, api._route_snapshot) run on the same provider."""
+        from core.model_routes.menu import bound_voice
+        from .api import _partner_settings
+        return bound_voice(_partner_settings(self.config.get("services")), user_id, "mc")
+
     def owner(self):
         user = self.config["current_user"]() or {}
         who = user.get("username")
@@ -598,13 +605,22 @@ PATHS = ("direct", "chained", "realtime")
 def voice_path(environ) -> str:
     """MC's voice path.
 
-    "chained" is the default (speech to text, a full MC turn, the reply read aloud).
-    "direct" is the older realtime path. "realtime" is the walk (spec v1.1): the
-    model is MC, and the server writes a note only after a bare yes. Anything else
-    stays "chained". Production compose sets "realtime". Unset stays chained.
+    "chained" is the default (speech to text, a full MC turn, the reply read aloud). "direct" is the one realtime path
+    (#659, 25 Nov): the chosen provider's voice answers light talk, and a consult runs the real MC turn on the owner's
+    Voice's model, so deep work stays on the same provider. "realtime" was the walk (OpenAI only, three read tools); it
+    is retired into the direct path, so a host that still says "realtime" gets "direct" (here, before may_start reads
+    it). Anything else stays "chained".
     """
     value = str(environ.get(PATH_ENV, "") or "").strip().lower()
+    if value == "realtime":
+        if not _WALK_WARNED:
+            _WALK_WARNED.append(True)
+            log.warning("MINIMOI_MC_VOICE_PATH=realtime: the walk is retired; MC voice takes the direct path")
+        return "direct"
     return value if value in PATHS else "chained"
+
+
+_WALK_WARNED: list = []
 
 
 def install(app, mount, *, environ, budget=None, clock=time.time, summary_http=None):

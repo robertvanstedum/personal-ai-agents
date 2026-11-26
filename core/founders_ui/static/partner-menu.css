@@ -1,0 +1,12 @@
+/* The shared ⋯ menu body (founders_ui/_partner_menu.html), MC's look, for MC and CoS alike. */
+.partner-menu { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: var(--gu-size-xs, 0.8125rem); }
+.partner-menu [hidden] { display: none !important; }
+.partner-menu label, .partner-menu p { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.partner-menu select { font: inherit; max-width: 100%; }
+.partner-menu-voice, .partner-menu-model { flex: 1 1 100%; }
+.partner-menu-model [data-partner-model] { font-weight: 600; }
+.partner-menu-last, .partner-menu-note, .partner-menu-foot { flex: 1 1 100%; color: var(--gu-muted, #6b6b6b); }
+.partner-menu-foot { font-size: 0.75rem; }
+@media (max-width: 640px) {
+  .partner-menu :is(button, select, label) { min-height: var(--gu-target-phone, 44px); }
+}

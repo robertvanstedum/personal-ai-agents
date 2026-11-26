@@ -1,3 +1,4 @@
+{% from "founders_ui/_partner_menu.html" import partner_menu %}
 {% from 'founders_ui/components.html' import domain_header, sidebar_tools %}
 <!DOCTYPE html>
 <html lang="en">
@@ -7,6 +8,7 @@
   <title>Chief of Staff</title>
   <link rel="stylesheet" href="/static/cos.css?v={{ founders_ui_version }}">
   <link rel="stylesheet" href="/founders-ui/founders.css?v={{ founders_ui_version }}">
+  <link rel="stylesheet" href="/founders-ui/partner-menu.css?v={{ founders_ui_version }}">
   <link rel="stylesheet" href="/static/calm-confer.css?v={{ founders_ui_version }}">
   {% from 'founders_ui/components.html' import assets %}
   {{ assets(founders_ui_version) }}
@@ -103,15 +105,11 @@
           <details class="cos-options" data-cos-options>
             <summary aria-label="Conversation options" title="Options"><span aria-hidden="true">•••</span></summary>
             <div class="cos-options-body">
-              <button id="btn-dictate" type="button" disabled title="Dictate" aria-label="Dictate into the message draft">Dictate</button>
-              {# The direct-voice provider choice (confer-voice.js writes it here); shown only when her direct voice is admitted. #}
-              <span id="voice-provider" class="conv-menu-provider"></span>
-              {# This chat's model (cos-route-picker.js): shown only where routes are on. #}
-              <label id="cos-route-control" class="conv-menu-route" hidden><span>Model</span><select id="cos-route" aria-label="Model for this conversation"></select><small id="cos-route-note"></small></label>
-              {# Private (#510), as the Guildhall's 🔒. A conversation is private from its creation and stays so (the backend
-                 sets the flag once), so the lock starts a new private chat, and Exit Private starts a new chat on the record. #}
-              <button id="cos-private" class="cos-lock" type="button" data-cos-private aria-pressed="false" aria-label="Go Private" title="Go Private: a new chat that CoS answers and keeps, but nothing from it goes to MC or to memory"><span aria-hidden="true">🔒</span><span class="cos-lock-text">Go Private</span></button>
-              <p class="conv-menu-note">Voice is AI-generated.</p>
+              {# One menu body for MC and CoS (#661): founders_ui/_partner_menu.html with partner-menu.js. Dictate and Private
+                 stay this page's own buttons. Private (#510) starts a new private chat; Exit Private starts one on the record. #}
+              {% set dictate_btn %}<button id="btn-dictate" type="button" disabled title="Dictate" aria-label="Dictate into the message draft">Dictate</button>{% endset %}
+              {% set private_btn %}<button id="cos-private" class="cos-lock" type="button" data-cos-private aria-pressed="false" aria-label="Go Private" title="Go Private: a new chat that CoS answers and keeps, but nothing from it goes to MC or to memory"><span aria-hidden="true">🔒</span><span class="cos-lock-text">Private</span></button>{% endset %}
+              {{ partner_menu("cos", dictate=dictate_btn, private=private_btn) }}
             </div>
           </details>
           <textarea id="send-input" rows="1" placeholder="Message CoS…" autocomplete="off" autofocus></textarea>
@@ -125,6 +123,8 @@
            provider choice now sits. The status stays for the voice code that writes it. #}
         <div class="talk-meta" hidden>
           <span id="voice-status"></span>
+          {# Voice's own state words (confer-voice.js, the page script); the provider choice is the shared menu's Voice. #}
+          <span id="voice-provider" class="conv-menu-provider"></span>
         </div>
         <details id="cos-files">
           <summary>Files from CoS</summary>
@@ -893,7 +893,7 @@ void refreshLegacyAvailability();
 // (her routes not installed, or admission off): Confer is exactly as it was. Not while a voice session of today's modes
 // runs: the path changes once it has ended.
 const DIRECT_CAPABILITIES='../api/realtime-voice/direct/api/realtime-voice/capabilities';
-const DIRECT_KEY='20261107-voice1';   // v3's live check (31 Oct) changed the session module, the controller and an adapter
+const DIRECT_KEY='20261125-menu1';   // 25 Nov: confer-voice.js reads the shared menu's Voice (#661)
 // Not while a session of today's modes runs, nor while an earlier one's end is unconfirmed (its restart block, Gate 2 Q N10).
 // Admitted and refused (Q S2): the button says why, and no other mode is offered.
 function adoptDirect(){
@@ -927,11 +927,10 @@ async function readDirect(){
     const headers=()=>({'Content-Type':'application/json',...cosWriteHeaders()});
     const timers={setTimeout:(fn,ms)=>window.setTimeout(fn,ms),clearTimeout:t=>window.clearTimeout(t)};
     const get=session.jsonGet((...a)=>fetch(...a),headers,timers),post=session.jsonPost((...a)=>fetch(...a),headers,timers);
-    const els={button,status,line:transcript,provider,chat:chatLog,
+    const els={button,status,line:transcript,provider,voice:document.querySelector('[data-partner-voice]'),chat:chatLog,
       live:document.getElementById('voice-live'),sessions:document.getElementById('voice-sessions')};
     if(admitted){
-      let storage=null;try{storage=window.localStorage;}catch(error){/* the provider choice is not remembered */}
-      pendingDirect=page.conferVoice({doc:document,els,direct:info,session,get,post,headers,storage,...timers,
+      pendingDirect=page.conferVoice({doc:document,els,direct:info,session,get,post,headers,...timers,
         conversationId:()=>window.cosVoiceConversationId || 'owner',
         fetch:(...a)=>fetch(...a),warn:(...a)=>console.warn(...a),
         setInterval:(fn,ms)=>window.setInterval(fn,ms),clearInterval:t=>window.clearInterval(t),
@@ -951,7 +950,27 @@ document.addEventListener('cos:chat-rendered',()=>{void voiceRecords?.restore?.(
 void readDirect();
 </script>
 <script src="/static/cos-history-ui.js?v={{ founders_ui_version }}"></script>
-<script src="/static/cos-route-picker.js?v={{ founders_ui_version }}"></script>
+<script type="module">
+// The shared ⋯ menu (#661), as MC's: the owner's Voice, kept by MiniMoi for every device and chat; the Model follows it.
+import { initPartnerMenu } from '/founders-ui/partner-menu.js?v={{ founders_ui_version }}';
+const base = location.pathname.replace(/\/ui(?:\/[^/]*)?\/?$/, '') + '/ui/history/partner-settings';
+async function request(method, url, body) {
+  try {
+    const r = await fetch(url, {method, credentials: 'same-origin', cache: 'no-store',
+      headers: method === 'GET' ? {Accept: 'application/json'} : {'Content-Type': 'application/json', ...cosWriteHeaders()},
+      body: body == null ? undefined : JSON.stringify(body)});
+    return {ok: r.ok, status: r.status, body: await r.json().catch(() => ({}))};
+  } catch (e) { return {ok: false, status: 0, body: {}}; }
+}
+const menu = initPartnerMenu({root: document.querySelector('[data-partner-menu]'), settingsUrl: base, request,
+  conversationId: () => (window.cosVoiceConversationId && window.cosVoiceConversationId !== 'owner') ? window.cosVoiceConversationId : null});
+if (menu) {
+  const opts = document.querySelector('[data-cos-options]');
+  opts?.addEventListener('toggle', () => { if (opts.open) menu.load(); });
+  document.addEventListener('cos:conversation-selected', () => menu.load());
+  menu.load();
+}
+</script>
 <script src="/static/calm-confer.js?v={{ founders_ui_version }}"></script>
 <script type="module" src="/static/cos-in-flight.js?v={{ founders_ui_version }}"></script>
 <script type="module" src="/static/cos-work-cards.js?v={{ founders_ui_version }}"></script>

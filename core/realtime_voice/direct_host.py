@@ -1086,6 +1086,11 @@ class DirectVoiceAdapter:
         are dropped (the portal) keeps its own durable line here. Default: nothing more."""
         return None
 
+    def saved_voice(self, user_id):
+        """The owner's Voice for this person, kept by MiniMoi (#659: one choice for every device), or None. Given, the
+        bootstrap mints the call on it and refuses a page asking for another. Default: none, the page's choice applies."""
+        return None
+
     def in_line(self, sid, item):
         """Whether this owner turn is waiting for the person to finish another one (#566 fault 1: MC answers one note at
         a time, and what he says meanwhile waits in line). Its pending answer then says it is next, not "taking longer"."""
@@ -2618,6 +2623,16 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             return True, NO_PROVIDER
         return True, None
 
+    def saved_voice(user_id):
+        """The owner's Voice for this partner, kept by MiniMoi (the adapter's ``saved_voice``), or None: never chosen,
+        unreadable, or a host without it. A failure to read never stops a start: the page's choice applies, as before."""
+        try:
+            voice = adapter.saved_voice(user_id)
+        except Exception:
+            log.exception("%s direct voice: the owner's voice choice could not be read", person["domain"])
+            return None
+        return voice if voice in ("openai", "xai") else None
+
     def unvoiced(body):
         """A host that takes no provider default (adapter.default_voices False; CoS, D2 (a)): the start's provider, resolved
         exactly as the bootstrap resolves it, refused when the card names no voice for it. None: not refused here (an
@@ -2626,6 +2641,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             return None
         production = adapter.is_production()
         explicit = body.get("provider") if isinstance(body, dict) else None
+        explicit = saved_voice(principal()) or explicit
         try:
             provider = resolve_provider(explicit=explicit, saved_preference=None, is_production=production,
                                         dev_query_override=None if production else request.args.get("provider"))
@@ -2710,7 +2726,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
     boot = create_bootstrap_blueprint(domain=person["domain"], locale=locale, get_persona=get_persona,
                                       is_production=adapter.is_production, consult_ledger=sessions, owner=adapter.owner,
-                                      admit=admit, page_responses=page_responses)
+                                      admit=admit, page_responses=page_responses, saved_provider=saved_voice)
     boot.before_request(bootstrap_guard)
     boot.register_error_handler(SessionRefused, lambda _exc: refusal(
         "unavailable", "Voice unavailable: the voice session could not be recorded in this conversation.", 503))

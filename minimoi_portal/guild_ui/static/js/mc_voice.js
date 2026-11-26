@@ -121,7 +121,7 @@ export function initMcVoice(page) {
   onChange(paintExport);
 
   // `session` numbers the attempt: stop() moves it on, and every callback of an older attempt (a late transcript, error, state change or answer) is then ignored.
-  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, direct = null, walk = false, directMod = null, sessionMod = null, directSession = null, directThread = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
+  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, direct = null, directMod = null, sessionMod = null, directSession = null, directThread = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
 
   let visualState = 'idle', pressed = false;
   const draw = () => {
@@ -149,42 +149,18 @@ export function initMcVoice(page) {
   const headers = () => ({ 'Content-Type':'application/json', 'X-CSRF-Token': page.csrf_token, 'X-Record-Mode': recordMode() });
   const busy = () => Boolean(controller || starting || ending);
 
-  // The Voice choice offers what this host can actually run (the capabilities answer) and plainly marks the rest unavailable;
-  // nothing is substituted silently, and the choice never changes an active session (owner, 18 Oct). A provider on which MC's
-  // voice may not act by itself (direct_voice.model_actions false: Grok until A4, Spec 165 §7 as amended) says so.
-  const PROVIDER_KEY = 'minimoi.voice.provider';
-  function offerProviders(body) {
-    const select = $('[data-mc-voice-provider]');
-    if (!select || !select.options) return;
-    const usable = new Set((body.providers || []).map(p => p && p.provider));
-    if (managed && managed.provider) usable.add(managed.provider);
-    const options = Array.from(select.options);
-    for (const option of options) {
-      const name = option.dataset.name || option.textContent.split(' · ')[0];
-      option.dataset.name = name;
-      option.disabled = !usable.has(option.value);
-      // v3 (confirm by voice): both providers confirm by voice, the same for Robert, so none is labelled "Check only".
-      option.textContent = option.disabled ? `${name} · not available yet` : name;
-    }
-    let saved = null;
-    try { saved = window.localStorage.getItem(PROVIDER_KEY); } catch (e) { /* the choice simply is not remembered */ }
-    const pick = options.find(o => o.value === saved && !o.disabled) || options.find(o => o.value === body.default_provider && !o.disabled) || options.find(o => !o.disabled);
-    if (pick) select.value = pick.value;
-    else select.disabled = true;                // nothing this host can run: no choice to make, and none faked
-  }
-
+  // The Voice choice is the shared ⋯ menu's (core/founders_ui/static/partner-menu.js): the owner's, kept by MiniMoi for
+  // every device (#659), and the server binds a call to it. Here it is only read at start and held while a call is live.
   async function available() {
     try {
       const r = await fetch(`${api}/mc/voice/capabilities`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
       const body = await r.json().catch(() => ({}));
-      walk = body.voice_path === 'realtime';
-      direct = !walk && body.direct_voice && typeof body.direct_voice === 'object' && (body.direct_voice.providers || []).length ? body.direct_voice : null;
+      direct = body.direct_voice && typeof body.direct_voice === 'object' && (body.direct_voice.providers || []).length ? body.direct_voice : null;
       const records = !direct && body.direct_records && typeof body.direct_records === 'object' ? body.direct_records : null;
       if (r.ok && body.ok && records) initThread(records);              // installed, not admitted: the thread only
       if (!r.ok || !body.ok || !((body.providers || []).length || direct)) return null;
       managed=body.managed_realtime || null;
-      if (managed || direct) $('[data-mc-managed-settings]').hidden=false;
-      offerProviders(direct ? { providers: direct.providers, default_provider: direct.default_provider, model_actions: direct.model_actions } : body);
+      if (managed) $('[data-mc-managed-settings]').hidden=false;      // the managed path's Transcript choice only
       if (direct) { initDirect(); const first = direct.providers[0]; return first.label || first.provider; }
       return body.providers[0].label || body.providers[0].provider || 'the speech provider';
     } catch (e) { return null; }
@@ -205,7 +181,7 @@ export function initMcVoice(page) {
       if(session!==stoppedSession)return;
       transcriptEnding=null;
       if(['user_ended','limit'].includes(reason))transcriptReveal?.();
-      for(const selector of ['[data-mc-voice-provider]','[data-mc-voice-transcript-choice]']){const node=$(selector);if(node)node.disabled=false;}
+      for(const selector of ['[data-partner-voice]','[data-mc-voice-transcript-choice]']){const node=$(selector);if(node){node.disabled=false;if(node.dataset)delete node.dataset.callLive;}}
       paint(false);
       if(!quiet&&!showingError)say(WORDS[reason]||(direct?DIRECT_ENDED:'Voice ended. Agent work already accepted may still finish.'),{loud:Boolean(WORDS[reason]),transient:!WORDS[reason]});
     };
@@ -233,8 +209,7 @@ export function initMcVoice(page) {
     const current = () => mine === session;
     setPhase('connecting');
     paint(true);
-    if (!direct && !managed && !walk) primeCue();    // on the tap, before any await (the chained path's tone)
-    if (walk) { await startWalk(mine, current); return; }
+    if (!direct && !managed) primeCue();    // on the tap, before any await (the chained path's tone)
     if (direct) {await startDirect(mine,current);return;}
     if (managed) {await startManaged(mine,current);return;}
     // Neither offered (production today: MINIMOI_MC_VOICE=1, direct not installed or not admitted, managed off): today's chained
@@ -298,46 +273,7 @@ export function initMcVoice(page) {
   // The direct path (UI_CONTRACT_chunk_B.md). Its files are loaded only now that the capabilities answer offered it: the
   // Guild's thread (mc_voice_direct.js) and the shared session module (Spec 165 §4.3), served beside the controller.
   const DIRECT_ENDED = 'Voice ended. What was said is in the conversation.';
-  // #578: after a talking call, its whole transcript, tucked (closed) under the composer, with a download from the server.
-  function showWalkTranscript({ turns, url }) {
-    const box = $('[data-mc-voice-transcript]'), text = $('[data-mc-voice-transcript-text]');
-    if (!box || !text) return;
-    const summary = box.querySelector('summary');
-    if (summary) summary.textContent = `Voice call transcript · ${turns.length} turns · saved`;
-    text.textContent = turns.map((t) => `${t.role === 'user' ? 'You' : 'MC'}: ${t.text}`).join('\n\n');
-    box.hidden = false;
-    box.open = false;
-    // Its own link inside the box: the options menu's export link is hidden on this path and repainted per conversation.
-    const link = box.querySelector('[data-mc-voice-call-download]');
-    if (link && url) { link.setAttribute('href', url); link.hidden = false; }
-  }
-  function walkAskedForGrok() {
-    const route = $('[data-mc-route]');
-    const voicePick = $('[data-mc-voice-provider]');
-    return (route && /xai/i.test(route.value || '')) || (voicePick && voicePick.value === 'xai');
-  }
-  async function startWalk(mine, current) {
-    const notice = $('[data-mc-voice-notice]');
-    const grok = walkAskedForGrok();
-    if (notice) { notice.textContent = grok ? 'MC voice runs on OpenAI for now.' : ''; notice.hidden = !grok; }
-    say(grok ? 'MC voice runs on OpenAI for now.' : 'Connecting…');
-    try {
-      const { startMcWalk } = await import('./mc_voice_walk.js');
-      if (!current()) return;
-      controller = await startMcWalk({
-        api, headers, current,
-        say: (text) => { if (current()) say(text); },
-        setPhase: (phase) => { if (current()) setPhase(phase); },
-        saved: showWalkTranscript,
-        conversationId: () => page.conversation?.id,
-        paint: (role, text) => { if (current()) paintSpoken(role, text); },
-      });
-    } catch (e) {
-      if (current()) { stop('failed', { quiet: true }); say(`Voice could not start${e && e.message ? `: ${e.message}` : ''}. Typing still works.`, { loud: true, error: true }); }
-    } finally {
-      if (current()) starting = false;
-    }
-  }
+
   const loadDirect = () => directMod ? Promise.resolve(directMod) : import('./mc_voice_direct.js').then((m) => (directMod = m));
   const loadSession = () => sessionMod ? Promise.resolve(sessionMod) : import(`${api}/mc/voice/static/direct-voice-session.js`).then((m) => (sessionMod = m));
   const liveBar = () => $('[data-mc-voice-live]');
@@ -382,8 +318,8 @@ export function initMcVoice(page) {
     $('[data-mc-voice-keep]')?.addEventListener?.('click', () => directSession?.keepTalking());
   }
   async function startDirect(mine,current) {
-    const selector=$('[data-mc-voice-provider]');
-    if(selector)selector.disabled=true;
+    const selector=$('[data-partner-voice]');
+    if(selector){selector.disabled=true;selector.dataset.callLive='true';}
     const spokenBox=$('[data-mc-voice-transcript]'),spokenText=$('[data-mc-voice-transcript-text]');
     if(spokenText)spokenText.textContent='';
     if(spokenBox)spokenBox.hidden=true;
@@ -404,7 +340,7 @@ export function initMcVoice(page) {
       // The session ended by itself (a refusal, the provider, the summary, the time limit): the button is ready again.
       ended:(words,{error=false}={})=>{
         if(directSession===mineSession)directSession=null;
-        if(mineNow()){controller=null;starting=false;endedAttempt=mine;paint(false);setPhase('idle');if(selector)selector.disabled=false;}
+        if(mineNow()){controller=null;starting=false;endedAttempt=mine;paint(false);setPhase('idle');if(selector){selector.disabled=false;delete selector.dataset.callLive;}}
         if(words&&(current()||endedAttempt===mine))say(words,{loud:error,error,transient:!error});
       },
     };
@@ -419,13 +355,13 @@ export function initMcVoice(page) {
       controller=handle;directSession=mineSession=s;
       await s.start(selector?.value||direct.default_provider);
     } catch (_) {if(current()){stop('failed',{quiet:true});say('Voice unavailable: the voice page could not load. Typing still works.',{loud:true,error:true});}}
-    finally {if(current())starting=false;if(!busy()&&selector)selector.disabled=false;}
+    finally {if(current())starting=false;if(!busy()&&selector){selector.disabled=false;delete selector.dataset.callLive;}}
   }
 
   async function startManaged(mine,current) {
     const cid=page.conversation?.id;
     if (!cid) {stop('failed',{quiet:true});say('Open a saved conversation before using voice.',{error:true});return;}
-    const selector=$('[data-mc-voice-provider]'),choice=$('[data-mc-voice-transcript-choice]');
+    const selector=$('[data-partner-voice]'),choice=$('[data-mc-voice-transcript-choice]');
     transcriptCancel?.();
     const displayEpoch=++transcriptEpoch;
     let latestTurns=[],afterEnd=false,savedText='',savedRead=null;
@@ -529,9 +465,6 @@ export function initMcVoice(page) {
     finally {if(current())starting=false;if(!busy()){selector.disabled=false;choice.disabled=false;}}
   }
 
-  $('[data-mc-voice-provider]')?.addEventListener?.('change', (event) => {
-    try { window.localStorage.setItem(PROVIDER_KEY, event.target.value); } catch (e) { /* not remembered */ }
-  });
   $('[data-mc-voice-transcript-choice]')?.addEventListener?.('change',()=>{
     if($('[data-mc-voice-transcript-choice]').checked)$('[data-mc-voice-transcript]').open=true;
     transcriptPaint?.();

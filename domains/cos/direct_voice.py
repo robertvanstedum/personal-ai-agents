@@ -249,6 +249,15 @@ class ChiefOfStaff(DirectVoiceAdapter):
         self._owner_turn, self._request_binding = owner_turn, request_binding
         self._files, self._card_root, self._clock = files or (lambda: None), card_root, clock
 
+    def saved_voice(self, user_id):
+        """The owner's Voice for CoS, kept by MiniMoi beside her history (#659): the call is minted on it, so her
+        consults (turns on the owner's Voice's model, model_route.for_turn) run on the same provider."""
+        if self._history is None:
+            return None
+        from core.model_routes.menu import bound_voice
+        from core.partner_settings import PartnerSettings
+        return bound_voice(PartnerSettings(self._history.root, "cos"), user_id, "cos")
+
     def owner(self):
         uid = resolve_user_id(request)
         if uid is None or request.headers.get("X-Minimoi-User-Tier") != "owner":
