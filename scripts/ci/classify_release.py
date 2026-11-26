@@ -71,6 +71,7 @@ def _is_release_only(path: str) -> bool:
         or path in OPS_ONLY_FILES
         or path in MC_HOST_INSTALL_FILES
         or path.startswith(MC_IMAGE_PREFIXES)
+        or path.startswith(VAULT_EMBEDDER_IMAGE_PREFIXES)
         or path.startswith(MC_PERSONA_TOOL_PREFIXES)
     )
 
@@ -102,6 +103,9 @@ OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
                             # Guildhall on production (#550): no main service runs these. They name the guildhall
                             # target instead (GUILDHALL_DEPLOY_FILES below), which deploy.yml refreshes on its own.
                             ".github/workflows/rooms-worker-image.yml",
+                            # The Vault's embedder image (#660): built by hand for a commit on main, pinned by digest in
+                            # the host's .env; no release builds, starts or recreates it.
+                            ".github/workflows/vault-embedder-image.yml",
                             "scripts/operations/guildhall_prod.sh",
                             "docker-compose.guildhall-production.yml",
                             "docker-compose.records-production.yml"})
@@ -119,6 +123,9 @@ MC_HOST_INSTALL_FILES = frozenset({"scripts/mc_host/install_delegation_runner.sh
 # MC's own container: built and deployed only by deploy-mc-agent.yml on an mc-agent-v* tag. The portal image copies the
 # repository, but no service reads these files (tests/test_release_classifier.py guards this).
 MC_IMAGE_PREFIXES = ("docker/mc-agent-container/",)
+# The Vault's embedder (#660): its own image (docker/vault-embedder/Dockerfile), built only by vault-embedder-image.yml and run by
+# digest from the host's .env. No mini-moi service is built from these files.
+VAULT_EMBEDDER_IMAGE_PREFIXES = ("docker/vault-embedder/",)
 
 
 # Master Craftsman's persona releases (Spec 165 §11.7). Their readers in a production image: the portal only, whose voice
@@ -142,7 +149,10 @@ MC_PERSONA_TOOL_PREFIXES = ("scripts/mc_persona/",)
 # fallback, as does any other service or top-level key (networks, volumes).
 PROD_COMPOSE = "docker-compose.prod.yml"
 COMPOSE_SERVICE_OWNERS = {**{service: (service,) for service in ALL_SERVICES}, "vault-ask": ("portal",), "vault-ask-mc": ("portal",),
-                          "supervisor": ("portal",)}
+                          "supervisor": ("portal",),
+                          # #660: run by digest from .env and started only by its activation, so an edit to its block alone
+                          # restarts no release service (adding or removing the service is still a full release).
+                          "vault-embedder": ()}
 
 
 # Top-level definitions a service uses by name: they are part of its rendered config.
@@ -359,7 +369,9 @@ VAULT_SYNC_PREFIXES = ("core/memory_sync/",)
 # MC's Vault index (#594): the EC2 host's vault-mc-index cron runs ``python -m core.memory_index.mc_index`` INSIDE the portal image,
 # reading the generic career rules the image carries, so both rebuild the portal image.
 VAULT_SYNC_IMAGE_FILES = frozenset({"scripts/vault/vault_apply.py", "scripts/vault/export_mc_conversations.py",
-                                    "core/memory_index/mc_index.py", "config/vault/career_filter.default.json"})
+                                    "core/memory_index/mc_index.py", "config/vault/career_filter.default.json",
+                                    # #660: the embedder's known-answer probe, read by every client in the portal image
+                                    "core/memory_index/embedder_probe.json"})
 # The portal metadata view loads regression -> runner -> existing remote
 # consumer/context/citation. Assessment is the coupled report-family reader;
 # it currently depends on that pair, rather than being imported by the host.

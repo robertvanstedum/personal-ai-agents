@@ -35,7 +35,7 @@ class Routing(unittest.TestCase):
         adapter = TasksAdapter.__new__(TasksAdapter)
         seen = []
         # Every tool in TASK_ADAPTER_TOOLS, including the work-artifact pair added with work modes (0690fcf3).
-        methods = ("build_item", "helper_ask", "helper_result", "helper_review", "work_read", "work_save")
+        methods = ("build_item", "helper_ask", "helper_result", "helper_review", "work_read", "work_save", "initiative_read")
         for method in methods:
             setattr(adapter, method, lambda host, args, caller, m=method: seen.append(m) or "ok")
         host = SimpleNamespace(_tier2=lambda caller: True)

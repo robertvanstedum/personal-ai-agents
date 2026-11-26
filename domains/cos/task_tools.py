@@ -19,8 +19,9 @@ binding's turn. Neither ever comes from tool arguments (S3).
 from __future__ import annotations
 
 import os
+import secrets
 from core.canonical_json import digest
-from services.partnership_tasks.client import TaskServiceUnavailable, command
+from services.partnership_tasks.client import TaskServiceRefused, TaskServiceUnavailable, command
 
 SCHEMA = "minimoi.cos.tasks_tool/1"
 ARGS = {"propose": {"outcome", "lead", "holder", "done_when"}, "status": {"task_id"},
@@ -31,6 +32,23 @@ ARGS.update(work_find={"query"}, work_read={"artifact_id", "revision"},
             work_save={"artifact_id", "expected_revision", "title", "content", "unresolved"})
 REQUIRED.update(work_find={"query"}, work_read={"artifact_id"},
                 work_save={"expected_revision", "title", "content", "unresolved"})
+# #680: the private professional-initiative store (parked PI- records with a packet). Planning Studio's INIT- numbers
+# are a different series; CoS never writes there.
+ARGS.update(initiative_file={"title", "summary", "packet_file_ids"}, initiative_attach={"initiative_id", "file_id"},
+            initiative_list=set(), initiative_read={"initiative_id"})
+REQUIRED.update(initiative_file={"title", "summary"}, initiative_attach={"initiative_id", "file_id"},
+                initiative_list=set(), initiative_read={"initiative_id"})
+REFUSAL_WORDS = {
+    "work_artifacts_disabled": "private working documents are switched off on this server",
+    "professional_initiatives_disabled": "the professional-initiative store is switched off on this server",
+    "work_scope_unavailable": "CoS is not allowed to write private working documents here",
+    "initiative_scope_unavailable": "CoS is not allowed to file professional initiatives here",
+    "planning_studio_id_not_accepted": "that is a Planning Studio INIT number; initiatives here are PI- numbers",
+    "initiative_not_found": "no initiative has that number",
+    "packet_too_many_files": "a packet holds at most 20 files",
+    "packet_too_large": "a packet holds at most 25 MB",
+    "file_too_large": "one packet file can be at most 5 MB",
+}
 EXECUTOR_SEATS = frozenset({"mc"})          # leads/holders CoS may propose in B4; MC delegates further
 DEFAULT_SEAT = "mc"                         # the only seat there is, so leaving lead or holder out says the same thing
 RUNTIME = {"kind": "model", "model": None, "provider": "openclaw", "build": "cos-bound/1", "config_version": None}
@@ -41,10 +59,24 @@ def _refuse(status, error, **extra):
 
 
 class CosTaskTools:
-    def __init__(self, *, platform, cos, history, environment: str, scope: str = "personal", charter=None, sleep=None):
+    def __init__(self, *, platform, cos, history, environment: str, scope: str = "personal", charter=None, sleep=None,
+                 bindings=None, files=None):
         self.platform, self.cos, self.history = platform, cos, history
+        self.bindings, self.files = bindings, files            # owner words of a meeting turn; the CoS inbox
+        self.meeting_proposals = {}                            # room -> the proposal its running turn made (Lane G)
         self.environment, self.scope = environment, scope
         self.charter, self.sleep = charter, sleep                # the EA's approved charter, or None: helpers off
+
+    def room_proposal(self, room):
+        """The card Records publishes for the proposal this meeting turn made, or None. The words are the stored task
+        terms and the digest is the one the owner's confirmation must name (never recomputed at approval)."""
+        made = self.meeting_proposals.pop(room, None)
+        if made is None:
+            return None
+        task = made["proposed"]["task"]
+        return {"code": "P-" + "".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(4)),
+                "source_ref": made["interpretation_id"], "payload_digest": digest(made["proposed"]),
+                "summary": f"Track: {task['outcome']}\nDone when: {task['done_when']}\nLead: {task['lead'].upper()}"}
 
     def serve(self, binding, op: str, args: dict) -> dict:
         if op not in ARGS:
@@ -55,8 +87,10 @@ class CosTaskTools:
                            required=sorted(REQUIRED[op]), missing=sorted(REQUIRED[op] - given))
         if op.startswith("work_"):
             return self._work(binding, op, args)
+        if op.startswith("initiative_"):
+            return self._initiative(binding, op, args)
         if op == "propose":
-            if binding.scope != "owner":
+            if binding.scope not in ("owner", "meeting"):
                 return _refuse(403, "scope_read_only")
             return self._propose(binding, args)
         if op in ("ask_helper", "helper_result", "helper_review"):
@@ -89,10 +123,89 @@ class CosTaskTools:
             if not good:
                 return {"status": 409, "body": {"error": data.get("reason") or data.get("status", "not_verified"), **data}}
             return {"status": 200, "body": {"message": "Private canonical working document. Draft, not action approval; indexing freshness is separate.", **data}}
+        except TaskServiceRefused as exc:
+            return _refuse(409, exc.code, message="Nothing was saved: " + REFUSAL_WORDS.get(exc.code, exc.code) + ".")
         except TaskServiceUnavailable:
             return _refuse(503, "work_outcome_unconfirmed", message="Do not repeat an uncertain save; read the canonical artifact to reconcile.")
         except (ValueError, KeyError):
             return _refuse(422, "work_arguments_invalid")
+
+    def _owner_source(self, binding):
+        """(source, words) for the owner's own words in this turn, or a refusal. A CoS conversation turn cites its
+        history record; a Guildhall turn is bound only in an owner-private room the scheduler verified, and cites the
+        verified trigger text the binding store kept (store ``cos-meeting-owner``)."""
+        if binding.scope == "owner" and binding.origin == "owner" and isinstance(binding.source_ref, dict):
+            ref = binding.source_ref
+            turn = self.history.turn(ref["conversation_id"], ref["turn_id"])
+            if turn is None or not turn.get("user_text"):
+                return None, _refuse(409, "owner_words_not_found")
+            return ({"store": "cos-history", "id": ref["conversation_id"] + ":" + ref["turn_id"],
+                     "position": int(turn.get("seq") or 1)}, turn["user_text"]), None
+        if binding.scope == "meeting" and binding.origin == "meeting" and self.bindings is not None:
+            words = self.bindings.owner_words(binding.turn_id)
+            if not isinstance(words, str) or not words.strip():
+                return None, _refuse(409, "owner_words_not_found")
+            return ({"store": "cos-meeting-owner", "id": f"guildhall:{binding.audience}:{binding.turn_id}",
+                     "position": int(binding.trigger_seq or 1)}, words), None
+        return None, _refuse(403, "private_owner_turn_required",
+                             message="Nothing was filed: an initiative is filed only from Robert's own turn, in your conversation or a private meeting.")
+
+    def _packet(self, file_ids):
+        """Stage inbox files with the task service; returns [{file_ref, name}]. Hashes are checked twice."""
+        import hashlib
+        if file_ids and self.files is None:
+            raise ValueError("files_unavailable")
+        out = []
+        for file_id in list(dict.fromkeys(file_ids or []))[:20]:
+            meta = self.files._meta(file_id)
+            data = (self.files.inbox / meta["file_id"] / meta["name"]).read_bytes()
+            if hashlib.sha256(data).hexdigest() != meta["sha256"]:
+                raise ValueError("file_changed")
+            staged = self.cos.stage_initiative_file(data, scope=self.scope)
+            out.append({"file_ref": staged["file_ref"], "name": meta["name"]})
+        return out
+
+    def _initiative(self, binding, op, args):
+        from domains.cos.files import FileRefused
+        try:
+            if op == "initiative_list":
+                data = self.cos.initiatives("list", {}, scope=self.scope)
+                return {"status": 200, "body": {"message": "Professional initiatives (parked PI- records).", **data}}
+            if op == "initiative_read":
+                data = self.cos.initiatives("read", {"initiative_id": args["initiative_id"]}, scope=self.scope)
+                return {"status": 200, "body": {"message": "The initiative as stored, with its packet index.", **data}}
+            source, refused = self._owner_source(binding)
+            if refused:
+                return refused
+            from services.partnership_tasks.work_artifact_source import prepare_source
+            sid, cmd = prepare_source(source=source[0], words=source[1], environment=self.environment, scope=self.scope)
+            if self.platform.submit(cmd).get("outcome") != "accepted":
+                return _refuse(409, "source_not_recorded", message="Nothing was filed: Robert's words could not be recorded.")
+            if op == "initiative_file":
+                ids = args.get("packet_file_ids") or []
+                if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
+                    return _refuse(422, "invalid", field="packet_file_ids")
+                data = self.cos.initiatives("file", {"title": args["title"], "summary": args["summary"],
+                                                     "files": self._packet(ids), "source_event_id": sid},
+                                            scope=self.scope)
+                return {"status": 200, "body": {**data, "message":
+                        f"Filed as {data['initiative_id']}, parked: no work starts. "
+                        f"Packet: {len(data.get('packet', []))} file(s). This is not a Planning Studio INIT number."}}
+            data = self.cos.initiatives("attach", {"initiative_id": args["initiative_id"],
+                                                   "files": self._packet([args["file_id"]]), "source_event_id": sid},
+                                        scope=self.scope)
+            words = "Added to" if data.get("status") == "attached" else "Already in the packet of"
+            return {"status": 200, "body": {**data, "message": f"{words} {data['initiative_id']} (still parked)."}}
+        except TaskServiceRefused as exc:
+            verb = "Nothing was filed: " if op in ("initiative_file", "initiative_attach") else "Nothing was read: "
+            return _refuse(409, exc.code, message=verb + REFUSAL_WORDS.get(exc.code, exc.code) + ".")
+        except FileRefused as exc:
+            return _refuse(409, "file_not_found", message="Nothing was filed: " + str(exc))
+        except TaskServiceUnavailable:
+            return _refuse(503, "initiative_outcome_unconfirmed",
+                           message="Not verified. Do not repeat it; list the initiatives to see whether it was filed.")
+        except (ValueError, KeyError, OSError):
+            return _refuse(422, "initiative_arguments_invalid", message="Nothing was filed: the request was not valid.")
 
     def _helper(self, binding, op, args):
         """CoS and its Executive Assistant (helper seats spec v0.4). Same chain as MC and its Apprentice."""
@@ -145,8 +258,12 @@ class CosTaskTools:
             return {"status": 503, "body": {"error": "task_service_unconfirmed", "answer": exc.answer}}
 
     def _propose(self, binding, args):
-        ref = binding.source_ref
-        if binding.origin != "owner" or not isinstance(ref, dict):
+        # Lane G: an owner-private Guildhall turn may propose too. Its source is the verified trigger text the binding
+        # store kept (store cos-meeting-owner); its card is posted in the room and Robert answers "yes P-XXXX" there.
+        source, refused = self._owner_source(binding)
+        if refused:
+            if refused["body"]["error"] == "owner_words_not_found":
+                return refused
             return _refuse(403, "propose_needs_an_owner_conversation_turn")
         for key in ("outcome", "done_when"):
             if not isinstance(args[key], str) or not args[key].strip() or len(args[key]) > 500:
@@ -154,15 +271,12 @@ class CosTaskTools:
         lead, holder = args.get("lead", DEFAULT_SEAT), args.get("holder", DEFAULT_SEAT)
         if lead not in EXECUTOR_SEATS or holder not in EXECUTOR_SEATS:
             return _refuse(422, "lead_and_holder_must_be", seats=sorted(EXECUTOR_SEATS))
-        turn = self.history.turn(ref["conversation_id"], ref["turn_id"])
-        if turn is None or not isinstance(turn.get("user_text"), str) or not turn["user_text"].strip():
-            return _refuse(409, "owner_words_not_found")
-        key = digest(f"{self.environment}\0{ref['conversation_id']}\0{ref['turn_id']}")[7:47]
+        (src, words) = source
+        key = digest(f"{self.environment}\0{src['store']}\0{src['id']}")[7:47] if src["store"] != "cos-history" else \
+            digest(f"{self.environment}\0{src['id'].rpartition(':')[0]}\0{src['id'].rpartition(':')[2]}")[7:47]
         sid, iid = "SE-cos-" + key[:32], "IN-cos-" + key[:32]
         source_cmd = command("source_event.record", "source_event", sid,
-                             {"source": {"store": "cos-history", "id": f"{ref['conversation_id']}:{ref['turn_id']}",
-                                         "position": int(turn.get("seq") or 1)},
-                              "content": turn["user_text"][:8000], "correction_of": None},
+                             {"source": src, "content": words[:8000], "correction_of": None},
                              command_id="cmd-cos-src-" + key, environment=self.environment, scope=self.scope,
                              session_id=binding.turn_id)
         proposed = {"outcome": args["outcome"].strip(), "scope": self.scope, "recipients": ["principal"],
@@ -183,6 +297,14 @@ class CosTaskTools:
         except TaskServiceUnavailable as exc:
             return {"status": 503, "body": {"error": "task_service_unconfirmed", "answer": exc.answer}}
         if out.get("outcome") == "accepted":
+            if binding.scope == "meeting":
+                self.meeting_proposals[binding.audience] = {"interpretation_id": iid, "proposed": proposed}
+                return {"status": 200, "body": {
+                    "schema": SCHEMA, "interpretation_id": iid, "state": "awaiting_robert",
+                    "replayed": bool(out.get("replayed")),
+                    "message": "Proposed. Nothing starts until Robert approves it. The platform posts its card in this "
+                               "meeting with a code; tell him in one line he can approve it here with \"yes\" and the "
+                               "code, and never repeat the card yourself."}}
             return {"status": 200, "body": {
                 "schema": SCHEMA, "interpretation_id": iid, "state": "awaiting_robert",
                 "replayed": bool(out.get("replayed")),

@@ -44,7 +44,7 @@ function harness() {
   // On the record: the lock offers Go Private and the chip is hidden.
   assert.equal(h.lock.getAttribute('aria-pressed'), 'false');
   assert.equal(h.lock.getAttribute('aria-label'), 'Go Private');
-  assert.equal(h.words.textContent, 'Go Private');
+  assert.equal(h.words.textContent, 'Private');          // the one word on both twins' menus (#661)
   assert.equal(h.chip.hidden, true);
 
   // The lock creates a new private conversation through the existing create API.

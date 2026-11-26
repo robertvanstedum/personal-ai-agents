@@ -182,7 +182,7 @@
     lock.setAttribute('aria-pressed', String(on));
     lock.setAttribute('aria-label', on ? 'Exit Private' : 'Go Private');
     lock.title = on ? 'Exit Private: go back on the record (starts a new chat)' : 'Go Private: a new chat that CoS answers and keeps, but nothing from it goes to MC or to memory';
-    const words = lock.querySelector('.cos-lock-text'); if (words) words.textContent = on ? 'Exit Private' : 'Go Private';
+    const words = lock.querySelector('.cos-lock-text'); if (words) words.textContent = on ? 'Exit Private' : 'Private';      // the one word on both twins' menus (#661)
   }
   if (lock) lock.addEventListener('click', () => startConversation(!isPrivateNow()));
   const exitPrivate = document.querySelector('[data-private-exit]');

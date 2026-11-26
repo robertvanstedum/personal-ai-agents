@@ -28,7 +28,7 @@ def test_voice_sits_with_send_and_settings_sit_in_one_menu(turned, provider, mon
     assert row.select_one("[data-mc-input]") is not None
     menu = form.select_one("details[data-mc-options]")
     assert menu is not None and menu.summary["aria-label"] == "Conversation options"
-    for hook in ("data-mc-managed-settings", "data-mc-record", "data-mc-voice-provider", "data-mc-voice-transcript-choice"):
+    for hook in ("data-mc-managed-settings", "data-mc-record", "data-partner-voice", "data-partner-model", "data-mc-voice-transcript-choice"):
         assert menu.find(attrs={hook: True}) is not None, hook
     tools = form.select_one(".mc-tools")
     assert tools.find(attrs={"data-mc-voice-btn": True}) is None
@@ -37,18 +37,27 @@ def test_voice_sits_with_send_and_settings_sit_in_one_menu(turned, provider, mon
         assert node is not None and node.find_parent("details") is None, state
 
 
-def test_the_voice_choice_is_truthful_about_grok(turned, provider, monkeypatch):
+def test_the_menu_is_the_shared_one_in_the_shared_order(turned, provider, monkeypatch):
+    """#661: MC's ⋯ body is founders_ui's partner menu: Dictate, Voice (OpenAI, Grok), Model, Private, the footnote."""
     _on(monkeypatch)
-    select = _composer(turned.owner()).select_one("[data-mc-voice-provider]")
-    options = {o["value"]: o for o in select.find_all("option")}
-    assert set(options) == {"openai", "xai"}
-    assert not options["openai"].has_attr("disabled")
-    assert options["xai"].has_attr("disabled") and "not available" in options["xai"].get_text()
+    menu = _composer(turned.owner()).select_one("[data-partner-menu]")
+    assert menu is not None and menu["data-partner"] == "mc"
+    options = [o["value"] for o in menu.select_one("[data-partner-voice]").find_all("option")]
+    assert options == ["openai", "xai"]                                     # no Claude in Voice
+    hooks = [el for el in menu.find_all(True) if el.has_attr("data-dictate") or el.has_attr("data-partner-voice")
+             or el.has_attr("data-partner-model") or el.has_attr("data-mc-record")]
+    order = ["dictate" if h.has_attr("data-dictate") else "voice" if h.has_attr("data-partner-voice")
+             else "model" if h.has_attr("data-partner-model") else "private" for h in hooks]
+    assert order in (["dictate", "voice", "model", "private"], ["voice", "model", "private"])   # Dictate only where it is on
+    assert menu.select_one(".partner-menu-foot").get_text(strip=True) == "Voice is AI-generated."
+    assert menu.find(attrs={"data-mc-voice-provider": True}) is None and menu.find(attrs={"data-mc-route": True}) is None
 
 
 def test_menu_labels_are_short(turned, provider, monkeypatch):
     _on(monkeypatch)
     body = _composer(turned.owner()).select_one(".mc-options-body")
+    for state in body.select(".partner-menu-lock[hidden], .mc-walk-note[hidden]"):   # state lines, shown only when true
+        state.decompose()
     words = body.get_text(" ", strip=True)
     for long in ("Show live transcript", "Download saved voice transcript", "Voice provider "):
         assert long not in words
@@ -82,3 +91,15 @@ def test_the_page_wires_the_options_menu_tested_in_mc_options_menu_mjs():
     js = (Path(__file__).resolve().parents[3] / "minimoi_portal/guild_ui/static/js/conversation.js").read_text()
     init = js[js.index("export function initConversation(p) {"):]
     assert "wireOptionsMenu($('[data-mc-options]'), document);" in init     # behaviour: tests/mc_options_menu.mjs
+
+
+def test_the_walk_menu_never_promises_a_grok_call(turned, provider, monkeypatch):
+    """Owner, 26 Nov ("B but keep the walk"): production's MC voice is the walk, OpenAI only. With Grok chosen the menu says
+    the call stays on OpenAI, and the call says it again; typed MC still follows the choice."""
+    from pathlib import Path
+    _on(monkeypatch)
+    note = _composer(turned.owner()).select_one("[data-mc-walk-note]")
+    assert note is not None and note.has_attr("hidden") and note.get_text(strip=True) == "Calls stay on OpenAI."
+    js = (Path(__file__).resolve().parents[3] / "minimoi_portal/guild_ui/static/js/mc_voice.js").read_text()
+    assert "note.hidden = !(walk && $('[data-partner-voice]')?.value === 'xai')" in js
+    assert "const WALK_OPENAI = 'MC voice calls stay on OpenAI.';" in js and "if (walk) { await startWalk(mine, current); return; }" in js

@@ -209,3 +209,13 @@ def test_drop_clears_a_replaced_sentence():
     confirm("s6", "yes please", hold_id=later["hold"], principal="robert", notes_add=add)
     assert saved["text"].startswith("Decision: two")
     drop("s6")
+
+
+def test_the_walk_keeps_answers_short_and_takes_issue_questions_to_the_issues_tool():
+    """Staging, 26 Nov (#689): the walk ran long, answered an issue question from the waiting notices (A6), and a phone
+    user cannot type."""
+    from minimoi_portal.guild_ui.mc.voice_walk import instructions, READ_TOOLS
+    words = instructions(briefing="Waiting: W-1 Blue Lantern.")
+    assert "Keep spoken answers short: two or three sentences, then stop." in words
+    assert "is for the issues tool" in words and "never answer an issue question from them" in words and "issues" in READ_TOOLS
+    assert "never tell him to type something" in words

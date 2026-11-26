@@ -225,6 +225,11 @@ services:
     pull_policy: never
     environment:
       - MINIMOI_ROLE=standby
+  # The Vault's pinned embedder (#660): the same Dockerfile and pins, built on this host (docs/runbooks/vault_meaning_search.md);
+  # the production service otherwise (internal network only, limits, identity health check).
+  vault-embedder:
+    image: minimoi-staging/vault-embedder:${MINIMOI_VAULT_EMBEDDER_TAG:-pinned}
+    pull_policy: never
 
   # The build supervisor (#365) answers to production's approvals bot: here it keeps production's opt-in profile and a
   # standby role, so a staging stack never starts a second poller of the same bot.

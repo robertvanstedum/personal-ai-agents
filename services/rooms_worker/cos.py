@@ -39,7 +39,10 @@ class CoS:
             response=self.session.post(self.base+'/internal/guildhall/turn',headers=self.headers(),json=payload,timeout=(5,150),allow_redirects=False)
             data=response.json()
             if response.status_code==200 and data.get('turn_id')==turn['id'] and data.get('room')==turn['room'] and isinstance(data.get('text'),str):
-                return {'outcome':'done','text':data['text'],'usage':None,'detail':'done'}
+                out={'outcome':'done','text':data['text'],'usage':None,'detail':'done'}
+                for extra in ('room_proposal','room_decision'):
+                    if isinstance(data.get(extra),dict):out[extra]=data[extra]
+                return out
             return {**empty,'outcome':'error','detail':'cos_outcome_uncertain'}
         except (requests.RequestException,ValueError):
             return {**empty,'outcome':'error','detail':'cos_outcome_uncertain'}

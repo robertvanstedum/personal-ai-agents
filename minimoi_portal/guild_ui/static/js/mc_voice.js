@@ -149,42 +149,20 @@ export function initMcVoice(page) {
   const headers = () => ({ 'Content-Type':'application/json', 'X-CSRF-Token': page.csrf_token, 'X-Record-Mode': recordMode() });
   const busy = () => Boolean(controller || starting || ending);
 
-  // The Voice choice offers what this host can actually run (the capabilities answer) and plainly marks the rest unavailable;
-  // nothing is substituted silently, and the choice never changes an active session (owner, 18 Oct). A provider on which MC's
-  // voice may not act by itself (direct_voice.model_actions false: Grok until A4, Spec 165 §7 as amended) says so.
-  const PROVIDER_KEY = 'minimoi.voice.provider';
-  function offerProviders(body) {
-    const select = $('[data-mc-voice-provider]');
-    if (!select || !select.options) return;
-    const usable = new Set((body.providers || []).map(p => p && p.provider));
-    if (managed && managed.provider) usable.add(managed.provider);
-    const options = Array.from(select.options);
-    for (const option of options) {
-      const name = option.dataset.name || option.textContent.split(' · ')[0];
-      option.dataset.name = name;
-      option.disabled = !usable.has(option.value);
-      // v3 (confirm by voice): both providers confirm by voice, the same for Robert, so none is labelled "Check only".
-      option.textContent = option.disabled ? `${name} · not available yet` : name;
-    }
-    let saved = null;
-    try { saved = window.localStorage.getItem(PROVIDER_KEY); } catch (e) { /* the choice simply is not remembered */ }
-    const pick = options.find(o => o.value === saved && !o.disabled) || options.find(o => o.value === body.default_provider && !o.disabled) || options.find(o => !o.disabled);
-    if (pick) select.value = pick.value;
-    else select.disabled = true;                // nothing this host can run: no choice to make, and none faked
-  }
-
+  // The Voice choice is the shared ⋯ menu's (core/founders_ui/static/partner-menu.js): the owner's, kept by MiniMoi for
+  // every device (#659), and the server binds a call to it. Here it is only read at start and held while a call is live.
   async function available() {
     try {
       const r = await fetch(`${api}/mc/voice/capabilities`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
       const body = await r.json().catch(() => ({}));
-      walk = body.voice_path === 'realtime';
+      walk = body.voice_path === 'realtime';                              // the walk: OpenAI only (owner, 26 Nov: "keep the walk")
       direct = !walk && body.direct_voice && typeof body.direct_voice === 'object' && (body.direct_voice.providers || []).length ? body.direct_voice : null;
+      paintWalkNote();
       const records = !direct && body.direct_records && typeof body.direct_records === 'object' ? body.direct_records : null;
       if (r.ok && body.ok && records) initThread(records);              // installed, not admitted: the thread only
       if (!r.ok || !body.ok || !((body.providers || []).length || direct)) return null;
       managed=body.managed_realtime || null;
-      if (managed || direct) $('[data-mc-managed-settings]').hidden=false;
-      offerProviders(direct ? { providers: direct.providers, default_provider: direct.default_provider, model_actions: direct.model_actions } : body);
+      if (managed) $('[data-mc-managed-settings]').hidden=false;      // the managed path's Transcript choice only
       if (direct) { initDirect(); const first = direct.providers[0]; return first.label || first.provider; }
       return body.providers[0].label || body.providers[0].provider || 'the speech provider';
     } catch (e) { return null; }
@@ -205,7 +183,7 @@ export function initMcVoice(page) {
       if(session!==stoppedSession)return;
       transcriptEnding=null;
       if(['user_ended','limit'].includes(reason))transcriptReveal?.();
-      for(const selector of ['[data-mc-voice-provider]','[data-mc-voice-transcript-choice]']){const node=$(selector);if(node)node.disabled=false;}
+      for(const selector of ['[data-partner-voice]','[data-mc-voice-transcript-choice]']){const node=$(selector);if(node){node.disabled=false;if(node.dataset)delete node.dataset.callLive;}}
       paint(false);
       if(!quiet&&!showingError)say(WORDS[reason]||(direct?DIRECT_ENDED:'Voice ended. Agent work already accepted may still finish.'),{loud:Boolean(WORDS[reason]),transient:!WORDS[reason]});
     };
@@ -298,6 +276,15 @@ export function initMcVoice(page) {
   // The direct path (UI_CONTRACT_chunk_B.md). Its files are loaded only now that the capabilities answer offered it: the
   // Guild's thread (mc_voice_direct.js) and the shared session module (Spec 165 §4.3), served beside the controller.
   const DIRECT_ENDED = 'Voice ended. What was said is in the conversation.';
+  // The walk (production's MC voice, OpenAI only). The shared menu's Voice still sets typed MC's model; for a call it is
+  // never taken as a promise: with Grok chosen, the menu and the call both say the call stays on OpenAI.
+  const WALK_OPENAI = 'MC voice calls stay on OpenAI.';
+  function paintWalkNote() {
+    const note = $('[data-mc-walk-note]');
+    if (note) note.hidden = !(walk && $('[data-partner-voice]')?.value === 'xai');
+  }
+  document.addEventListener('partner:voice', paintWalkNote);
+  $('[data-partner-voice]')?.addEventListener?.('change', paintWalkNote);
   // #578: after a talking call, its whole transcript, tucked (closed) under the composer, with a download from the server.
   function showWalkTranscript({ turns, url }) {
     const box = $('[data-mc-voice-transcript]'), text = $('[data-mc-voice-transcript-text]');
@@ -311,16 +298,11 @@ export function initMcVoice(page) {
     const link = box.querySelector('[data-mc-voice-call-download]');
     if (link && url) { link.setAttribute('href', url); link.hidden = false; }
   }
-  function walkAskedForGrok() {
-    const route = $('[data-mc-route]');
-    const voicePick = $('[data-mc-voice-provider]');
-    return (route && /xai/i.test(route.value || '')) || (voicePick && voicePick.value === 'xai');
-  }
   async function startWalk(mine, current) {
     const notice = $('[data-mc-voice-notice]');
-    const grok = walkAskedForGrok();
-    if (notice) { notice.textContent = grok ? 'MC voice runs on OpenAI for now.' : ''; notice.hidden = !grok; }
-    say(grok ? 'MC voice runs on OpenAI for now.' : 'Connecting…');
+    const grok = $('[data-partner-voice]')?.value === 'xai';
+    if (notice) { notice.textContent = grok ? WALK_OPENAI : ''; notice.hidden = !grok; }
+    say(grok ? WALK_OPENAI : 'Connecting…');
     try {
       const { startMcWalk } = await import('./mc_voice_walk.js');
       if (!current()) return;
@@ -338,6 +320,7 @@ export function initMcVoice(page) {
       if (current()) starting = false;
     }
   }
+
   const loadDirect = () => directMod ? Promise.resolve(directMod) : import('./mc_voice_direct.js').then((m) => (directMod = m));
   const loadSession = () => sessionMod ? Promise.resolve(sessionMod) : import(`${api}/mc/voice/static/direct-voice-session.js`).then((m) => (sessionMod = m));
   const liveBar = () => $('[data-mc-voice-live]');
@@ -382,8 +365,8 @@ export function initMcVoice(page) {
     $('[data-mc-voice-keep]')?.addEventListener?.('click', () => directSession?.keepTalking());
   }
   async function startDirect(mine,current) {
-    const selector=$('[data-mc-voice-provider]');
-    if(selector)selector.disabled=true;
+    const selector=$('[data-partner-voice]');
+    if(selector){selector.disabled=true;selector.dataset.callLive='true';}
     const spokenBox=$('[data-mc-voice-transcript]'),spokenText=$('[data-mc-voice-transcript-text]');
     if(spokenText)spokenText.textContent='';
     if(spokenBox)spokenBox.hidden=true;
@@ -404,7 +387,7 @@ export function initMcVoice(page) {
       // The session ended by itself (a refusal, the provider, the summary, the time limit): the button is ready again.
       ended:(words,{error=false}={})=>{
         if(directSession===mineSession)directSession=null;
-        if(mineNow()){controller=null;starting=false;endedAttempt=mine;paint(false);setPhase('idle');if(selector)selector.disabled=false;}
+        if(mineNow()){controller=null;starting=false;endedAttempt=mine;paint(false);setPhase('idle');if(selector){selector.disabled=false;delete selector.dataset.callLive;}}
         if(words&&(current()||endedAttempt===mine))say(words,{loud:error,error,transient:!error});
       },
     };
@@ -419,13 +402,13 @@ export function initMcVoice(page) {
       controller=handle;directSession=mineSession=s;
       await s.start(selector?.value||direct.default_provider);
     } catch (_) {if(current()){stop('failed',{quiet:true});say('Voice unavailable: the voice page could not load. Typing still works.',{loud:true,error:true});}}
-    finally {if(current())starting=false;if(!busy()&&selector)selector.disabled=false;}
+    finally {if(current())starting=false;if(!busy()&&selector){selector.disabled=false;delete selector.dataset.callLive;}}
   }
 
   async function startManaged(mine,current) {
     const cid=page.conversation?.id;
     if (!cid) {stop('failed',{quiet:true});say('Open a saved conversation before using voice.',{error:true});return;}
-    const selector=$('[data-mc-voice-provider]'),choice=$('[data-mc-voice-transcript-choice]');
+    const selector=$('[data-partner-voice]'),choice=$('[data-mc-voice-transcript-choice]');
     transcriptCancel?.();
     const displayEpoch=++transcriptEpoch;
     let latestTurns=[],afterEnd=false,savedText='',savedRead=null;
@@ -467,7 +450,7 @@ export function initMcVoice(page) {
     };
     transcriptPaint=paintTranscript;transcriptReveal=revealSaved;
     let terminal=false,failed=false;
-    selector.disabled=true;choice.disabled=false;
+    if(selector)selector.disabled=true;choice.disabled=false;
     $('[data-mc-voice-transcript]').hidden=true;$('[data-mc-voice-transcript-text]').textContent='';
     say('Connecting voice…');
     try {
@@ -481,7 +464,7 @@ export function initMcVoice(page) {
           if(state==='ending'&&!failed)setPhase('ending');
           if(state==='ended'){
             terminal=true;endedAttempt=mine;controller=null;starting=false;paint(false);
-            selector.disabled=false;choice.disabled=false;
+            if(selector)selector.disabled=false;choice.disabled=false;
             revealSaved();
             // #420 on every MC voice path (UI review #5): the ended line clears after about five seconds or at the next send.
             if(!showingError)say('Voice ended. Agent work already accepted may still finish.',{transient:true});
@@ -524,14 +507,13 @@ export function initMcVoice(page) {
           paintTranscript();
         }});
       controller={stop:reason=>c.endSession(reason)};
-      await c.startSession({provider:selector.value,conversation_id:cid});
+      // The managed path is OpenAI only (the controller refuses any other provider before a request): it never reads the
+      // shared Voice, which may say Grok, so the server's own refusal (an unresolved earlier session or action) still shows.
+      await c.startSession({provider:'openai',conversation_id:cid});
     } catch (_) {if(current()){stop('failed',{quiet:true});say(restartBlocked?'The earlier voice session needs verification before another can start. Typing still works.':'Voice could not start. No new session was confirmed; typing still works.',{loud:true,error:true});}}
-    finally {if(current())starting=false;if(!busy()){selector.disabled=false;choice.disabled=false;}}
+    finally {if(current())starting=false;if(!busy()){if(selector)selector.disabled=false;choice.disabled=false;}}
   }
 
-  $('[data-mc-voice-provider]')?.addEventListener?.('change', (event) => {
-    try { window.localStorage.setItem(PROVIDER_KEY, event.target.value); } catch (e) { /* not remembered */ }
-  });
   $('[data-mc-voice-transcript-choice]')?.addEventListener?.('change',()=>{
     if($('[data-mc-voice-transcript-choice]').checked)$('[data-mc-voice-transcript]').open=true;
     transcriptPaint?.();

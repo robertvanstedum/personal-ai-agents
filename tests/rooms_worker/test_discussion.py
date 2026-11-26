@@ -94,3 +94,20 @@ def test_unusable_completed_reply_has_fixed_reason_without_partial_text(setup, f
     assert result == {'outcome': 'refused', 'detail': reason, 'reason': reason,
                       'text': '', 'usage': {'completion_tokens': 2000}}
     assert len(calls) == 1  # no hidden retry or tool-enabled fallback
+
+
+def test_discussion_reply_knows_who_is_in_the_meeting(setup):
+    """#689: "is everyone here?" got "I can't see the room" because a discussion reply had no roster."""
+    import json
+    transport, turn, calls, _ = setup
+    turn['brief'] = {'participants': [{'id': 'robert', 'label': 'Robert'}, {'id': 'mc', 'label': 'Master Craftsman'},
+                                      {'id': 'cos', 'label': 'Chief of Staff'}]}
+    assert transport.stream([], 'u', 'c', turn=turn, admit=lambda: (True, None))['outcome'] == 'done'
+    system, user = calls[0][1]['json']['messages']
+    assert json.loads(user['content'])['meeting_participants'] == ['Robert', 'Master Craftsman', 'Chief of Staff']
+    assert 'never say you cannot see the room' in system['content']
+    assert 'does not prove someone is connected' in system['content']
+    # No brief, no invented roster.
+    calls.clear(); turn.pop('brief')
+    transport.stream([], 'u', 'c', turn=turn, admit=lambda: (True, None))
+    assert json.loads(calls[0][1]['json']['messages'][1]['content'])['meeting_participants'] == []

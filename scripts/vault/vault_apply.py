@@ -7,10 +7,21 @@
   vault_apply.py run --execute                  COMPLETE batches not yet applied, oldest first: chain -> ciphertext -> decrypt -> plaintext ->
                                                 strict extract -> per-version checks; build a new release (hard links + applied records + keyword
                                                 index), verify, fsync, switch current; then the acks, applied.json and the inventory
-  vault_apply.py index-step (--shelf DIR --index FILE | --release DIR) (--only-file F | --rebuild)
-                                                internal: the keyword-only index step, run inside the image by --index-runner docker:<image>
-                                                (shelf mounted read-only, only the index folder writable); prints one JSON line
-                                                {"protocol": 1, "code": ..., counts}
+  vault_apply.py seed --execute --meaning-embedder URL --embed-network NAME [--slice-s 420]
+                                                meaning search (#660): one time-boxed slice of the meaning seed (the backfill) over the
+                                                serving shelf, only between 00:00 and 06:00 Chicago, under the same lock as run; apply
+                                                promotes the seed once complete. Job id vault-meaning-seed.
+  vault_apply.py seed-donor --execute [--allow-outside-window]
+                                                the one-time copy (#660): fetch only the index of the latest COMPLETE published
+                                                production snapshot (the Mac's meaning index), check chain, hashes, the pinned embedder
+                                                and one vector per chunk, and place it beside the seed as its donor. The seed slices then
+                                                take its vectors, re-embedding a sample here that must agree (cosine >= 0.999), and drop
+                                                it once complete. Job id vault-meaning-seed.
+  vault_apply.py index-step (--shelf DIR --index FILE | --release DIR) (--only-file F | --rebuild | --update-all) [--embedder-url URL
+                            [--budget-s N] [--donor FILE]]
+                                                internal: the index step, run inside the image by --index-runner docker:<image>
+                                                (shelf mounted read-only, only the index folder writable); keyword-only without
+                                                --embedder-url; prints one JSON line {"protocol": 1, "code": ..., counts}
 
 Settings (flag, else environment, else default):
   --dest         MOI_VAULT_PUBLISH_DEST     s3://minimoi-backups/vault
@@ -28,6 +39,16 @@ Settings (flag, else environment, else default):
   --force-inventory                         write sync/acks/inventory.json this run even when nothing changed (gap repair)
   --rebuild-index                           rebuild the keyword index from the shelf in a new release this run, batch or not (an index
                                             the image's indexer reports rebuild_needed is rebuilt automatically when a batch applies)
+  --meaning-embedder MOI_VAULT_MEANING_EMBEDDER  (#660) e.g. http://vault-embedder:11434: build keyword-and-meaning indexes with the pinned
+                                            embedder (apply: incremental on a meaning serving index, promotes a complete seed; seed: the
+                                            backfill). Unset: keyword-only, exactly as before.
+  --embed-network MOI_VAULT_EMBED_NETWORK   (#660) the internal network the index step joins to reach it (minimoi-vault-embed)
+
+Cron (root, with the meaning embedder; the seed offset from apply, only in the batch window):
+  */15 * * * *     ... vault_apply.py --index-runner docker-container:minimoi-portal --meaning-embedder http://vault-embedder:11434 \
+                       --embed-network minimoi-vault-embed run --execute
+  7-59/15 0-5 * * * ... vault_apply.py --index-runner docker-container:minimoi-portal --meaning-embedder http://vault-embedder:11434 \
+                       --embed-network minimoi-vault-embed seed --execute     (cron runs in the host's zone: write it for Chicago time)
 
 Exit codes: 0 ok/noop, 1 failed, 2 refused (fixed reason on stderr). Job id: vault-apply. Runbook and cron entry: core/memory_sync/apply.py.
 """
@@ -48,11 +69,13 @@ from core.memory_backup import backup                                     # noqa
 from core.memory_sync import apply, batch                                 # noqa: E402
 
 JOB_ID = "vault-apply"
+SEED_JOB_ID = "vault-meaning-seed"
 EXIT_OK, EXIT_FAIL, EXIT_REFUSED = 0, 1, 2
 # Nothing to do right now (a snapshot refresh or another apply holds the lock): warn, never a FAILED alert.
 QUIET_REFUSALS = {"apply_busy"}
 REFUSALS = {"root_required", "apply_busy", "nothing_installed", "vault_root_unsafe", "current_not_a_link", "current_link_unexpected",
-            "sync_state_unsafe", "bad_arguments", "index_runner_required", "host_sqlite_too_old"}
+            "sync_state_unsafe", "bad_arguments", "index_runner_required", "host_sqlite_too_old", "meaning_embedder_required",
+            "index_identity_mismatch", "seed_unsafe", "donor_not_pinned", "donor_incomplete"}
 
 
 def env(flag, name, default=None):
@@ -66,6 +89,8 @@ def settings(a) -> dict:
             "age_bin": env(a.age_bin, "MOI_AGE_BIN", "/opt/minimoi-vault-tools/age-v1.3.2/age"),
             "expect_age": env(a.expect_age, "MOI_AGE_VERSION", "v1.3.2"),
             "jobs_root": env(a.jobs_root, "MINIMOI_JOBS_ROOT", "/opt/minimoi/jobs"),
+            "meaning_embedder": env(a.meaning_embedder, "MOI_VAULT_MEANING_EMBEDDER") or None,
+            "embed_network": env(a.embed_network, "MOI_VAULT_EMBED_NETWORK") or None,
             "reader_uid": int(a.reader_uid), "reader_gid": int(a.reader_gid)}
 
 
@@ -74,13 +99,19 @@ def refuse(code: str) -> int:
     return EXIT_REFUSED
 
 
-def job_definition(path=None):
+def job_definition(path=None, job_id=JOB_ID):
     try:
-        job = registry.load(path).get(JOB_ID)
+        job = registry.load(path).get(job_id)
         if job:
             return job
     except registry.RegistryError:
         pass
+    if job_id == SEED_JOB_ID:
+        return registry.parse({"schema_version": 1, "jobs": [{
+            "id": SEED_JOB_ID, "name": "Vault meaning seed (backfill, batch window)", "host": "ec2",
+            "schedule": {"text": "every 15 minutes, 00:00-06:00 Chicago, until promoted", "kind": "interval", "every_s": 900},
+            "expected_every_s": 86400, "missed_after_s": 172800, "stuck_after_s": 1800,
+            "status_file": f"{SEED_JOB_ID}.json", "owner": "robert", "runbook": "core/memory_sync/apply.py"}]}).jobs[0]
     return registry.parse({"schema_version": 1, "jobs": [{
         "id": JOB_ID, "name": "Vault incremental apply", "host": "ec2",
         "schedule": {"text": "every 15 minutes", "kind": "interval", "every_s": 900},
@@ -108,7 +139,7 @@ def cmd_plan(a) -> int:
     return EXIT_OK
 
 
-def _finish(s, job, running, state, code, summary, results, run_id) -> None:
+def _finish(s, job, running, state, code, summary, results, run_id, alert_code=None) -> None:
     finished = datetime.now(timezone.utc)
     try:
         next_due = schedule.next_fire(job.schedule, finished)
@@ -117,7 +148,8 @@ def _finish(s, job, running, state, code, summary, results, run_id) -> None:
     alert_result = "not_needed"
     if state == "failed":
         try:
-            alert_result = alert.send(f"minimoi job {job.id} FAILED on {job.host}, run {run_id}: {results.get('apply')}")
+            alert_result = alert.send(f"minimoi job {job.id} FAILED on {job.host}, run {run_id}: "
+                                      f"{alert_code if alert_code is not None else results.get('apply')}")
         except Exception:                                                   # noqa: BLE001
             alert_result = alert.NOT_SENT
         if alert_result not in status.ALERT_VALUES:
@@ -137,7 +169,8 @@ def cmd_run(a) -> int:
         # written, every time.
         return refuse("index_runner_required_use_docker_image")
     try:
-        runner = apply.make_index_runner(a.index_runner, reader_uid=s["reader_uid"], reader_gid=s["reader_gid"])
+        runner = apply.make_index_runner(a.index_runner, reader_uid=s["reader_uid"], reader_gid=s["reader_gid"],
+                                         embedder_url=s["meaning_embedder"], network=s["embed_network"])
     except backup.BackupError as exc:
         return refuse(exc.code)
     if a.max_run_mib < 1 or a.keep < 1:
@@ -166,11 +199,13 @@ def cmd_run(a) -> int:
             results = {"apply": out["code"], "batches": str(out["batches"]), "stored": str(out["stored"]), "superseded": str(out["superseded"]),
                        "rejected": str(out["rejected"]), "applied": str(out["applied"]), "release": out["release"].lower(),   # status codes are lower case
                        "index_seed": "yes" if out["index_seed"] else "no", "inventory": out["inventory"],
+                       "index_kind": out.get("index_kind", "none"), "seed_promoted": "yes" if out.get("seed_promoted") else "no",
                        "last_batch": (out.get("last_batch") or "none").lower()}                    # the newest batch id this run processed
             if out["code"] in ("ok", "noop"):
                 state, code = ("warn" if out["rejected"] else "ok"), EXIT_OK
                 summary = (f"{out['code']}: {out['batches']} batches, {out['applied']} applied, {out['stored']} stored, {out['rejected']} rejected"
-                           f"{', index seeded' if out['index_seed'] else ''}, release {out['release']}")
+                           f"{', index seeded' if out['index_seed'] else ''}"
+                           f"{', meaning seed promoted' if out.get('seed_promoted') else ''}, release {out['release']}")
             else:                                                               # a transient stop: processed batches completed, the rest retries
                 summary = f"failed: {out['code']} after {out['batches']} batches"
         except backup.BackupError as exc:
@@ -189,11 +224,111 @@ def cmd_run(a) -> int:
         admission.__exit__(None, None, None)
 
 
+def cmd_seed(a) -> int:
+    """One meaning-seed slice (#660), with its own job status. Outside the window: a quiet no-op that writes nothing."""
+    if not a.execute:
+        return refuse("plan_only_use_execute")
+    s = settings(a)
+    if os.geteuid() != 0 and not a._allow_non_root:
+        return refuse("root_required")
+    if not a.index_runner or not s["meaning_embedder"]:
+        return refuse("meaning_embedder_required")
+    try:
+        runner = apply.make_index_runner(a.index_runner, reader_uid=s["reader_uid"], reader_gid=s["reader_gid"],
+                                         embedder_url=s["meaning_embedder"], network=s["embed_network"])
+    except backup.BackupError as exc:
+        return refuse(exc.code)
+    if not apply.in_window(datetime.now(timezone.utc)):
+        print("outside_window: the seed runs only between 00:00 and 06:00 Chicago")
+        return EXIT_OK
+    try:
+        admission = apply.P.Admission(s["vault_root"], owner_uid=os.geteuid() if a._allow_non_root else 0, reader_uid=s["reader_uid"],
+                                     reader_gid=s["reader_gid"]).__enter__()
+    except backup.BackupError as exc:
+        return refuse("apply_busy" if exc.code == "refresh_busy" else exc.code)
+    try:
+        job = job_definition(a.registry, SEED_JOB_ID)
+        started = datetime.now(timezone.utc)
+        run_id = f"{started.strftime('%Y%m%dT%H%M%SZ')}-{secrets.token_hex(3)}"
+        try:
+            running = status.start_run(s["jobs_root"], job, run_id, started)
+        except Exception:                                                       # noqa: BLE001
+            return refuse("status_file_not_writable")
+        results, state, code, summary = {}, "failed", EXIT_FAIL, "seed failed"
+        try:
+            out = apply.run_seed(vault_root=s["vault_root"], index_runner=runner, owner_uid=os.geteuid() if a._allow_non_root else 0,
+                                 reader_uid=s["reader_uid"], reader_gid=s["reader_gid"], slice_s=a.slice_s,
+                                 require_root=not a._allow_non_root, admission=admission)
+            results = {"seed": out["code"], "complete": "yes" if out.get("complete") else "no",
+                       "embedded_chunks": str(out.get("embedded_chunks", 0)), "release": str(out.get("release", "none")).lower()}
+            state, code = "ok", EXIT_OK
+            summary = f"{out['code']}: {out.get('embedded_chunks', 0)} chunks embedded{', seed complete' if out.get('complete') else ''}"
+        except backup.BackupError as exc:
+            results["seed"] = exc.code[:40]
+            summary = f"{'refused' if exc.code in REFUSALS else 'failed'}: {exc.code}"
+            code = EXIT_REFUSED if exc.code in REFUSALS else EXIT_FAIL
+            if exc.code in QUIET_REFUSALS:
+                state = "warn"
+        except Exception as exc:                                                # noqa: BLE001
+            results["seed"] = f"exception_{type(exc).__name__.lower()}"[:40]
+            summary = "failed: unexpected error"
+        _finish(s, job, running, state, code, summary, results, run_id, alert_code=results.get("seed"))
+        print(summary)
+        return code
+    finally:
+        admission.__exit__(None, None, None)
+
+
+def cmd_seed_donor(a) -> int:
+    """The one-time copy of the Mac's vectors (#660). Prints one summary line; writes the seed job's status."""
+    if not a.execute:
+        return refuse("plan_only_use_execute")
+    s = settings(a)
+    if os.geteuid() != 0 and not a._allow_non_root:
+        return refuse("root_required")
+    try:
+        admission = apply.P.Admission(s["vault_root"], owner_uid=os.geteuid() if a._allow_non_root else 0, reader_uid=s["reader_uid"],
+                                     reader_gid=s["reader_gid"]).__enter__()
+    except backup.BackupError as exc:
+        return refuse("apply_busy" if exc.code == "refresh_busy" else exc.code)
+    try:
+        job = job_definition(a.registry, SEED_JOB_ID)
+        started = datetime.now(timezone.utc)
+        run_id = f"{started.strftime('%Y%m%dT%H%M%SZ')}-{secrets.token_hex(3)}"
+        try:
+            running = status.start_run(s["jobs_root"], job, run_id, started)
+        except Exception:                                                       # noqa: BLE001
+            return refuse("status_file_not_writable")
+        results, state, code, summary = {}, "failed", EXIT_FAIL, "seed donor failed"
+        try:
+            out = apply.run_seed_donor(dest=s["dest"], vault_root=s["vault_root"], identity_spec=s["identity"], age_bin=s["age_bin"],
+                                       expect_age=s["expect_age"], owner_uid=os.geteuid() if a._allow_non_root else 0,
+                                       reader_uid=s["reader_uid"], reader_gid=s["reader_gid"], require_root=not a._allow_non_root,
+                                       allow_outside_window=a.allow_outside_window, admission=admission)
+            results = {"seed_donor": out["code"], "chunks": str(out.get("chunks", 0)), "attempt": str(out.get("attempt", "none")).lower()}
+            state, code = "ok", EXIT_OK
+            summary = f"{out['code']}: {out.get('chunks', 0)} chunks with vectors" if out["code"] in ("donor_ready", "donor_present") else out["code"]
+        except backup.BackupError as exc:
+            results["seed_donor"] = exc.code[:40]
+            summary = f"{'refused' if exc.code in REFUSALS else 'failed'}: {exc.code}"
+            code = EXIT_REFUSED if exc.code in REFUSALS else EXIT_FAIL
+            if exc.code in QUIET_REFUSALS:
+                state = "warn"
+        except Exception as exc:                                                # noqa: BLE001
+            results["seed_donor"] = f"exception_{type(exc).__name__.lower()}"[:40]
+            summary = "failed: unexpected error"
+        _finish(s, job, running, state, code, summary, results, run_id, alert_code=results.get("seed_donor"))
+        print(summary)
+        return code
+    finally:
+        admission.__exit__(None, None, None)
+
+
 def cmd_index_step(a) -> int:
     """Inside the image (or on the host): one JSON line, nothing else on stdout."""
     try:
         only = None
-        if not a.rebuild:
+        if not a.rebuild and not a.update_all:
             doc = json.loads(Path(a.only_file).read_text())
             if not isinstance(doc, list) or not all(isinstance(x, str) for x in doc):
                 raise ValueError("only_file_malformed")
@@ -204,16 +339,28 @@ def cmd_index_step(a) -> int:
             shelf, index = Path(a.shelf), Path(a.index)
         else:
             raise ValueError("index_step_paths")
-        out = apply.index_step(shelf, index, only)
+        embedder = None
+        if a.embedder_url:
+            if not apply.EMBEDDER_URL.match(a.embedder_url):
+                raise ValueError("embedder_url")
+            from core.memory_index.embedder import OllamaEmbedder
+            embedder = OllamaEmbedder(a.embedder_url)
+        elif a.update_all or a.budget_s is not None or a.donor:
+            raise ValueError("update_all_needs_embedder")
+        if a.donor and not a.update_all:
+            raise ValueError("donor_needs_update_all")
+        out = apply.index_step(shelf, index, only, embedder=embedder, update_all=a.update_all, budget_s=a.budget_s,
+                               donor_path=Path(a.donor) if a.donor else None)
     except Exception as exc:                                                # noqa: BLE001
         out = {"protocol": apply.INDEX_PROTOCOL, "code": f"exception_{type(exc).__name__.lower()}"[:40]}
     print(json.dumps(out, sort_keys=True))
-    return EXIT_OK if out.get("code") == "ok" else EXIT_FAIL
+    return EXIT_OK if out.get("code") in (("ok", "budget_spent", "outside_window") if a.update_all else ("ok",)) else EXIT_FAIL
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    for flag in ("--dest", "--vault-root", "--identity", "--age-bin", "--expect-age", "--jobs-root", "--registry", "--index-runner"):
+    for flag in ("--dest", "--vault-root", "--identity", "--age-bin", "--expect-age", "--jobs-root", "--registry", "--index-runner",
+                 "--meaning-embedder", "--embed-network"):
         ap.add_argument(flag)
     ap.add_argument("--reader-uid", type=int, default=0)
     ap.add_argument("--reader-gid", type=int, default=0)
@@ -227,6 +374,12 @@ def main(argv=None) -> int:
     p.add_argument("--check-remote", action="store_true")
     r = sub.add_parser("run")
     r.add_argument("--execute", action="store_true")
+    sd = sub.add_parser("seed")
+    sd.add_argument("--execute", action="store_true")
+    sd.add_argument("--slice-s", type=int, default=apply.SEED_SLICE_S)
+    sdd = sub.add_parser("seed-donor")
+    sdd.add_argument("--execute", action="store_true")
+    sdd.add_argument("--allow-outside-window", action="store_true")
     i = sub.add_parser("index-step")
     i.add_argument("--release")
     i.add_argument("--shelf")
@@ -234,10 +387,14 @@ def main(argv=None) -> int:
     g = i.add_mutually_exclusive_group(required=True)
     g.add_argument("--only-file")
     g.add_argument("--rebuild", action="store_true")
+    g.add_argument("--update-all", action="store_true")
+    i.add_argument("--embedder-url")
+    i.add_argument("--budget-s", type=float)
+    i.add_argument("--donor")
     a = ap.parse_args(argv)
     if a.cmd is None:
         a.check_remote = False
-    return {"plan": cmd_plan, "run": cmd_run, "index-step": cmd_index_step, None: cmd_plan}[a.cmd](a)
+    return {"plan": cmd_plan, "run": cmd_run, "seed": cmd_seed, "seed-donor": cmd_seed_donor, "index-step": cmd_index_step, None: cmd_plan}[a.cmd](a)
 
 
 if __name__ == "__main__":

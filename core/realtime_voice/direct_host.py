@@ -571,13 +571,15 @@ def direct_rules(person, owner=OWNER, actions=False, *, page_asks=False, platfor
               "closing or sending anything, files, jobs, any work), "
     ask = (request + "never ask him to confirm it yourself and never say it is done: the app hears what he asks for, and "
            "when it has heard a request its own instruction tells you to ask him; ask then, briefly and naturally, "
-           "without repeating or describing his words. If he clearly asked for such work and the app gave you no such instruction, say briefly that typing it in the chat will do it; never tell him to say it more clearly. Otherwise just talk with him: never mention requests, your runtime, or anything not coming through. " if page_asks else
+           "without repeating or describing his words. If he clearly asked for such work and the app gave you no such instruction, say briefly that it did not come through as a request and ask him to say what he wants done again in one short sentence (he may be on a phone and unable to type, so never tell him to type it); never tell him to say it more clearly. Otherwise just talk with him: never mention requests, your runtime, or anything not coming through. " if page_asks else
            request + "ask him briefly and naturally to confirm, for example \"Sure, just confirm for me\" or \"Shall I "
            "go ahead?\", without repeating or describing his words, and never say it is done. ")
     return (f"You are {name} ({short}) speaking by voice, not a separate companion. The realtime speech model has no "
             "tools and must never execute work directly. The app routes a confirmed request to your work runtime, "
             f"and only after {owner} confirms. This is an internal execution boundary: speak as {short} throughout, "
             "including when the app returns your result. Never pretend a lookup or action happened without that result. " + ask +
+            # Staging, 26 Nov (#689): "goes on too long".
+            "Keep spoken answers short: two or three sentences, then stop; say more only when he asks for it. "
             "Never repeat his words back unless he asks you to. Outcomes come from the app: say only what it gives "
             f"you, and never claim anything was checked, saved or done otherwise. "
             # #652: "Got it, I'll handle that handoff for you", with nothing sent.
@@ -1084,6 +1086,11 @@ class DirectVoiceAdapter:
     def call_started(self, sid, *, provider, device):
         """A call started on this host: its provider and device class (#570). The core logs it; a host whose INFO logs
         are dropped (the portal) keeps its own durable line here. Default: nothing more."""
+        return None
+
+    def saved_voice(self, user_id):
+        """The owner's Voice for this person, kept by MiniMoi (#659: one choice for every device), or None. Given, the
+        bootstrap mints the call on it and refuses a page asking for another. Default: none, the page's choice applies."""
         return None
 
     def in_line(self, sid, item):
@@ -2618,6 +2625,16 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             return True, NO_PROVIDER
         return True, None
 
+    def saved_voice(user_id):
+        """The owner's Voice for this partner, kept by MiniMoi (the adapter's ``saved_voice``), or None: never chosen,
+        unreadable, or a host without it. A failure to read never stops a start: the page's choice applies, as before."""
+        try:
+            voice = adapter.saved_voice(user_id)
+        except Exception:
+            log.exception("%s direct voice: the owner's voice choice could not be read", person["domain"])
+            return None
+        return voice if voice in ("openai", "xai") else None
+
     def unvoiced(body):
         """A host that takes no provider default (adapter.default_voices False; CoS, D2 (a)): the start's provider, resolved
         exactly as the bootstrap resolves it, refused when the card names no voice for it. None: not refused here (an
@@ -2626,6 +2643,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             return None
         production = adapter.is_production()
         explicit = body.get("provider") if isinstance(body, dict) else None
+        explicit = saved_voice(principal()) or explicit
         try:
             provider = resolve_provider(explicit=explicit, saved_preference=None, is_production=production,
                                         dev_query_override=None if production else request.args.get("provider"))
@@ -2710,7 +2728,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
     boot = create_bootstrap_blueprint(domain=person["domain"], locale=locale, get_persona=get_persona,
                                       is_production=adapter.is_production, consult_ledger=sessions, owner=adapter.owner,
-                                      admit=admit, page_responses=page_responses)
+                                      admit=admit, page_responses=page_responses, saved_provider=saved_voice)
     boot.before_request(bootstrap_guard)
     boot.register_error_handler(SessionRefused, lambda _exc: refusal(
         "unavailable", "Voice unavailable: the voice session could not be recorded in this conversation.", 503))

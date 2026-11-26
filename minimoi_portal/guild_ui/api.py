@@ -1746,7 +1746,7 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         return "refused", {"error": "invalid", "message": "This message has no text and no file. Nothing was sent."}, 422
     agent_state = _agent_state(conv)
     route, route_refusal = _route_snapshot(services, conv, sent_text,  # unaugmented owner words only
-                                           attached=_turn_attached(files, ctx))
+                                           attached=_turn_attached(files, ctx), principal=principal)
     if route_refusal is None:
         carried, route_refusal = _carried_history(services, conv, principal, route, note)
     if route_refusal is not None:
@@ -2143,17 +2143,41 @@ def _turn_attached(files, context) -> bool:
     return files is not None or bool((context or {}).get("item_ref"))
 
 
-def _route_snapshot(services, conv, owner_text="", attached=None):
+def _partner_settings(services=None):
+    """The owner's Voice for MC (core.partner_settings), kept beside the conversations; None where there is no data folder."""
+    from core.partner_settings import PartnerSettings, root_for
+    store = getattr(services or cfg()["services"], "store", None)
+    root = root_for(getattr(store, "folder", None) if store is not None and getattr(store, "path", None) else None)
+    return PartnerSettings(root, "mc") if root else None
+
+
+def _owner_voice(services, principal):
+    """The owner's saved Voice for MC, or None (never chosen, or the store cannot be read: the plan-first default)."""
+    settings = _partner_settings(services)
+    if settings is None or not principal:
+        return None
+    try:
+        return settings.get(principal)["voice"]
+    except OSError:
+        _mc_log().warning("partner settings: MC's voice choice could not be read; the default applies")
+        return None
+
+
+def _route_snapshot(services, conv, owner_text="", attached=None, principal=None):
     """(route, refusal). The route is fixed here, at admission, once per turn. (None, None): no routes here. A waiting
-    message is admitted when it is sent, so it takes the conversation's choice at that moment. ``attached`` unknown
-    (None) keeps a short turn off the light route."""
+    message is admitted when it is sent, so it takes the owner's choice at that moment. ``attached`` unknown
+    (None) keeps a short turn off the light route. The route is the owner's Voice's model (#661: Voice and Model are
+    linked, kept per owner, not per conversation or device)."""
     from core.model_routes import RouteRefused, conversation_role, load_catalogue
     from core.model_routes.depth import for_owner_turn
+    from core.model_routes.picker import owner_conversation
     agent = _route_agent(services)
     if agent is None:
         return None, None
     try:
-        return for_owner_turn(load_catalogue(), conversation_role(agent), conv, owner_text, attached=attached), None
+        catalogue = load_catalogue()
+        conv = owner_conversation(conv, agent, _owner_voice(services, principal), catalogue)
+        return for_owner_turn(catalogue, conversation_role(agent), conv, owner_text, attached=attached), None
     except RouteRefused as exc:
         return None, exc
     except (OSError, ValueError):
@@ -2234,7 +2258,10 @@ def _with_route_receipt(events, route, turn_id, record, through_note_id=None):
 
 @owner_api
 def conversation_route(cid):
+    """Read only: the route this conversation's next turn takes (the owner's Voice's model, #661) and the last turn's
+    receipt, kept apart. Nothing is chosen here any more: the shared menu's partner-settings is the one choice."""
     from core.model_routes import load_catalogue, view
+    from core.model_routes.picker import owner_conversation
     from .conversations import ConversationNotFound, ConversationStoreUnavailable
     agent = _route_agent()
     if agent is None:
@@ -2246,42 +2273,72 @@ def conversation_route(cid):
     except ConversationStoreUnavailable:
         return json_error("unavailable", CONV_WORDS["unavailable"], 503)
     try:
-        return jsonify({**view(load_catalogue(), agent, conv), "observed_at": now_iso()})
+        catalogue = load_catalogue()
+        effective = owner_conversation(conv, agent, _owner_voice(cfg()["services"], _principal()), catalogue)
+        return jsonify({**view(catalogue, agent, effective), "observed_at": now_iso()})
     except (OSError, ValueError):
         _mc_log().exception("model routes: the catalogue could not be read")
         return json_error("unavailable", "The model routes could not be read.", 503)
 
 
-@owner_api
-def conversation_route_select(cid):
-    """Only a catalogue route_id and the revision the page saw are read from the browser."""
-    from core.model_routes import RouteRefused, check_selectable, load_catalogue, view
-    from .conversations import RouteRevisionConflict
-    agent = _route_agent()
-    if agent is None:
-        return json_error("not_available", "This conversation has no model routes.", 404)
+def _menu_last_turn(agent, cid):
+    """The conversation's own last turn receipt, for the Last-answer line; None when unnamed or unreadable."""
+    if not cid:
+        return None
+    from core.model_routes import selection_of
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable
     try:
-        catalogue = load_catalogue()
-    except (OSError, ValueError):
-        _mc_log().exception("model routes: the catalogue could not be read")
-        return json_error("unavailable", "The model routes could not be read. Nothing changed.", 503)
+        return selection_of(_conversations().get(cid, _principal()), agent).get("last_turn")
+    except (ConversationNotFound, ConversationStoreUnavailable):
+        return None
 
-    def action(store, body):
-        expected = body.get("revision")
-        if not isinstance(expected, int) or isinstance(expected, bool):
-            return json_error("invalid", "A route change needs the revision the page saw.", 422), None
-        try:
-            route = check_selectable(catalogue, agent, body.get("route_id"))
-            return store.set_route(cid, _principal(), agent, route["route_id"], expected), "route_selected"
-        except RouteRefused as exc:
-            return json_error(exc.code, exc.message, 409), None
-        except RouteRevisionConflict as exc:
-            return json_error("route_changed", "The model route changed elsewhere. Reload to see it.", 409, revision=exc.revision), None
-    response = _conv_write(action)
-    if not isinstance(response, tuple) and getattr(response, "is_json", False) and (response.get_json() or {}).get("result") == "route_selected":
-        return jsonify({"result": "route_selected", **view(catalogue, agent, _conversations().get(cid, _principal())),
-                        "observed_at": now_iso()})
-    return response
+
+@owner_api
+def partner_settings_view():
+    """The shared ⋯ menu's Voice, Model and Last-answer line for MC (core.model_routes.menu): the owner's choice, kept by
+    MiniMoi for every device and every new conversation. ``?conversation=`` names whose last answer to describe."""
+    from core.model_routes.menu import catalogue_or_none, menu_view
+    settings = _partner_settings()
+    if settings is None:
+        return json_error("unavailable", "Settings are not available here.", 503)
+    try:
+        catalogue = catalogue_or_none()
+        agent = _route_agent() or "mc"
+        return jsonify({**menu_view(catalogue, agent, settings.get(_principal()),
+                                    _menu_last_turn(agent, request.args.get("conversation"))), "observed_at": now_iso()})
+    except (OSError, ValueError):
+        _mc_log().exception("partner settings: could not be read")
+        return json_error("unavailable", "Settings could not be read.", 503)
+
+
+@owner_api
+def partner_settings_choose():
+    """Only ``voice`` and the revision the page saw are read. The model follows the voice; nothing else is stored."""
+    from core.model_routes.menu import VoiceUnavailable, catalogue_or_none, choose, menu_view
+    from core.partner_settings import SettingsConflict
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    settings = _partner_settings()
+    if settings is None:
+        return json_error("unavailable", "Settings are not available here. Nothing changed.", 503)
+    revision = body.get("revision")
+    if not isinstance(revision, int) or isinstance(revision, bool):
+        return json_error("invalid", "A change needs the revision the page saw.", 422)
+    try:
+        catalogue = catalogue_or_none()
+        agent = _route_agent() or "mc"
+        saved = choose(settings, _principal(), catalogue, agent, body.get("voice"), revision)
+        return jsonify({"result": "voice_selected", **menu_view(catalogue, agent, saved,
+                        _menu_last_turn(agent, body.get("conversation"))), "observed_at": now_iso()})
+    except VoiceUnavailable as exc:
+        return json_error("voice_unavailable", exc.message, 409)
+    except SettingsConflict as exc:
+        return json_error("settings_changed", "The voice changed on another device. Reload to see it.", 409,
+                          revision=exc.revision)
+    except (OSError, ValueError):
+        _mc_log().exception("partner settings: could not be saved")
+        return json_error("unavailable", "Settings could not be saved. Nothing changed.", 503)
 
 
 @owner_api
@@ -2541,7 +2598,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         return {"error": "files_unsupported", "message": f"The {getattr(services.mc, 'display_name', 'assistant')} does not read "
                 "attached documents. Your note is kept; nothing was sent."}, 422
     route, route_refusal = _route_snapshot(services, conv, _owner_words(note["text"]),  # before attachment/context augmentation
-                                           attached=_turn_attached(files, note.get("context")))
+                                           attached=_turn_attached(files, note.get("context")), principal=principal)
     if route_refusal is None:
         carried, route_refusal = _carried_history(services, conv, principal, route, note)
     if route_refusal is not None:
@@ -3255,7 +3312,8 @@ RULES = [
     ("/conversations", "api_conversation_create", conversation_create, ["POST"]),
     ("/conversations/<cid>/rename", "api_conversation_rename", conversation_rename, ["POST"]),
     ("/conversations/<cid>/route", "api_conversation_route", conversation_route, ["GET"]),
-    ("/conversations/<cid>/route", "api_conversation_route_select", conversation_route_select, ["POST"]),
+    ("/mc/partner-settings", "api_mc_partner_settings", partner_settings_view, ["GET"]),
+    ("/mc/partner-settings", "api_mc_partner_settings_choose", partner_settings_choose, ["POST"]),
     ("/conversations/<cid>/pin", "api_conversation_pin", conversation_pin, ["POST"]),
     ("/conversations/<cid>/unpin", "api_conversation_unpin", conversation_unpin, ["POST"]),
     ("/conversations/<cid>/archive", "api_conversation_archive", conversation_archive, ["POST"]),

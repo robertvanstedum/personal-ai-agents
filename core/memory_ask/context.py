@@ -185,7 +185,14 @@ def build(result: dict, *, max_chars=MAX_CHARS, max_bytes=MAX_BYTES, allowed_tie
             values = result[group]
             body["omitted"][group] = len(values)
             body["omission_reasons"]["result_cap"] += max(0, len(values) - MAX_RESULTS)
-            candidates.extend((group, rank, hit) for rank, hit in enumerate(values[:MAX_RESULTS], 1))
+        # The two lists share the budget rank by rank (keyword #1, meaning #1, keyword #2, ...). Filling every keyword passage first
+        # spent a small caller budget (CoS: 6,000 chars) on exact-word hits and dropped every meaning hit, so a question worded
+        # differently from the conversation never reached the model (#660, staging C1, 26 Nov).
+        for rank in range(1, MAX_RESULTS + 1):
+            for group in ("keyword", "meaning"):
+                values = result[group]
+                if rank <= len(values):
+                    candidates.append((group, rank, values[rank - 1]))
         adjacent = result.get("adjacent", {})
         if adjacent.get("file"):
             body["omitted"]["adjacent"] = 1

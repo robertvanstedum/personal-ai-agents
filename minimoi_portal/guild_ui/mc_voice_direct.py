@@ -312,6 +312,13 @@ class _MasterCraftsman(DirectVoiceAdapter):
         from .mc.voice_calls import voice_calls_of
         voice_calls_of(self.config.get("services")).record(path="direct", provider=provider, device=device, session=sid)
 
+    def saved_voice(self, user_id):
+        """The owner's Voice for MC, kept by MiniMoi (#659): the call is minted on it, so its consults (MC turns on the
+        owner's Voice's model, api._route_snapshot) run on the same provider."""
+        from core.model_routes.menu import bound_voice
+        from .api import _partner_settings
+        return bound_voice(_partner_settings(self.config.get("services")), user_id, "mc")
+
     def owner(self):
         user = self.config["current_user"]() or {}
         who = user.get("username")
@@ -599,9 +606,9 @@ def voice_path(environ) -> str:
     """MC's voice path.
 
     "chained" is the default (speech to text, a full MC turn, the reply read aloud).
-    "direct" is the older realtime path. "realtime" is the walk (spec v1.1): the
-    model is MC, and the server writes a note only after a bare yes. Anything else
-    stays "chained". Production compose sets "realtime". Unset stays chained.
+    "direct" is the realtime path with consults and actions (#659): built, off in production.
+    "realtime" is the walk (spec v1.1): the model is MC, OpenAI only, three read tools.
+    Production compose sets "realtime" (owner, 26 Nov: "B but keep the walk"). Anything else stays "chained".
     """
     value = str(environ.get(PATH_ENV, "") or "").strip().lower()
     return value if value in PATHS else "chained"

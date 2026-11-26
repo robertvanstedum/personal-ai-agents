@@ -32,6 +32,8 @@ DOMAIN_API_ADDED = {
     # CoS contracts' date-time format validation in clean images (77e3e393).
     "rfc3339-validator": "0.1.4",
 }
+# Vault meaning search (#660): the Ask services and index steps open keyword-and-meaning indexes.
+VAULT_ADDED = {"sqlite-vec": "0.1.9"}
 
 
 def _pins():
@@ -53,10 +55,12 @@ def test_every_portal_dependency_is_pinned_exactly():
 def test_production_baseline_unchanged_and_only_reviewed_ui_and_realtime_packages_added():
     pins = _pins()
     assert {name: pins.get(name) for name in BASELINE} == BASELINE
-    assert set(pins) - set(BASELINE) == UI_ADDED | set(MANAGED_REALTIME_ADDED) | set(REGISTER_ADDED) | set(DOMAIN_API_ADDED)
+    assert set(pins) - set(BASELINE) == (UI_ADDED | set(MANAGED_REALTIME_ADDED) | set(REGISTER_ADDED) | set(DOMAIN_API_ADDED)
+                                         | set(VAULT_ADDED))
     assert {name: pins.get(name) for name in MANAGED_REALTIME_ADDED} == MANAGED_REALTIME_ADDED
     assert {name: pins.get(name) for name in DOMAIN_API_ADDED} == DOMAIN_API_ADDED
     assert {name: pins.get(name) for name in REGISTER_ADDED} == REGISTER_ADDED
+    assert {name: pins.get(name) for name in VAULT_ADDED} == VAULT_ADDED
 
 
 def test_the_base_image_is_pinned_by_digest():

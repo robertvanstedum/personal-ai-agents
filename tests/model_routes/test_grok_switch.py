@@ -113,19 +113,23 @@ def test_turning_it_off_refuses_a_conversation_still_on_it_and_substitutes_nothi
     assert refused.value.code == "route_unavailable" and "Nothing was sent" in refused.value.message
 
 
-def test_a_cos_choice_applies_from_the_next_turn_to_that_conversation_only(tmp_path, monkeypatch):
+def test_a_cos_voice_change_applies_from_the_next_turn_to_every_chat(tmp_path, monkeypatch):
+    """#661: the owner's Voice (here a host mapping Grok to this tier) decides the next turn of every chat; a running
+    turn keeps the route it was admitted with."""
     from domains.cos import model_route
     from domains.cos.history import History
+    catalogue = offered("cos")
+    catalogue["voice_routes"] = {"cos": {"openai": "gateway-cos-role", "xai": GROK}}
     path = tmp_path / "routes.json"
-    path.write_text(json.dumps(offered("cos")))
+    path.write_text(json.dumps(catalogue))
     monkeypatch.setenv(CATALOGUE_VAR, str(path))
     history = History(tmp_path / "history", "dev")
     cid, other = history.ensure_default()["conversation_id"], history.create("Other")["conversation_id"]
-    fixed_for_the_running_turn = model_route.for_turn(history, cid)
-    model_route.choose(history, cid, GROK, 0)
+    fixed_for_the_running_turn = model_route.for_turn(history, cid, owner="robert")
+    model_route.settings(history).set_voice("robert", "xai", 0)
     assert model_route.runtime_model(fixed_for_the_running_turn) is None
-    assert model_route.runtime_model(model_route.for_turn(history, cid)) == GROK_REF
-    assert model_route.runtime_model(model_route.for_turn(history, other)) is None
+    for chat in (cid, other):
+        assert model_route.runtime_model(model_route.for_turn(history, chat, owner="robert")) == GROK_REF
 
 
 def test_a_cos_turn_asks_for_the_tier_and_keeps_the_same_session():

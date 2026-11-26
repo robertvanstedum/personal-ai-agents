@@ -75,3 +75,7 @@ attrs==26.1.0
 # CoS contracts require date-time format validation in clean images.
 rfc3339-validator==0.1.4
 cryptography==46.0.4
+
+# Vault meaning search (#660): the Ask services (vault-ask, vault-ask-mc), vault-apply's index step and MC's index build open
+# keyword-and-meaning indexes. The version the tests and the Vault runtime (requirements-vault.txt) pin.
+sqlite-vec==0.1.9

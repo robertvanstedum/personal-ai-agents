@@ -11,10 +11,14 @@ room, or one not verified, is closed (no tools, no owner context). Until F2 step
 import hashlib
 import hmac
 import json
+import logging
 import sqlite3
 from pathlib import Path
 from uuid import UUID
 from flask import Blueprint, jsonify, request
+from domains.cos.files import FileRefused
+
+_log = logging.getLogger('cos.guildhall')
 
 
 def validate(turn):
@@ -47,7 +51,7 @@ def admit_environment(environ, *, verifier):
 
 
 def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verify_members=None, stop_turn=None,
-            verifier=None):
+            verifier=None, room_proposal=None, approve_room=None, files=None):
     """``verify_members(turn)`` returns the room's members from Records, or None; never the request body's.
     ``verifier`` (F2 step 4, ``meeting_verifier.RecordsMeetingVerifier``) supersedes it: the turn runs only when
     Records admits it, with the owner's text from the snapshot, the meeting binding and a once-a-second watch."""
@@ -58,6 +62,43 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
     def db():return sqlite3.connect(dbpath,timeout=10)
     with db() as c:
         c.execute('CREATE TABLE IF NOT EXISTS turns(id TEXT PRIMARY KEY,digest TEXT NOT NULL,state TEXT NOT NULL,result TEXT)')
+        c.execute('CREATE TABLE IF NOT EXISTS room_files(room TEXT NOT NULL,sha256 TEXT NOT NULL,file_id TEXT NOT NULL,PRIMARY KEY(room,sha256))')
+
+    def meeting_files(value, facts):
+        """Lane G (#681 D): the files shared in this owner-private meeting, saved once per room into the CoS inbox
+        (hash-checked twice), as DATA lines for this turn. Returns '' when there are none or files are off."""
+        if files is None or verifier is None or not hasattr(verifier, 'document'):
+            return ''
+        seen, ids, missing = set(), [], 0
+        for row in (facts['context'].get('transcript') or []):
+            f = row.get('file') if isinstance(row, dict) else None
+            if not isinstance(f, dict) or not f.get('id') or f['id'] in seen:
+                continue
+            seen.add(f['id'])
+            with db() as c:
+                kept = c.execute('SELECT file_id FROM room_files WHERE room=? AND sha256=?', (value['room'], f.get('sha256'))).fetchone()
+            if kept:
+                ids.append(kept[0]); continue
+            got = verifier.document(value['id'], facts['claim_id'], f['id'])
+            if got is None or got[2] != f.get('sha256'):
+                missing += 1; continue
+            try:
+                meta = files.save_upload(got[0], got[1])
+            except FileRefused:                 # e.g. empty, or over CoS's own upload limit: say so, keep the turn
+                missing += 1; continue
+            with db() as c:
+                c.execute('INSERT OR IGNORE INTO room_files VALUES(?,?,?)', (value['room'], got[2], meta['file_id']))
+            ids.append(meta['file_id'])
+        ids = ids[-5:]
+        text = ''
+        if ids:
+            text = files.compose_turn('', ids).replace(
+                '[Platform: Robert sent the attached file(s) without a message.]', '').replace(
+                'files Robert attached to this message', 'files shared in this meeting (file ids for initiative_attach: '
+                + ', '.join(ids) + ')').strip()
+        if missing:
+            text += f"\n[Platform: {missing} file(s) shared in this meeting could not be copied for you; say so if asked.]"
+        return text
     dbpath.chmod(0o600)
     bp=Blueprint('cos_guildhall',__name__)
     @bp.before_request
@@ -113,7 +154,17 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
         context=(facts['context'] if facts is not None
                  else {k:value.get(k) for k in ('room','brief','transcript','coverage')})
         prompt=json.dumps(context,ensure_ascii=False)
+        binding=None
         try:
+            ra=(facts or {}).get('room_approval')
+            if ra is not None and approve_room is not None and facts is not None and facts.get('owner_private'):
+                # Robert's exact yes/no for a card CoS published here (Records routed it by its registry). The portal
+                # confirms it against the stored digest; no model call is made.
+                decision=approve_room(value['room'],value['id'],ra)
+                answer={'text':decision['receipt'],'turn_id':value['id'],'room':value['room'],
+                        'room_decision':{'code':ra['code'],'state':decision['state'],'receipt':decision['receipt']}}
+                with db() as c:c.execute('UPDATE turns SET state=?,result=? WHERE id=?',('done',json.dumps(answer),value['id']))
+                return jsonify(answer)
             if value['trigger']['text'].strip() == '/new':
                 from types import SimpleNamespace
                 result=SimpleNamespace(reply='Each Guildhall turn has its own CoS session. Start a new meeting for a fresh shared conversation; your private CoS chat is unchanged.')
@@ -131,16 +182,30 @@ def install(app, *, token_file, data_dir, run_turn, is_ready=lambda: True, verif
                                            (lambda turn,reason:stop_turn(turn,reason)) if stop_turn
                                            else (lambda turn,reason:None))
                             if facts is not None and binding is not None else (lambda:None))
+                if room_proposal is not None:room_proposal(value['room'])   # drop any card left by an earlier failed turn
+                if binding is not None and facts is not None:
+                    shared=meeting_files(value,facts)
+                    if shared:text=text+'\n\n'+shared
                 try:
                     result=run_turn(text,meeting_context=prompt,channel='guildhall',conversation_id='guildhall:'+value['room']+':'+value['id'],request_id=value['id'],turn_id=value['id'],meeting_scope=scope,binding=binding)
                 finally:
                     stop_watch()
             answer={'text':result.reply,'turn_id':value['id'],'room':value['room']}
             if not isinstance(answer['text'],str) or not answer['text'].strip():raise ValueError('Empty reply')
+            # Lane G: a proposal this owner-private turn made goes to Records as a platform card (the stored task terms,
+            # with the digest Robert's room "yes" must match). Kept with the result, so a replay returns the same card.
+            card=room_proposal(value['room']) if room_proposal is not None and facts is not None and binding is not None else None
+            if card is not None:answer['room_proposal']=card
             with db() as c:c.execute('UPDATE turns SET state=?,result=? WHERE id=?',('done',json.dumps(answer),value['id']))
             return jsonify(answer)
-        except Exception:
-            # Never expose provider errors or retry a possibly action-bearing turn.
+        except Exception as exc:
+            # Never expose provider errors or retry a possibly action-bearing turn. The log names only the exception
+            # class and where it was raised (no message text, which can carry provider or file content): staging B3,
+            # 26 Nov, failed before any model call and left nothing to diagnose from.
+            import traceback
+            last=traceback.extract_tb(exc.__traceback__)[-1:] or [None]
+            where=f'{Path(last[0].filename).name}:{last[0].lineno}:{last[0].name}' if last[0] else 'unknown'
+            _log.warning('guildhall cos turn %s uncertain: %s at %s', value['id'], type(exc).__name__, where)
             with db() as c:c.execute('UPDATE turns SET state=? WHERE id=?',('uncertain',value['id']))
             return jsonify(error='CoS outcome uncertain; no automatic retry'),502
     app.register_blueprint(bp)

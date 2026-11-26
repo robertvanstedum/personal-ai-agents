@@ -161,6 +161,12 @@ services:
       # The Workshop view reads this folder and never writes it. Nothing feeds it on production yet, so it reads "unknown".
       MINIMOI_WORKSHOPS_DIR: /app/data/workshops
       MINIMOI_WORKSHOP_ID: mac
+      # Lane G (#681 D): copies of owner-private meeting files for MC's container, as the portal sees the folder and as
+      # MC does (docker-compose.mc-1-2-production.yml mounts it read-only), owned by MC's runtime user.
+      MINIMOI_MC_AGENT_FILES_DIR: /app/runtime/guild/mc-agent-evidence
+      MINIMOI_MC_AGENT_FILES_MC_DIR: /home/node/.openclaw/workspace-mc/mc-evidence
+      MINIMOI_MC_AGENT_FILES_UID: "1000"
+      MINIMOI_MC_AGENT_FILES_GID: "1000"
     volumes:
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage", target: /app/data/usage, read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage/portal", target: /app/data/usage/portal, bind: {create_host_path: false}}
@@ -213,6 +219,12 @@ services:
       PARTNERSHIP_GRANTS: /run/secrets/partnership/grants.json
       PARTNERSHIP_OWNER_KEY_FILE: /run/secrets/partnership/owner.key
       PARTNERSHIP_OWNER_NONCE_FILE: /data/owner-nonces.sqlite3
+      # MC's private working documents (#599), under /data/store/private-work-artifacts. A seat still needs
+      # work_artifacts in bindings.json, and MC's policy its work_read_v1/work_save_v1 rules.
+      PARTNERSHIP_WORK_ARTIFACTS: "1"
+      # CoS's private professional-initiative store (#680), under /data/store/professional-initiatives. CoS files
+      # and MC reads only with professional_initiatives in its bindings.json row.
+      PARTNERSHIP_PROFESSIONAL_INITIATIVES: "1"
       PYTHONPATH: /app
     volumes:
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/partnership", target: /data, bind: {create_host_path: false}}

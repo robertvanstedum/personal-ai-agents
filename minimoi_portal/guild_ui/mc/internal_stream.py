@@ -16,7 +16,8 @@ import time
 
 from .backend import TurnResult
 from .openclaw import OPENCLAW_NO_RESPONSE
-from .stream import STREAM_ANSWER_FINISH_REASONS, Answer, Delta, Failure, Finish, RunStarted, StreamRefused, Served, Switched, Usage
+from .stream import STREAM_ANSWER_FINISH_REASONS, Answer, Delta, Failure, Finish, RunStarted, StreamRefused, Served, Step, Switched, Usage
+from .turn_steps import StepTally
 from .streaming import answer_text
 
 _log = logging.getLogger("guild_ui.mc")
@@ -31,6 +32,7 @@ def collect(backend, req, *, on_run, record_usage=None, clock=time.monotonic) ->
         from .stream_usage import record_run as record_usage
     started, parts, finish, usage, failure, run_seen, served, switched = clock(), [], None, None, None, False, None, None
     answer_only = None
+    tally = StepTally()                                   # Lane G: kept so a room turn can say which step was refused
     try:
         for event in events:
             if isinstance(event, RunStarted):
@@ -60,6 +62,8 @@ def collect(backend, req, *, on_run, record_usage=None, clock=time.monotonic) ->
                 served = event.fields
             elif isinstance(event, Switched):
                 switched = event.route
+            elif isinstance(event, Step):
+                tally.add(event)
             elif isinstance(event, Failure):
                 failure = event
                 break
@@ -69,7 +73,7 @@ def collect(backend, req, *, on_run, record_usage=None, clock=time.monotonic) ->
     duration_ms = int((clock() - started) * 1000)
     text = answer_text("".join(parts), answer_only)
     trace = {"finish_reason": finish or "none", "internal_stream": True, **({"served": served} if served else {}),
-             **({"route": switched} if switched else {})}
+             **({"route": switched} if switched else {}), **({"steps": tally.record()} if len(tally) else {})}
     if failure is None and not (finish in STREAM_ANSWER_FINISH_REASONS and text.strip()
                                 and text.strip() != OPENCLAW_NO_RESPONSE):
         failure = Failure("no_run_status") if finish is not None else Failure("truncated")

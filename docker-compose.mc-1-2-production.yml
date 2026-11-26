@@ -20,6 +20,15 @@ services:
       # The runtime's default where a turn names no route (the job agent): Grok, not the plan.
       MC_PRIMARY_ROUTE: minimoi-gateway/minimoi-xai-strong
       MC_MODEL_GATEWAY_KEY: ${MINIMOI_MC_MODEL_GATEWAY_KEY:?capped MC gateway key required}
+    volumes:
+      # Lane G (#681 D): files shared in an owner-private meeting, copied by the portal (MINIMOI_MC_AGENT_FILES_* in
+      # docker-compose.minimoi-1-2-production.yml), read-only inside MC's workspace. The host folder must exist first,
+      # owned by MC's runtime user (1000:1000) with mode 0700: data/guild is the portal's /app/runtime/guild.
+      - type: bind
+        source: /opt/minimoi/data/guild/mc-agent-evidence
+        target: /home/node/.openclaw/workspace-mc/mc-evidence
+        read_only: true
+        bind: {create_host_path: false}
 
   mc-relay:
     image: ${MINIMOI_MC_IMAGE:?immutable reviewed MC image digest required}

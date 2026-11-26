@@ -56,6 +56,17 @@ def test_room_authority_includes_pending_observer(env, tmp_path):
         state_dir=tmp_path/'bridge',craft_prefix='/guild-next')
     with pytest.raises(ValueError,match='owner_room_required'):
         bridge.admitted(ids,snapshot=True)
+    # #687: run still refuses (nothing prepared); the HTTP endpoint turns this one refusal into a plain room line.
+    from minimoi_portal.guild_ui.mc_rooms_bridge import OwnerRoomRequired, install, PATH as BRIDGE_PATH
+    bridge.prepare=lambda *a,**k:(_ for _ in ()).throw(AssertionError('nothing may be prepared for a shared room'))
+    with pytest.raises(OwnerRoomRequired):
+        bridge.run(ids)
+    import hashlib
+    from flask import Flask
+    app=Flask('t'); install(app,bridge,hashlib.sha256(b'room-token').hexdigest())
+    r=app.test_client().post(BRIDGE_PATH,json=ids,headers={'Authorization':'Bearer room-token'})
+    assert r.status_code==200 and r.json['outcome']=='done' and r.json['detail']=='owner_room_required'
+    assert r.json['text'].startswith('Platform: MC answers only in meetings with just you, MC and CoS')
 
 
 def test_worker_handles_cancel_at_portal_send_boundary(env, tmp_path):
