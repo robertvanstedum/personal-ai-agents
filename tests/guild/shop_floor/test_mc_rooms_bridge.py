@@ -207,6 +207,21 @@ def test_approval_path_uses_current_environment(world, prefix):
     assert 'https://dev.minimoi.ai' not in requests[0].text
 
 
+def test_meeting_turn_says_where_working_documents_go(world):
+    """B4 on staging, 26 Nov: MC saved a "working document" with minimoi_working_write and could not read it back."""
+    requests=[]
+    original=world.backend.stream_turn
+    def capture(req, cancel=None):
+        requests.append(req)
+        return original(req, cancel=cancel)
+    world.backend.stream_turn=capture
+    assert world.bridge.run(IDS)['outcome']=='done'
+    text=requests[0].text
+    assert 'goes to minimoi_work_save and comes back with minimoi_work_read' in text
+    assert 'minimoi_working_write makes a file for him to download, not a working document' in text
+    assert 'Say a save happened only from its receipt' in text
+
+
 def test_a_catalogue_missing_this_task_refuses_and_nothing_reaches_the_runtime(world, tmp_path, monkeypatch):
     import json
     from core.model_routes import CATALOGUE_PATH, CATALOGUE_VAR

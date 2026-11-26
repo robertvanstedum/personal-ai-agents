@@ -384,7 +384,12 @@ class Bridge:
                      'directory/recall lookups, then answer with verified evidence or the precise access gap. '
                      'Do not repeatedly search an unavailable filesystem. Host tools describe the runtime host; '
                      'never assume that host is Robert’s Mac. Ground capability claims in this turn’s actual tools. '
-                     'A promised later task requires a durable tracked action; otherwise say it is not scheduled.'),
+                     'A promised later task requires a durable tracked action; otherwise say it is not scheduled.'
+                     # B4 on staging, 26 Nov: MC kept a "working document" with minimoi_working_write (a downloadable
+                     # file, recoverable only in its own conversation), so the next meeting turn could not read it back.
+                     '\nA working document Robert asks you to save, keep or read back goes to minimoi_work_save and '
+                     'comes back with minimoi_work_read, in this or any later turn. minimoi_working_write makes a file '
+                     'for him to download, not a working document. Say a save happened only from its receipt.'),
                 context={'about': 'Guildhall', 'page': review_url},
                 route=role_snapshot_for(getattr(self.services.mc, 'kind', None), 'mc-rooms'))
             bridge = self
