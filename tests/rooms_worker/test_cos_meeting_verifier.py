@@ -109,4 +109,7 @@ def test_guildhall_runs_only_admitted_turns_with_the_snapshot_text_and_binding(r
     assert 'BODY-INJECTED' not in kw['meeting_context']     # re-review F2: context is the Records snapshot's
     assert kw['binding'] == {'origin': 'meeting', 'principal': 'robert', 'audience': turn['room'],
                              'claim_id': turn['claim_id'], 'room_generation': kw['binding']['room_generation'],
-                             'trigger_seq': kw['binding']['trigger_seq']}
+                             'trigger_seq': kw['binding']['trigger_seq'],
+                             # Lane G: the verified trigger text, so an owner-private turn can cite Robert's words.
+                             'owner_words': kw['binding']['owner_words']}
+    assert kw['binding']['owner_words'] == 'CoS, please help me plan tomorrow.'

@@ -498,7 +498,7 @@ async function attach(file) {
   let r;
   try { r = await records(`/v1/rooms/${encodeURIComponent(current)}/documents`, { method: 'POST', body: { name: file.name, base64: btoa(binary) }, key: keyFor(name) }); }
   catch (e) { status(''); attachError(`${file.name} was NOT shared: the connection to Rooms failed. Try again.`); return; }
-  if (r.status === 201 || r.status === 200) { keys.delete(name); attachError(''); status(`Shared ${file.name}. The teammates in this room are given a verified copy of it with their next turn.`); await loadRoom(current); }
+  if (r.status === 201 || r.status === 200) { keys.delete(name); attachError(''); status(`Shared ${file.name}. In a private meeting MC and CoS get a verified copy with their next turn; in a shared room teammates see its name, and only invited agents get a copy.`); await loadRoom(current); }
   else if (r.status === 401) { status(''); }
   else {
     status('');
@@ -999,6 +999,9 @@ function turnLine(t) {
 function noteLine(n) {
   const f = facilitator();
   const alt = f ? ` ${labelOf(f)} can answer — say @${handle(f)} or leave it unaddressed.` : '';
+  if (n.disposition === 'no_such_proposal') return `Nothing named ${n.label} is waiting in this meeting, so nothing was done.`;
+  if (n.disposition === 'proposal_expired') return `${n.label} expired, so nothing was done. Ask for it again to get a new code.`;
+  if (n.disposition && n.disposition.startsWith('proposal_already_')) return `${n.label} was already ${n.disposition.slice(17)}; nothing new was done.`;
   if (n.disposition === 'wait_needs_choice') return `Not sent to ${n.label}: did you want them to wait? Choose Wait, or select Send to and write a fresh request.`;
   if (n.disposition === 'waiting_by_request') return `${n.label} is waiting as requested. Address them directly to resume.`;
   if (n.disposition === 'no_connector') return `Not sent to ${n.label}: not available in Rooms yet.${alt}`;

@@ -30,6 +30,37 @@ class TaskServiceUnavailable(RuntimeError):
         self.answer = answer
 
 
+class TaskServiceRefused(RuntimeError):
+    """A definite refusal made before anything was written (Lane G spec v0.2 change 6). ``code`` is the service's
+    error word. Only the whitelist below counts: a store failure (5xx without one of these) stays uncertain."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
+DEFINITE_REFUSALS = {
+    503: {"work_artifacts_disabled", "professional_initiatives_disabled"},
+    403: {"work_scope_unavailable", "initiative_scope_unavailable"},
+    400: {"work_arguments_invalid", "initiative_arguments_invalid"},
+    401: {"not_authenticated"},
+    413: {"too_large"},
+}
+
+
+def _refusal(response):
+    """The coded definite refusal in this response, or None. 422 from the initiative store is always definite."""
+    try:
+        code = response.json().get("error")
+    except (ValueError, AttributeError):
+        return None
+    if not isinstance(code, str):
+        return None
+    if response.status_code == 422 or code in DEFINITE_REFUSALS.get(response.status_code, ()):
+        return code
+    return None
+
+
 def read_token(path: str | os.PathLike) -> str:
     """A seat token from a private file (owner-only permissions). Refuses anything else."""
     p = Path(path)
@@ -86,10 +117,50 @@ class TaskClient:
             r = self._call("POST", "/v1/work-artifacts",
                            {"operation": operation, "scope": scope, "arguments": arguments})
             if r.status_code != 200:
+                code = _refusal(r)
+                if code is not None:
+                    raise TaskServiceRefused(code)
                 raise TaskServiceUnavailable(f"work artifacts failed: HTTP {r.status_code}")
             return r.json()
         except (requests.RequestException, ValueError) as exc:
             raise TaskServiceUnavailable("work artifact outcome unconfirmed") from exc
+
+    def initiatives(self, operation, arguments, *, scope):
+        """The professional-initiative store (#680). One attempt; a write is idempotent on its source and intent,
+        so a caller that sees TaskServiceUnavailable reads back before saying anything was filed."""
+        try:
+            r = self._call("POST", "/v1/professional-initiatives",
+                           {"operation": operation, "scope": scope, "arguments": arguments})
+            if r.status_code != 200:
+                code = _refusal(r)
+                if code is not None:
+                    raise TaskServiceRefused(code)
+                raise TaskServiceUnavailable(f"initiative store failed: HTTP {r.status_code}")
+            return r.json()
+        except (requests.RequestException, ValueError) as exc:
+            raise TaskServiceUnavailable("initiative outcome unconfirmed") from exc
+
+    def stage_initiative_file(self, data: bytes, *, scope):
+        """Upload one packet file as raw bytes; returns {"file_ref", "bytes"}."""
+        import hashlib
+        from urllib.parse import quote
+        sha = hashlib.sha256(data).hexdigest()
+        path = f"/v1/professional-initiatives/files/{sha}?scope={quote(scope, safe='')}"
+        headers = self._headers()
+        headers["Content-Type"] = "application/octet-stream"
+        if self._signer is not None:
+            headers.update(self._signer("PUT", path, data))
+        try:
+            r = self.session.request("PUT", self.base + path, headers=headers, data=data, timeout=self.timeout,
+                                     allow_redirects=False)
+            if r.status_code != 200:
+                code = _refusal(r)
+                if code is not None:
+                    raise TaskServiceRefused(code)
+                raise TaskServiceUnavailable(f"initiative upload failed: HTTP {r.status_code}")
+            return r.json()
+        except (requests.RequestException, ValueError) as exc:
+            raise TaskServiceUnavailable("initiative upload unconfirmed") from exc
 
     def resolve_wake(self, operation_id, *, principal, lead, environment):
         """A current packet for this lead, or stale. Authentication/outage is never cancellation."""

@@ -60,7 +60,8 @@
       "minimoi_helper_result",
       "minimoi_helper_review",
       "minimoi_work_read",
-      "minimoi_work_save"
+      "minimoi_work_save",
+      "minimoi_initiative_read"
     ]
   },
   "configSchema": {
@@ -86,7 +87,7 @@
       },
       "tools": {
         "type": "array",
-        "maxItems": 57,
+        "maxItems": 58,
         "items": {
           "type": "string"
         }
