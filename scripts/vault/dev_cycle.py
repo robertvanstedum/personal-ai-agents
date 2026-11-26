@@ -108,9 +108,9 @@ def prune(scratch, now=None):
     return count
 
 
-def run_worker(command, worker):
+def run_worker(command, worker, timeout=300):
     try:
-        subprocess.run(command, check=True, timeout=300)
+        subprocess.run(command, check=True, timeout=timeout)
     finally:
         subprocess.run(["docker", "rm", "-f", worker], stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL, timeout=30)
@@ -176,7 +176,8 @@ def cycle(image, principal, embed=None):
                         # #594: MC's own index beside the full one; a failed MC build never fails the feed.
                         "--mc-index-path", "/vault/memory-index/memory-mc.sqlite",
                         *(["--embedder-url", embed[0]] if embed else [])]
-            run_worker(command, worker)
+            # #660: the first run with the embedder embeds the whole Dev shelf once (later runs borrow the last index's vectors).
+            run_worker(command, worker, 1800 if embed else 300)
             publish_status()
 
 
