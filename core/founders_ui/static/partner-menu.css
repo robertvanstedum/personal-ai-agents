@@ -5,6 +5,7 @@
 .partner-menu select { font: inherit; max-width: 100%; }
 .partner-menu-voice, .partner-menu-model { flex: 1 1 100%; }
 .partner-menu-model [data-partner-model] { font-weight: 600; }
+.partner-menu-lock { color: var(--gu-muted, #6b6b6b); font-size: 0.75rem; }
 .partner-menu-last, .partner-menu-note, .partner-menu-foot { flex: 1 1 100%; color: var(--gu-muted, #6b6b6b); }
 .partner-menu-foot { font-size: 0.75rem; }
 @media (max-width: 640px) {

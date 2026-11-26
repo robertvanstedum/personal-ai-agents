@@ -25,10 +25,16 @@ export function initPartnerMenu({ root, settingsUrl, request, conversationId = (
   const model = root.querySelector('[data-partner-model]');
   const last = root.querySelector('[data-partner-last]');
   const note = root.querySelector('[data-partner-note]');
+  const lock = root.querySelector('[data-partner-voice-lock]');   // the reason a live call holds the Voice (staging, 26 Nov)
   if (!row || !select || !modelRow || !model || !last || !note) return null;
   let revision = 0, selected = null, generation = 0, busy = false;
   const say = (el, text) => { el.textContent = text || ''; el.hidden = !text; };
   const names = new Map(Array.from(select.options, (o) => [o.value, o.textContent]));
+  // The page's voice code locks the select for a live call (data-call-live); the menu says why, whoever set it.
+  const paintLock = () => { if (lock) lock.hidden = select.dataset.callLive !== 'true'; };
+  if (typeof MutationObserver === 'function') {
+    try { new MutationObserver(paintLock).observe(select, { attributes: true, attributeFilter: ['disabled', 'data-call-live'] }); } catch (e) { /* stand-in element */ }
+  }
 
   function show(view) {
     revision = view.revision;
@@ -44,6 +50,7 @@ export function initPartnerMenu({ root, settingsUrl, request, conversationId = (
     if (selected) select.value = selected;
     row.hidden = false;
     select.disabled = busy || !selected || select.dataset.callLive === 'true';   // a live call's provider never changes
+    paintLock();
     say(model, view.model ? view.model.text : '');
     modelRow.hidden = !view.model;
     say(last, view.last_answer);
@@ -82,6 +89,7 @@ export function initPartnerMenu({ root, settingsUrl, request, conversationId = (
   return {
     load,
     voice: () => selected,
-    setBusy(on) { busy = Boolean(on); select.disabled = busy || !selected || select.dataset.callLive === 'true'; },
+    setBusy(on) { busy = Boolean(on); select.disabled = busy || !selected || select.dataset.callLive === 'true'; paintLock(); },
+    paintLock,
   };
 }

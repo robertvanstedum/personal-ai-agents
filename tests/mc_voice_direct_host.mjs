@@ -34,7 +34,7 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
   const nodes = {}, instances = [], docEvents = {}, windowEvents = {}, dispatched = [], calls = [], timers = [];
   const confers = [], submitted = [];
   let directLoads = 0, sessionLoads = 0, conferLoads = 0;
-  const node = (s) => nodes[s] ??= { selector: s, textContent: '', value: s.includes('provider') ? 'openai' : '', disabled: false, hidden: s !== '[data-mc-voice-btn]' ? false : true,
+  const node = (s) => nodes[s] ??= { selector: s, textContent: '', value: (s.includes('provider') || s.includes('partner-voice')) ? 'openai' : '', disabled: false, dataset: {}, hidden: s !== '[data-mc-voice-btn]' ? false : true,
     open: false, checked: false, attrs: {}, listeners: {}, parentElement: { hidden: false },
     options: s.includes('provider') ? [{ value: 'openai', textContent: 'OpenAI', disabled: false, dataset: {} }, { value: 'xai', textContent: 'Grok (xAI) · not available yet', disabled: true, dataset: {} }] : undefined,
     setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; },
@@ -119,15 +119,17 @@ let n = 0;
   const r = await rig();
   assert.equal(r.node('[data-mc-voice-btn]').hidden, false);
   assert.equal(r.directLoads, 1); assert.equal(r.sessionLoads, 1);                       // loaded to paint the thread
-  const select = r.node('[data-mc-voice-provider]');
-  assert.deepEqual(select.options.map((o) => [o.value, o.disabled, o.textContent]), [['openai', false, 'OpenAI'], ['xai', false, 'Grok (xAI)']]);
-  assert.equal(select.value, 'openai');                                                   // direct.default_provider
-  assert.equal(r.node('[data-mc-managed-settings]').hidden, false);
+  // #659/#661: the Voice is the shared ⋯ menu's select (partner-menu.js fills it from the owner's saved choice); this page
+  // only reads it at start and locks it while a call is live. The managed path's Transcript settings stay closed here.
+  const select = r.node('[data-partner-voice]');
+  assert.equal(select.value, 'openai');
+  assert.equal(r.node('[data-mc-managed-settings]').hidden, false);                      // untouched on the direct path
   assert.equal(r.node('[data-mc-voice-transcript-choice]').parentElement.hidden, true);  // nothing that is said shows while live
   select.value = 'xai';
   await r.click();
   const c = r.instances[0];
   assert.deepEqual(c.args, { provider: 'xai', persona: 'master_craftsman', scene: '', conversation_id: 'c-1' });
+  assert.equal(select.disabled, true); assert.equal(select.dataset.callLive, 'true');    // a live call's Voice never changes
   assert.equal(c.options.bootstrapUrl, DIRECT.bootstrap_url);
   assert.equal(JSON.stringify(c.options.requestHeaders()), JSON.stringify({ 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf-synthetic', 'X-Record-Mode': 'on_record' }));   // another realm: compared as JSON
   assert.equal(r.dispatched[0].type, 'guild:mic-claim'); assert.equal(r.dispatched[0].detail.who, 'voice');   // §8: Dictate yields
@@ -483,7 +485,7 @@ for (const provider of ['openai', 'xai']) {
   const real = await realController({ adapters: 'real' });
   try {
     const r = await rig({ controller: real.RealtimeVoiceController });
-    r.node('[data-mc-voice-provider]').value = provider;
+    r.node('[data-partner-voice]').value = provider;
     await r.click(); await flush();
     real.state.answer({ provider, model: 'm', warning_minutes: 20, max_minutes: 30, voice_session_id: SID,
       ...(provider === 'openai' ? { client_secret: 'ek_synthetic', page_responses: true } : { ephemeral_token: 'synthetic', session_config: {} }) });
