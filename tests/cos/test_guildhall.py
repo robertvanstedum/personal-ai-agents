@@ -52,6 +52,15 @@ def test_uncertain_run_is_not_repeated_after_restart(tmp_path):
     assert calls==[1]
 
 
+def test_uncertain_turn_logs_where_it_failed_never_the_message(tmp_path, caplog):
+    def run(*a,**k):raise RuntimeError('provider detail must remain private')
+    c,h=setup(tmp_path,run);t=turn()
+    with caplog.at_level('WARNING', logger='cos.guildhall'):
+        assert c.post('/internal/guildhall/turn',json=t,headers=h).status_code==502
+    [line]=[r.getMessage() for r in caplog.records if r.name=='cos.guildhall']
+    assert t['id'] in line and 'RuntimeError at test_guildhall.py:' in line and 'provider detail' not in line
+
+
 PRIVATE=[{'id':'robert'},{'id':'mc'},{'id':'cos'}]
 
 
