@@ -21,7 +21,6 @@ import { initJobs } from './jobs.js';
 import { initAgentRequests } from './agent_requests.js';
 import { initQueue } from './mc_queue.js';
 import { interruptions } from './mc_interruption.js';
-import { initPartnerMenu } from '/founders-ui/partner-menu.js';
 
 let page, panel, thread, pill;
 let latestStreamRequest = null;
@@ -1359,13 +1358,20 @@ export function initConversation(p) {
   if (exit) exit.addEventListener('click', () => { if (live.off) toggleRecord(); });
   wireOptionsMenu($('[data-mc-options]'), document);
   // The shared ⋯ menu (#661): Voice, Model, the Last-answer line; the owner's choice, kept by MiniMoi (one for every device).
-  const partnerMenu = initPartnerMenu({ root: $('[data-partner-menu]'), settingsUrl: '/mc/partner-settings',
-    request: (method, path, body) => (method === 'GET' ? apiGet(path) : apiPost(path, body)),
-    conversationId: () => page?.conversation?.id });
-  if (partnerMenu) {
-    const opts = $('[data-mc-options]');
-    if (opts) opts.addEventListener('toggle', () => { if (opts.open) partnerMenu.load(); });
-    partnerMenu.load();
+  // Loaded by the shared UI revision (/founders-ui/partner-menu.js?v=…), as CoS loads it: a plain-path import was kept by the
+  // browser for hours after a deploy (Cloudflare's 4-hour browser cache, staging 26 Nov), so a phone ran the old menu.
+  if ($('[data-partner-menu]')) {
+    const revision = document.body.dataset.foundersUi;
+    import(`/founders-ui/partner-menu.js${revision ? `?v=${encodeURIComponent(revision)}` : ''}`).then(({ initPartnerMenu }) => {
+      const partnerMenu = initPartnerMenu({ root: $('[data-partner-menu]'), settingsUrl: '/mc/partner-settings',
+        request: (method, path, body) => (method === 'GET' ? apiGet(path) : apiPost(path, body)),
+        conversationId: () => page?.conversation?.id });
+      if (partnerMenu) {
+        const opts = $('[data-mc-options]');
+        if (opts) opts.addEventListener('toggle', () => { if (opts.open) partnerMenu.load(); });
+        partnerMenu.load();
+      }
+    }).catch(() => {});
   }
   const typeBtn = $('[data-mc-type]');
   if (typeBtn) typeBtn.addEventListener('click', () => {

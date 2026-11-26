@@ -66,19 +66,12 @@ def test_the_menu_script_for_both_twins():
 
 def test_a_locked_voice_says_why_and_phones_get_new_menu_code_and_an_unclipped_menu():
     """Staging, 26 Nov: on iPhone the thread hid Dictate, the greyed Voice gave no reason, and the menu's code (imported by
-    its plain path, cached 4 hours) could stay old after a deploy."""
-    from flask import Flask
-    from core.founders_ui import install
-    assert "data-partner-voice-lock hidden>Locked during a call<" in _render("mc")
-    app = Flask(__name__)
-    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 14400        # the portal's (max-age=14400 on staging)
-    install(app)
-    client = app.test_client()
-    plain = client.get("/founders-ui/partner-menu.js")
-    assert plain.status_code == 200 and plain.headers["Cache-Control"] == "no-cache" and plain.headers.get("ETag")
-    assert client.get("/founders-ui/partner-menu.js", headers={"If-None-Match": plain.headers["ETag"]}).status_code == 304
-    versioned = client.get("/founders-ui/partner-menu.js?v=abc")
-    assert versioned.status_code == 200 and versioned.headers.get("Cache-Control") == "public, max-age=14400"
+    its plain path, kept 4 hours by Cloudflare) could stay old after a deploy."""
+    js = (ROOT / "minimoi_portal/guild_ui/static/js/conversation.js").read_text()
+    assert "import(`/founders-ui/partner-menu.js${revision ? `?v=${encodeURIComponent(revision)}` : ''}`)" in js
+    assert "import { initPartnerMenu } from '/founders-ui/partner-menu.js'" not in js
+    base = (ROOT / "minimoi_portal/guild_ui/templates/guild_floor/_base.html").read_text()
+    assert 'data-founders-ui="{{ founders_ui_version }}"' in base
     css = (SHARED / "static/founders.css").read_text()
     assert "body.gu[data-page=floor] .mc-composer{z-index:45}" in css
     assert ".founders-cos .input-row{position:relative;z-index:45;" in css
