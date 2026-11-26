@@ -161,6 +161,12 @@ services:
       # The Workshop view reads this folder and never writes it. Nothing feeds it on production yet, so it reads "unknown".
       MINIMOI_WORKSHOPS_DIR: /app/data/workshops
       MINIMOI_WORKSHOP_ID: mac
+      # Lane G (#681 D): copies of owner-private meeting files for MC's container, as the portal sees the folder and as
+      # MC does (docker-compose.mc-1-2-production.yml mounts it read-only), owned by MC's runtime user.
+      MINIMOI_MC_AGENT_FILES_DIR: /app/runtime/guild/mc-agent-evidence
+      MINIMOI_MC_AGENT_FILES_MC_DIR: /home/node/.openclaw/workspace-mc/mc-evidence
+      MINIMOI_MC_AGENT_FILES_UID: "1000"
+      MINIMOI_MC_AGENT_FILES_GID: "1000"
     volumes:
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage", target: /app/data/usage, read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: "${MINIMOI_1_2_STATE:?}/usage/portal", target: /app/data/usage/portal, bind: {create_host_path: false}}
