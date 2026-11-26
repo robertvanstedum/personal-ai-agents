@@ -273,6 +273,13 @@ body.gu[data-mc-mode="floating"] .mc-pill, body.gu[data-mc-mode="docked"] .mc-pi
   border: 1px solid var(--gu-border); border-radius: var(--gu-radius); background: var(--gu-surface); font-size: var(--gu-size-xs); }
 .mc-options-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .mc-options-group[hidden], .mc-options-body .mc-dictate[hidden] { display: none; }
+/* Dictate is the same quiet microphone as CoS's (owner, 26 Nov: "on MC it's a box"); its word stays the button's name. */
+.mc-options-body .mc-dictate { display: inline-grid; place-items: center; width: 34px; min-width: 34px; height: 34px; min-height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--gu-muted, #6b6b6b); font-size: 0; }
+.mc-options-body .mc-dictate::before { content: ""; width: 19px; height: 19px; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'%3E%3Crect x='9' y='3' width='6' height='12' rx='3'/%3E%3Cpath d='M6 11v1a6 6 0 0 0 12 0v-1M12 18v3M9 21h6'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'%3E%3Crect x='9' y='3' width='6' height='12' rx='3'/%3E%3Cpath d='M6 11v1a6 6 0 0 0 12 0v-1M12 18v3M9 21h6'/%3E%3C/svg%3E") center/contain no-repeat; }
+.mc-options-body .mc-dictate:hover { background: var(--gu-zone-conv, rgba(0,0,0,.05)); color: var(--gu-text, #222); }
+.mc-options-body .mc-dictate[aria-pressed="true"] { background: #8a3020; color: #fff; }
+.mc-options-body .mc-dictate[aria-pressed="true"]::before { -webkit-mask: none; mask: none; width: 11px; height: 11px; border-radius: 1px; }
+@media (max-width: 640px) { .mc-options-body .mc-dictate { width: 44px; min-width: 44px; height: 44px; min-height: 44px; } }
 .mc-options-body label { display: inline-flex; align-items: center; gap: 6px; }
 .mc-options-body select { font: inherit; max-width: 100%; }
 .mc-options-group[data-mc-route-control] { width: 100%; }

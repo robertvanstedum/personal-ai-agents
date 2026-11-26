@@ -282,6 +282,7 @@ def test_the_talking_call_uses_the_persona_voice_and_refuses_a_silent_grok_swap(
     assert minted == {}
     ok = client.post(f"{API}/mc/voice/bootstrap", json={"provider": "openai"}, headers=write_headers(token))
     assert ok.status_code == 200 and minted["voice"] == voice
+    assert "Central time in Chicago." in minted["instructions"]          # A5: the walk knows the owner's time
 
 
 def test_a_talking_call_settles_at_end_to_the_minutes_it_ran_for_its_owner_only(turned, provider, monkeypatch):

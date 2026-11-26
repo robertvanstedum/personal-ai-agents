@@ -364,3 +364,26 @@ def test_notice_semantics_ignore_age_and_delivery_but_explicit_owner_reference_s
     named = plan('reply-c')
     mc.context_block('robert', 'What about w1?', notice_plan=named)
     assert named.offers
+
+
+def test_a_stale_notice_is_never_presented_as_an_agent_waiting(svc, clock):
+    """Staging, 26 Nov: a 5 Nov notice was read out as an agent blocked on Robert. A stale notice is left out of the
+    voice digest, and the text block lists it apart, labelled stale, never under what waits on him."""
+    _agent(svc)
+    svc.sweep()
+    assert mc.voice_summary("robert").startswith("1 open: W-1 ")
+    clock.advance(73 * 3600)
+    svc.sweep()
+    assert mc.voice_summary("robert") == ""
+    lines = mc.context_block("robert", "what's waiting?").splitlines()
+    assert "Nothing is recorded as waiting." in lines
+    stale_at = lines.index("Stale notices (possibly outdated or already handled; never present these as an agent waiting on him):")
+    w1 = next(i for i, l in enumerate(lines) if l.startswith("- W-1 "))
+    assert w1 > stale_at and "· stale" in lines[w1]
+    _agent(svc, key="blocked-merge-002", words="Second ask")
+    svc.sweep()
+    assert mc.voice_summary("robert").startswith("1 open: W-2 ")                 # a fresh one still counts
+    lines = mc.context_block("robert", "").splitlines()
+    assert "Nothing is recorded as waiting." not in lines
+    assert next(i for i, l in enumerate(lines) if l.startswith("- W-2 ")) < lines.index(
+        "Stale notices (possibly outdated or already handled; never present these as an agent waiting on him):")

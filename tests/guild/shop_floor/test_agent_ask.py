@@ -992,3 +992,19 @@ def test_a_request_held_at_the_daily_ceiling_gets_one_plain_note_and_the_words_s
     assert [n["id"] for n in again.get_json()["notes"] if "paused at today's usage limit" in n["text"]] == first_ids   # the same one note, not a new one per poll
     assert agent_ask.attention_words("daily_ceiling_reached:21.00 of 20").startswith("the session's daily usage limit has been reached")
     assert "restarts it between turns" in agent_ask.attention_words("turn_failed:error_max_budget_usd")
+
+
+def test_a_spoken_card_id_sends_that_card_once(asks):
+    """Staging, 26 Nov: "Yes, S U 4 W S" (the id as speech writes it) fell through to an ordinary turn and sent nothing.
+    Spoken, it now sends that card's exact words once; a second yes finds nothing waiting."""
+    _reply(asks, "Noted.")
+    client, token, cid, note, events = _ask(asks, "can you send a message to grok on this fix part and to claude code on the deployment part")
+    words = events[-1]["reply_note"]["text"]
+    ids = re.findall(r"yes (S-[A-Z0-9]{4})", words)
+    assert len(ids) == 2 and _requests(asks) == []
+    spoken = "Yes, S " + " ".join(ids[0][2:])
+    _ask(asks, spoken, cid=cid)
+    sent = _requests(asks)
+    assert len(sent) == 1 and sent[0]["request"]["to"] == "grok" and sent[0]["request"]["action"] == "this fix part"
+    *_, again = _ask(asks, spoken.lower(), cid=cid)
+    assert len(_requests(asks)) == 1 and "No send card" in again[-1]["reply_note"]["text"]
