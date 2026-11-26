@@ -275,6 +275,10 @@ def requires_domain(domain: str):
 
 # ── Public routes ─────────────────────────────────────────────────────────────
 
+from minimoi_portal import uat_signin as _uat_signin  # noqa: E402
+_uat_signin.install(app, session)  # staging-only UAT door; 404 everywhere else (SPEC_AUTOMATIC_UAT §2)
+
+
 @app.route("/capture-auth")
 def capture_auth():
     """Snapshot-tooling session bootstrap for capture_snapshot.py.
