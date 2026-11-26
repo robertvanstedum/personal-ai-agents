@@ -56,6 +56,11 @@ def test_room_authority_includes_pending_observer(env, tmp_path):
         state_dir=tmp_path/'bridge',craft_prefix='/guild-next')
     with pytest.raises(ValueError,match='owner_room_required'):
         bridge.admitted(ids,snapshot=True)
+    # #687: the run path answers plainly instead of a 409 the worker reads as "outcome unknown"; nothing is prepared.
+    bridge.prepare=lambda *a,**k:(_ for _ in ()).throw(AssertionError('nothing may be prepared for a shared room'))
+    out=bridge.run(ids)
+    assert out['outcome']=='done' and out['detail']=='owner_room_required'
+    assert out['text'].startswith('Platform: MC answers only in meetings with just you, MC and CoS')
 
 
 def test_worker_handles_cancel_at_portal_send_boundary(env, tmp_path):
