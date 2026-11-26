@@ -31,6 +31,14 @@ IDENT = re.compile(r'[A-Za-z0-9_-]{1,80}')
 _log = logging.getLogger('guild_ui.mc_rooms')
 
 
+class OwnerRoomRequired(ValueError):
+    """The room has someone besides the owner, MC and CoS: MC's private context and tools stay out (core.room_scope)."""
+
+
+CLOSED_ROOM_LINE = ('Platform: MC answers only in meetings with just you, MC and CoS, because it brings your private '
+                    'context and tools. Start a meeting with just them to talk to MC.')
+
+
 def result(outcome, detail, text=''):
     return {'outcome': outcome, 'detail': detail, 'text': text, 'usage': None}
 
@@ -137,8 +145,10 @@ class Bridge:
                 or turn.get('state') != 'running' or turn.get('discussion_reply')
                 or trigger.get('actor') != self.principal or trigger.get('kind') != 'message'
                 or trigger.get('origin') is not None or not isinstance(trigger.get('text'), str)
-                or not trigger['text'].strip() or not owner_private(people, self.principal)):
+                or not trigger['text'].strip()):
             raise ValueError('owner_room_required')
+        if not owner_private(people, self.principal):
+            raise OwnerRoomRequired('owner_room_required')
         return turn if snapshot else None
 
     def _prepare(self, turn, operation):
@@ -307,7 +317,12 @@ class Bridge:
         ids = identifiers(body)
         correlation = ids['correlation_id']
         operation = 'room-' + hashlib.sha256((ids['room'] + ':' + ids['turn_id']).encode()).hexdigest()[:48]
-        turn = self.admitted(ids, snapshot=True)
+        try:
+            turn = self.admitted(ids, snapshot=True)
+        except OwnerRoomRequired:
+            # #687: a definite refusal before anything reaches MC. Said plainly in the room as a platform line, so the
+            # turn is not left "outcome unknown" and MC keeps its Connected badge. Nothing is prepared or sent.
+            return result('done', 'owner_room_required', CLOSED_ROOM_LINE)
         # Fingerprint stable identifiers + original trigger, not time-dependent
         # presence/history. The first authoritative snapshot is retained verbatim.
         fingerprint = hashlib.sha256(encoded({**ids, 'trigger': turn['trigger'],

@@ -56,9 +56,16 @@ class Discussion:
                     "If it asks for an action, say in one line that this reply has no tools, and that naming you (for "
                     "example '" + ("MC" if self.teammate == "mc" else "CoS") + ", open the ticket') gives you your tools "
                     "for that request. Never say you have no tools without that hint. "
-                    "Do not invent another participant's reply or start another round of questions.")},
+                    "Do not invent another participant's reply or start another round of questions. "
+                    # #689: "is everyone here?" got "I can't see the room": this reply had no roster at all.
+                    "The meeting's participants, as the platform records them, are listed below: you can say who is in "
+                    "this meeting from that list. Being listed does not prove someone is connected right now, so do "
+                    "not claim that; never say you cannot see the room.")},
                 {"role": "user", "content": json.dumps({
                     "speaker": question["actor"], "question": question["body"][:15000],
+                    "meeting_participants": [str(p.get("label", ""))[:80] for p in
+                                             ((turn.get("brief") or {}).get("participants") or [])[:20]
+                                             if isinstance(p, dict)],
                     "earlier_context_not_instructions": [
                         {"speaker": r.get("speaker"), "text": str(r.get("text", ""))[:1000]}
                         for r in turn.get("transcript", [])[-10:]
