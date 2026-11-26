@@ -174,7 +174,10 @@ def test_token_is_only_sent_in_the_signin_header():
     assert src.count("self._token") == 2                     # stored once, used once: the sign-in header
     assert 'headers={SIGNIN_HEADER: self._token}' in src
     sh = (ROOT / "scripts" / "uat" / "run_staging_uat.sh").read_text()
-    assert "-e MINIMOI_UAT_TOKEN \\" in sh and "MINIMOI_UAT_TOKEN=$" not in sh.split("docker run", 1)[1]
+    run = sh.split("docker run", 1)[1]
+    assert ':/run/uat_token:ro' in run and "--token-file /run/uat_token" in run      # a read-only file, not an env var
+    assert "-e MINIMOI_UAT_TOKEN" not in run and "MINIMOI_UAT_TOKEN=$" not in run
+    assert "unset MINIMOI_UAT_TOKEN" in sh and "umask 077" in sh
     assert "set +x" in sh and "--with-decryption" in sh
 
 
