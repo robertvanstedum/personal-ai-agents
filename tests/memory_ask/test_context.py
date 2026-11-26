@@ -320,3 +320,16 @@ def test_omission_accounting_across_all_reasons_and_adjacent_slot():
     assert built.report["omission_reasons"] == {"malformed": 1, "passage_limit": 1, "budget": 1, "result_cap": 1, "tier": 2}
     assert sum(built.report["omitted"].values()) == sum(built.report["omission_reasons"].values())
     assert built.citations["adjacent"] == {"none": "not_retained"}
+
+
+def test_a_small_budget_is_shared_by_both_lists_so_meaning_hits_still_reach_the_model():
+    """#660 staging C1 (26 Nov): five long keyword passages filled CoS's 6,000-char budget and every meaning hit (the right
+    conversation, ranked 1-3) was dropped. The lists now take turns rank by rank."""
+    long = "unrelated exact word passage " * 40
+    r = {"keyword": [hit(f"records/kw{i}.md", long) for i in range(5)],
+         "meaning": [hit(f"records/me{i}.md", "Interviews dropped off while managers are in demand.") for i in range(5)],
+         "adjacent": {"none": "not_retained"}, "status": {"meaning": "ok"}}
+    built = context.build(r, max_chars=6000, max_bytes=12000)
+    files = [c["file"] for c in built.citations["meaning"]]
+    assert "records/me0.md" in files                                  # the top meaning hit is always in
+    assert built.citations["keyword"] and built.citations["keyword"][0]["file"] == "records/kw0.md"
