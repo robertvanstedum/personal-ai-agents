@@ -1066,7 +1066,7 @@
       "name": "minimoi_working_write",
       "label": "working write",
       "capability": "host.artifacts.create",
-      "description": "Create a new private file in an operation-owned directory. Optional name uses .md, .txt, .csv or .json (for example summary.md); omitted name is artifact.txt. Up to 20000 characters. Never overwrites; use artifact recovery after uncertainty.",
+      "description": "Create a new private file for Robert to download, in an operation-owned directory. Not for working documents: a draft, note or document Robert asks you to save, keep or read back later goes to minimoi_work_save and is read back with minimoi_work_read; a file made here is never in /minimoi/work and can be recovered only in this conversation. Optional name uses .md, .txt, .csv or .json (for example summary.md); omitted name is artifact.txt. Up to 20000 characters. Never overwrites; use artifact recovery after uncertainty.",
       "parameters": {
         "type": "object",
         "additionalProperties": false,
@@ -1888,7 +1888,7 @@
       "name": "minimoi_work_save",
       "label": "Save working revision",
       "capability": "work.artifact.save",
-      "description": "Save a private working draft or decision discussion, never action approval. Supply title, content, unresolved questions and expected_revision: 0 for a new document (omit artifact_id), otherwise first read its artifact_id/current revision. Conflicts require reconciliation, never force overwrite. Unknown saves must be reconciled by reading canonical state before another write.",
+      "description": "Save a working document: a named private draft, note or decision discussion Robert asks you to save or keep, never action approval. Read it back later, in any conversation, with minimoi_work_read. Supply title, content, unresolved questions and expected_revision: 0 for a new document (omit artifact_id), otherwise first read its artifact_id/current revision. Conflicts require reconciliation, never force overwrite. Unknown saves must be reconciled by reading canonical state before another write.",
       "parameters": {
         "type": "object",
         "additionalProperties": false,
