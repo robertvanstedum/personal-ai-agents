@@ -56,12 +56,8 @@ def _docx_rendering(data: bytes) -> bytes:
     to MC and MC can say plainly why it cannot quote it, rather than the whole meeting's files being withheld."""
     global _DOCX_READER
     if _DOCX_READER is None:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            'minimoi_fixed_host_inspector', Path(__file__).resolve().parents[2] / 'scripts' / 'mc_host' / 'inspect.py')
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _DOCX_READER = module
+        import importlib
+        _DOCX_READER = importlib.import_module('scripts.mc_host.inspect')   # by package name; never a bare 'inspect'
     try:
         return _DOCX_READER.docx_text(data).encode('utf-8')
     except _DOCX_READER.Refused as exc:
@@ -317,12 +313,7 @@ class Bridge:
         ids = identifiers(body)
         correlation = ids['correlation_id']
         operation = 'room-' + hashlib.sha256((ids['room'] + ':' + ids['turn_id']).encode()).hexdigest()[:48]
-        try:
-            turn = self.admitted(ids, snapshot=True)
-        except OwnerRoomRequired:
-            # #687: a definite refusal before anything reaches MC. Said plainly in the room as a platform line, so the
-            # turn is not left "outcome unknown" and MC keeps its Connected badge. Nothing is prepared or sent.
-            return result('done', 'owner_room_required', CLOSED_ROOM_LINE)
+        turn = self.admitted(ids, snapshot=True)
         # Fingerprint stable identifiers + original trigger, not time-dependent
         # presence/history. The first authoritative snapshot is retained verbatim.
         fingerprint = hashlib.sha256(encoded({**ids, 'trigger': turn['trigger'],
@@ -494,6 +485,11 @@ def install(app, bridge, token_sha256, *, forbidden_hashes=()):
                     raise ValueError('correlation_required')
                 return jsonify(bridge.stop(body['correlation_id']))
             return jsonify(bridge.run(body))
+        except OwnerRoomRequired:
+            # #687: the one definite refusal before anything reaches MC (the room is not owner-private). bridge.run still
+            # raises, so nothing is prepared or sent; the worker gets a plain platform line to post instead of a 409 it
+            # must read as "outcome unknown", and MC keeps its Connected badge.
+            return jsonify(result('done', 'owner_room_required', CLOSED_ROOM_LINE))
         except ValueError:
             return jsonify(result('refused', 'admission_refused')), 409
         except Exception:
