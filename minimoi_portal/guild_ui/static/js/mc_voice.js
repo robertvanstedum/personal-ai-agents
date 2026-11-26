@@ -121,7 +121,7 @@ export function initMcVoice(page) {
   onChange(paintExport);
 
   // `session` numbers the attempt: stop() moves it on, and every callback of an older attempt (a late transcript, error, state change or answer) is then ignored.
-  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, direct = null, directMod = null, sessionMod = null, directSession = null, directThread = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
+  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, direct = null, walk = false, directMod = null, sessionMod = null, directSession = null, directThread = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
 
   let visualState = 'idle', pressed = false;
   const draw = () => {
@@ -155,7 +155,9 @@ export function initMcVoice(page) {
     try {
       const r = await fetch(`${api}/mc/voice/capabilities`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
       const body = await r.json().catch(() => ({}));
-      direct = body.direct_voice && typeof body.direct_voice === 'object' && (body.direct_voice.providers || []).length ? body.direct_voice : null;
+      walk = body.voice_path === 'realtime';                              // the walk: OpenAI only (owner, 26 Nov: "keep the walk")
+      direct = !walk && body.direct_voice && typeof body.direct_voice === 'object' && (body.direct_voice.providers || []).length ? body.direct_voice : null;
+      paintWalkNote();
       const records = !direct && body.direct_records && typeof body.direct_records === 'object' ? body.direct_records : null;
       if (r.ok && body.ok && records) initThread(records);              // installed, not admitted: the thread only
       if (!r.ok || !body.ok || !((body.providers || []).length || direct)) return null;
@@ -209,7 +211,8 @@ export function initMcVoice(page) {
     const current = () => mine === session;
     setPhase('connecting');
     paint(true);
-    if (!direct && !managed) primeCue();    // on the tap, before any await (the chained path's tone)
+    if (!direct && !managed && !walk) primeCue();    // on the tap, before any await (the chained path's tone)
+    if (walk) { await startWalk(mine, current); return; }
     if (direct) {await startDirect(mine,current);return;}
     if (managed) {await startManaged(mine,current);return;}
     // Neither offered (production today: MINIMOI_MC_VOICE=1, direct not installed or not admitted, managed off): today's chained
@@ -273,6 +276,50 @@ export function initMcVoice(page) {
   // The direct path (UI_CONTRACT_chunk_B.md). Its files are loaded only now that the capabilities answer offered it: the
   // Guild's thread (mc_voice_direct.js) and the shared session module (Spec 165 §4.3), served beside the controller.
   const DIRECT_ENDED = 'Voice ended. What was said is in the conversation.';
+  // The walk (production's MC voice, OpenAI only). The shared menu's Voice still sets typed MC's model; for a call it is
+  // never taken as a promise: with Grok chosen, the menu and the call both say the call stays on OpenAI.
+  const WALK_OPENAI = 'MC voice calls stay on OpenAI.';
+  function paintWalkNote() {
+    const note = $('[data-mc-walk-note]');
+    if (note) note.hidden = !(walk && $('[data-partner-voice]')?.value === 'xai');
+  }
+  document.addEventListener('partner:voice', paintWalkNote);
+  $('[data-partner-voice]')?.addEventListener?.('change', paintWalkNote);
+  // #578: after a talking call, its whole transcript, tucked (closed) under the composer, with a download from the server.
+  function showWalkTranscript({ turns, url }) {
+    const box = $('[data-mc-voice-transcript]'), text = $('[data-mc-voice-transcript-text]');
+    if (!box || !text) return;
+    const summary = box.querySelector('summary');
+    if (summary) summary.textContent = `Voice call transcript · ${turns.length} turns · saved`;
+    text.textContent = turns.map((t) => `${t.role === 'user' ? 'You' : 'MC'}: ${t.text}`).join('\n\n');
+    box.hidden = false;
+    box.open = false;
+    // Its own link inside the box: the options menu's export link is hidden on this path and repainted per conversation.
+    const link = box.querySelector('[data-mc-voice-call-download]');
+    if (link && url) { link.setAttribute('href', url); link.hidden = false; }
+  }
+  async function startWalk(mine, current) {
+    const notice = $('[data-mc-voice-notice]');
+    const grok = $('[data-partner-voice]')?.value === 'xai';
+    if (notice) { notice.textContent = grok ? WALK_OPENAI : ''; notice.hidden = !grok; }
+    say(grok ? WALK_OPENAI : 'Connecting…');
+    try {
+      const { startMcWalk } = await import('./mc_voice_walk.js');
+      if (!current()) return;
+      controller = await startMcWalk({
+        api, headers, current,
+        say: (text) => { if (current()) say(text); },
+        setPhase: (phase) => { if (current()) setPhase(phase); },
+        saved: showWalkTranscript,
+        conversationId: () => page.conversation?.id,
+        paint: (role, text) => { if (current()) paintSpoken(role, text); },
+      });
+    } catch (e) {
+      if (current()) { stop('failed', { quiet: true }); say(`Voice could not start${e && e.message ? `: ${e.message}` : ''}. Typing still works.`, { loud: true, error: true }); }
+    } finally {
+      if (current()) starting = false;
+    }
+  }
 
   const loadDirect = () => directMod ? Promise.resolve(directMod) : import('./mc_voice_direct.js').then((m) => (directMod = m));
   const loadSession = () => sessionMod ? Promise.resolve(sessionMod) : import(`${api}/mc/voice/static/direct-voice-session.js`).then((m) => (sessionMod = m));

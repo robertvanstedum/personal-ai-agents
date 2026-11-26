@@ -72,6 +72,5 @@ def test_a_locked_voice_says_why_and_phones_get_new_menu_code_and_an_unclipped_m
     assert "import { initPartnerMenu } from '/founders-ui/partner-menu.js'" not in js
     base = (ROOT / "minimoi_portal/guild_ui/templates/guild_floor/_base.html").read_text()
     assert 'data-founders-ui="{{ founders_ui_version }}"' in base
-    css = (SHARED / "static/founders.css").read_text()
-    assert "body.gu[data-page=floor] .mc-composer{z-index:45}" in css
-    assert ".founders-cos .input-row{position:relative;z-index:45;" in css
+    css = (ROOT / "minimoi_portal/guild_ui/static/components.css").read_text()
+    assert 'body.gu[data-page="floor"] .mc-dock-bottom:has(.mc-options[open]) { overflow: visible; }' in css

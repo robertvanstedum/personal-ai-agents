@@ -11,3 +11,4 @@
 @media (max-width: 640px) {
   .partner-menu :is(button, select, label) { min-height: var(--gu-target-phone, 44px); }
 }
+.mc-walk-note[hidden] { display: none !important; }
