@@ -5,7 +5,7 @@
 {% macro partner_menu(partner, dictate='', private='') -%}
 <div class="partner-menu" data-partner-menu data-partner="{{ partner }}">
   {{ dictate }}
-  <label class="partner-menu-voice" data-partner-voice-row hidden><span>Voice</span> <select data-partner-voice aria-label="Voice"><option value="openai">OpenAI</option><option value="xai">Grok</option></select></label>
+  <label class="partner-menu-voice" data-partner-voice-row hidden><span>Voice</span> <select data-partner-voice aria-label="Voice"><option value="openai">OpenAI</option><option value="xai">Grok</option></select> <small class="partner-menu-lock" data-partner-voice-lock hidden>Locked during a call</small></label>
   <p class="partner-menu-model" data-partner-model-row hidden><span>Model</span> <span data-partner-model></span></p>
   {{ private }}
   <p class="partner-menu-last" data-partner-last aria-live="polite" hidden></p>

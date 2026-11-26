@@ -136,7 +136,7 @@
 .founders-cos .cos-options>summary{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;color:var(--soft);font-size:11px;letter-spacing:1px;list-style:none;cursor:pointer;user-select:none}
 .founders-cos .cos-options>summary::-webkit-details-marker{display:none}
 .founders-cos .cos-options>summary:hover,.founders-cos .cos-options[open]>summary{background:var(--paper-mid)}
-.founders-cos .cos-options-body{position:absolute;left:0;bottom:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:2px;width:min(320px,calc(100vw - 32px));padding:6px;background:#fffdf8;border:1px solid var(--line-strong);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
+.founders-cos .cos-options-body{position:absolute;left:0;bottom:calc(100% + 6px);z-index:40;transform:translateZ(0);display:flex;flex-direction:column;gap:2px;width:min(320px,calc(100vw - 32px));padding:6px;background:#fffdf8;border:1px solid var(--line-strong);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
 .founders-cos .conv-menu-route{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;min-height:34px;padding:4px 10px;color:var(--mute);font-size:13.5px}
 .founders-cos .conv-menu-route[hidden]{display:none}
 .founders-cos .conv-menu-route select{flex:1 1 0;min-width:0;max-width:190px;height:30px;padding:0 6px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink);font:14px var(--sans)}
@@ -190,7 +190,7 @@
 /* One rounded composer: the words, then ＋ on the left and 🎙 and Send on the right; under it only the save state. */
 .founders-cos #attach-tray,.founders-cos .input-row,.founders-cos #voice-live,.founders-cos #save-state,.founders-cos #voice-transcript,.founders-cos #voice-sessions{width:min(760px,calc(100% - 48px));margin-left:auto;margin-right:auto}
 .founders-cos #attach-tray{margin-bottom:6px}
-.founders-cos .input-row{position:relative;flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px 10px 8px 14px;background:#fffdf8;border:1px solid var(--line-strong);border-radius:16px;box-shadow:0 2px 10px rgba(18,59,48,.06)}
+.founders-cos .input-row{position:relative;z-index:45;flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px 10px 8px 14px;background:#fffdf8;border:1px solid var(--line-strong);border-radius:16px;box-shadow:0 2px 10px rgba(18,59,48,.06)}
 .founders-cos #send-input{order:-1;flex:1 0 100%;min-width:0;min-height:26px;max-height:30vh;height:auto;field-sizing:content;padding:0;border:0;border-radius:0;outline:none;background:none;color:var(--ink);font:16px/1.5 var(--sans);resize:none}
 .founders-cos .input-row>button{flex:none;width:34px;height:34px;min-width:0;min-height:0;display:inline-grid;place-items:center;padding:0;border:0;border-radius:50%;background:none;color:var(--soft);font:17px/1 var(--sans)}
 .founders-cos .input-row>button:hover:not(:disabled){background:var(--paper-mid)}
@@ -422,6 +422,9 @@ body.gu[data-page=floor] .craft-hero-ph::before{content:"";position:absolute;ins
 /* One rounded composer: the words on top; ＋, the options and Voice and Send under them. */
 body.gu[data-page=floor] .mc-dock-bottom{flex:none;width:min(760px,calc(100% - 48px));max-width:none;margin:0 auto 12px;padding:0;border:0;background:none}
 body.gu[data-page=floor] .mc-composer{flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:10px 10px 8px 14px;background:var(--r6-field);border:1px solid var(--r6-line-strong);border-radius:16px;box-shadow:0 2px 10px rgba(18,59,48,.06)}
+/* The ⋯ menu opens upward over the scrolling thread. iPhone Safari painted the thread over it (staging, 26 Nov: Dictate and
+   the top rows hidden), so the composer is its own layer above the thread. */
+body.gu[data-page=floor] .mc-composer{z-index:45}
 body.gu[data-page=floor] .mc-composer:focus-within{border-color:rgba(18,59,48,.45)}
 body.gu[data-page=floor] .mc-composer .mc-row{display:contents}
 body.gu[data-page=floor] .mc-composer .mc-tray{order:-2;flex:1 0 100%}
@@ -438,7 +441,7 @@ body.gu[data-page=floor] .mc-composer [data-mc-send]:hover:not(:disabled){backgr
 body.gu[data-page=floor] .mc-composer>p,body.gu[data-page=floor] .mc-composer>span.visually-hidden{order:5;flex:1 0 100%;margin:0}
 body.gu[data-page=floor] .mc-composer .mc-options>summary{width:34px;height:34px;min-height:34px;border-radius:50%;color:var(--r6-mute);font-size:13px;letter-spacing:1px;white-space:nowrap}
 body.gu[data-page=floor] .mc-composer .mc-options>summary:hover,body.gu[data-page=floor] .mc-composer .mc-options[open]>summary{background:var(--r6-paper-mid)}
-body.gu[data-page=floor] .mc-composer .mc-options-body{position:absolute;left:0;bottom:calc(100% + 8px);z-index:40;min-width:220px;margin:0;padding:8px 10px;background:var(--r6-field);border:1px solid var(--r6-line-strong);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
+body.gu[data-page=floor] .mc-composer .mc-options-body{position:absolute;left:0;bottom:calc(100% + 8px);z-index:40;transform:translateZ(0);min-width:220px;margin:0;padding:8px 10px;background:var(--r6-field);border:1px solid var(--r6-line-strong);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
 body.gu[data-page=floor] .mc-blocker,body.gu[data-page=floor] .mc-queue-bar{margin:0 0 6px;font-size:13.5px}
 
 /* The picture column: the Master and Apprentice, with the bench under them; Files only when there are files. */

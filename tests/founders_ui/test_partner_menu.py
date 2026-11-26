@@ -61,3 +61,17 @@ def test_the_menu_script_for_both_twins():
                          timeout=30, env=dict(os.environ), check=False)
     assert run.returncode == 0, run.stdout + run.stderr
     assert "partner-menu checks passed for MC and CoS" in run.stdout
+
+
+
+def test_a_locked_voice_says_why_and_phones_get_new_menu_code_and_an_unclipped_menu():
+    """Staging, 26 Nov: on iPhone the thread hid Dictate, the greyed Voice gave no reason, and the menu's code (imported by
+    its plain path, kept 4 hours by Cloudflare) could stay old after a deploy."""
+    js = (ROOT / "minimoi_portal/guild_ui/static/js/conversation.js").read_text()
+    assert "import(`/founders-ui/partner-menu.js${revision ? `?v=${encodeURIComponent(revision)}` : ''}`)" in js
+    assert "import { initPartnerMenu } from '/founders-ui/partner-menu.js'" not in js
+    base = (ROOT / "minimoi_portal/guild_ui/templates/guild_floor/_base.html").read_text()
+    assert 'data-founders-ui="{{ founders_ui_version }}"' in base
+    css = (SHARED / "static/founders.css").read_text()
+    assert "body.gu[data-page=floor] .mc-composer{z-index:45}" in css
+    assert ".founders-cos .input-row{position:relative;z-index:45;" in css

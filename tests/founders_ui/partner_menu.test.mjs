@@ -15,7 +15,7 @@ function rig(answers) {
   const options = [el({ value: 'openai', textContent: 'OpenAI' }), el({ value: 'xai', textContent: 'Grok' })];
   const select = el({ options, value: 'openai' });
   const parts = { '[data-partner-voice-row]': el(), '[data-partner-voice]': select, '[data-partner-model-row]': el(),
-    '[data-partner-model]': el(), '[data-partner-last]': el(), '[data-partner-note]': el() };
+    '[data-partner-model]': el(), '[data-partner-last]': el(), '[data-partner-note]': el(), '[data-partner-voice-lock]': el() };
   const root = { querySelector: (s) => parts[s] || null };
   const calls = [], voices = [];
   const request = async (method, url, body) => { calls.push({ method, url, body }); return answers.shift(); };
@@ -92,4 +92,20 @@ assert.deepEqual(seen.mc, seen.cos);                                            
   assert.equal(r.parts['[data-partner-voice-row]'].hidden, true);
 }
 
-console.log('7 partner-menu checks passed for MC and CoS');
+{ // a live call says why the Voice is locked (staging, 26 Nov: greyed out with no reason); it clears when the call ends
+  const r = rig([ok(view('mc', 'openai')), ok(view('mc', 'openai')), ok(view('mc', 'openai'))]);
+  const lock = r.parts['[data-partner-voice-lock]'];
+  await r.menu.load();
+  assert.equal(lock.hidden, true);
+  r.select.dataset.callLive = 'true';
+  await r.menu.load();
+  assert.equal(r.select.disabled, true);
+  assert.equal(lock.hidden, false);
+  delete r.select.dataset.callLive;
+  r.menu.paintLock();
+  assert.equal(lock.hidden, true);
+  r.menu.setBusy(false);
+  assert.equal(r.select.disabled, false);
+}
+
+console.log('8 partner-menu checks passed for MC and CoS');
