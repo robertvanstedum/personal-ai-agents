@@ -253,9 +253,11 @@ class Bridge:
             return decided('cancelled', text)
         if state in ('nothing_pending', 'not_shown', 'needs_code', 'refused', 'kind_off'):
             return decided('refused', text)
-        if state == 'expired':
-            return decided('failed', text)
-        return decided('failed' if state == 'failed' else 'confirmed', text)
+        if state == 'stale':                      # the policy changed: nothing was done, and the card cannot be used again
+            return decided('refused', text)
+        # Only a verified (or partly verified) effect confirms the card. Anything else, including an unconfirmed write
+        # ('unknown'), closes it as failed: never shown as confirmed, never run a second time from this card.
+        return decided('confirmed' if state in ('verified', 'partial') else 'failed', text)
 
     def run(self, body):
         from .mc import TurnRequest, ledger_gate
