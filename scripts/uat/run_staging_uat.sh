@@ -3,17 +3,17 @@
 #
 #   scripts/uat/run_staging_uat.sh [extra staging_uat.py args, e.g. --only A1,B2]
 #
-# * The runner runs inside the official Playwright Python image (pinned below), with the repo mounted read-only and
-#   only the run's output folder writable.
+# * The runner runs in docker/Dockerfile.uat (the official Playwright image, pinned by digest, plus the matching
+#   Python package), built on the host the first time. The repo is mounted read-only; only the output folder is writable.
 # * The sign-in token comes from SSM (/minimoi/staging/uat_signin_token, SecureString). It is passed to the container
 #   as a read-only 0600 file mounted at /run/uat_token, so it never appears on a command line, in `ps`, in
-#   `docker inspect`, or in this script's output. TODO before enabling the watcher: pin IMAGE by digest.
+#   `docker inspect`, or in this script's output.
 # * Output: /opt/minimoi-staging/uat/<UTC run id>/ (report.md, report.json, screenshots/, runner.log, exit_code).
 # * Exit code: the runner's (0 green, 1 a case failed or errored, 2 configuration), 75 if another run holds the lock.
 set -euo pipefail
 set +x                                                       # never trace: the token lives in this shell
 
-IMAGE="${UAT_IMAGE:-mcr.microsoft.com/playwright/python:v1.49.1-noble}"
+IMAGE="${UAT_IMAGE:-minimoi-staging/uat-runner:pw1.49.1}"
 UAT_ROOT="${UAT_ROOT:-/opt/minimoi-staging/uat}"
 SSM_NAME="${UAT_SSM_NAME:-/minimoi/staging/uat_signin_token}"
 BASE_URL="${UAT_BASE_URL:-https://dev.minimoi.ai}"
@@ -35,6 +35,11 @@ mkdir -p "$UAT_ROOT"
 if [ "${UAT_LOCK_HELD:-0}" != "1" ]; then
   exec 9>"$LOCK"
   if ! flock -n 9; then echo "another UAT run holds $LOCK" >&2; exit 75; fi
+fi
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "building $IMAGE from docker/Dockerfile.uat"
+  docker build -q -t "$IMAGE" -f "$REPO_DIR/docker/Dockerfile.uat" "$REPO_DIR/docker" >/dev/null
 fi
 
 OUT="$UAT_ROOT/$RUN_ID"
