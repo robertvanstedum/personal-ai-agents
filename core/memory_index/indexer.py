@@ -34,6 +34,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import os
+import struct
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -48,7 +49,7 @@ except ImportError:                         # building an index needs it; readin
 
 from core.jobs import batch_window
 from core.memory_index import career_filter, chunker, policy, store
-from core.memory_index.embedder import Embedder, EmbedderUnavailable, Identity, PinMismatch
+from core.memory_index.embedder import DIMS, Embedder, EmbedderUnavailable, Identity, PinMismatch, cosine
 from core.memory_shelf import fsio
 from core.memory_shelf.shelf import Shelf, read_front_matter
 
@@ -61,12 +62,25 @@ OK, DISK_LOW, BUSY, EMBEDDER_UNAVAILABLE, PIN_MISMATCH, INCOMPATIBLE = (
     "ok", "disk_low", "index_busy", "embedder_unavailable", "pin_mismatch", "rebuild_needed")
 CAREER_MISMATCH = "career_mismatch"        # filtered vs unfiltered, or another filter digest: rebuild, never patch
 BUDGET_SPENT = "budget_spent"              # ``update(budget_s=)`` stopped between records: committed, the next run resumes (#660)
+DONOR_UNUSABLE = "donor_unusable"          # ``donor_check`` asked for a copy that is not this embedder's and chunker's (#660)
+DONOR_MISMATCH = "donor_mismatch"          # a donor's vector disagreed with this embedder's own for the same text: discard the donor (#660)
+# Donor spot check (#660, the one-time copy of the Mac's vectors): the first DONOR_CHECK_FIRST lent vectors, then every
+# DONOR_CHECK_EVERY-th, are embedded again here and must agree (cosine >= DONOR_MIN_COSINE; the workstation and server measured 1.0).
+DONOR_CHECK_FIRST, DONOR_CHECK_EVERY, DONOR_MIN_COSINE = 16, 250, 0.999
 # Held reasons that a code change (not a new record edition) can lift: never skipped as "unchanged".
 RECHECK_HELD = frozenset({policy.UNKNOWN_PROVIDER, policy.AWAITING_REPROCESS})
 
 
 class IndexBusy(RuntimeError):
     """Another process holds the index lock."""
+
+
+class DonorMismatch(RuntimeError):
+    """A donor's vector is not what this embedder makes for the same text."""
+
+
+def _unpack(blob: bytes) -> list[float]:
+    return list(struct.unpack(f"<{DIMS}f", blob))
 
 
 def default_index_path(shelf_root: str | Path) -> Path:
@@ -149,8 +163,9 @@ KEYWORD_ONLY_EMBEDDER = ("none", "0")      # (name, version) on chunk rows writt
 
 class _Run:
     def __init__(self, con, shelf_root: Path, embedder: Embedder | None, ident: Identity | None, now: Callable[[], datetime],
-                 keyword_only: bool = False, donor=None, career=None):
+                 keyword_only: bool = False, donor=None, career=None, donor_check: bool = False):
         self.con, self.root, self.embedder, self.ident, self.now = con, shelf_root, embedder, ident, now
+        self.donor_check = donor_check  # spot-check lent vectors against this embedder (a donor made on another machine)
         self.career = career            # career_filter.CareerFilter, or None (the full index)
         self.keyword_only = keyword_only
         self.donor = donor              # a previous index whose vectors may be reused (``rebuild(reuse_vectors=True)``)
@@ -247,8 +262,13 @@ class _Run:
         else:
             # The donor lends what this index lacks; this index's own vectors win (#660: MC's index borrows the full index's).
             kept = {c.text_hash for c in chunks}
-            reuse = {**(store.old_vectors(self.donor, rid, kept) if self.donor is not None else {}),
-                     **store.old_vectors(self.con, rid)}
+            own = store.old_vectors(self.con, rid)
+            lent = {h: v for h, v in (store.old_vectors(self.donor, rid, kept) if self.donor is not None else {}).items() if h not in own}
+            reuse = {**lent, **own}
+            if lent:
+                self.counts["donor_vectors"] += len(lent)
+                if self.donor_check:
+                    self._spot_check(chunks, lent)
             todo = [c for c in chunks if c.text_hash not in reuse]
             fresh = self.embedder.embed_documents([c.text for c in todo], chunker.EMBED_MAX_CHARS) if todo else []
             vectors = {c.text_hash: sqlite_vec.serialize_float32(v) for c, v in zip(todo, fresh)}
@@ -277,6 +297,24 @@ class _Run:
         self.con.commit()
         self.counts["reindexed" if row else "indexed"] += 1
 
+    def _spot_check(self, chunks, lent: dict) -> None:
+        """Embed a sample of the lent chunks here; any disagreement stops the run before this record is written."""
+        seen = self.counts["donor_vectors"] - len(lent)
+        sample = []
+        for c in chunks:
+            if c.text_hash in lent and c.text_hash not in {s.text_hash for s in sample}:
+                seen += 1
+                if seen <= DONOR_CHECK_FIRST or seen % DONOR_CHECK_EVERY == 0:
+                    sample.append(c)
+        if not sample:
+            return
+        fresh = self.embedder.embed_documents([c.text for c in sample], chunker.EMBED_MAX_CHARS)
+        for c, v in zip(sample, fresh):
+            got = cosine(list(v), _unpack(lent[c.text_hash]))
+            self.counts["donor_checked"] += 1
+            if not got >= DONOR_MIN_COSINE:
+                raise DonorMismatch(c.text_hash)
+
     def drop_missing(self, present: set[str]) -> None:
         for (rid,) in self.con.execute("SELECT record_id FROM records").fetchall():
             if rid not in present:
@@ -292,10 +330,11 @@ class _Run:
 
 
 def _sync(con, shelf_root: Path, embedder: Embedder | None, ident: Identity | None, now, only: Iterable[str] | None,
-          limit: int | None, keyword_only: bool = False, donor=None, career=None, budget_s: float | None = None) -> dict:
+          limit: int | None, keyword_only: bool = False, donor=None, career=None, budget_s: float | None = None,
+          donor_check: bool = False) -> dict:
     started = time.monotonic()
     stop_at = None if budget_s is None else started + max(0.0, float(budget_s))
-    run = _Run(con, shelf_root, embedder, ident, now, keyword_only, donor, career)
+    run = _Run(con, shelf_root, embedder, ident, now, keyword_only, donor, career, donor_check)
     entries = shelf_entries(shelf_root)
     if only is not None:
         wanted = set(only)
@@ -315,6 +354,9 @@ def _sync(con, shelf_root: Path, embedder: Embedder | None, ident: Identity | No
     except EmbedderUnavailable:
         con.commit()
         return run.result(EMBEDDER_UNAVAILABLE, started)
+    except DonorMismatch:
+        con.rollback()
+        return run.result(DONOR_MISMATCH, started)
     finally:
         if embedder is not None:
             embedder.release()
@@ -347,13 +389,15 @@ def _keyword_meta(con, now, career=None) -> None:
 def update(shelf_root: str | Path, embedder: Embedder | None, *, index_path: str | Path | None = None,
            min_free_bytes: int | None = fsio.DEFAULT_MIN_FREE_BYTES, now: Callable[[], datetime] | None = None,
            only: Iterable[str] | None = None, limit: int | None = None, keyword_only: bool = False, career=None,
-           budget_s: float | None = None, donor_path: str | Path | None = None) -> dict:
+           budget_s: float | None = None, donor_path: str | Path | None = None, donor_check: bool = False) -> dict:
     """Bring the index up to date with the shelf (creating it if missing). Returns counts and a result code.
     ``keyword_only``: no embedder (``None``), no vectors; the index must be (or is created) keyword-only.
     ``career``: a ``career_filter.CareerFilter``; the index must be (or is created) filtered with exactly it.
     ``budget_s``: stop between records once this many seconds are spent (``budget_spent``; the next run resumes).
     ``donor_path``: another vector index, opened read-only, that lends the vectors of chunk text it already embedded for the same
-    record, only when made with this embedder and chunker (MC's index borrows the full index's: #660)."""
+    record, only when made with this embedder and chunker (MC's index borrows the full index's: #660).
+    ``donor_check``: the donor was made on another machine (the Mac's index, the one-time production copy): a sample of the lent
+    vectors is embedded again here and must agree, else ``donor_mismatch`` (the caller discards what this run built)."""
     shelf_root = Path(shelf_root)
     index_path = Path(index_path) if index_path else default_index_path(shelf_root)
     now = now or (lambda: datetime.now(timezone.utc))
@@ -385,8 +429,11 @@ def update(shelf_root: str | Path, embedder: Embedder | None, *, index_path: str
                                    policy_version=policy.POLICY_VERSION, chunker_version=chunker.CHUNKER_VERSION,
                                    built_at=_utc(now()), **career_meta(career))
                 donor = _donor(Path(donor_path), ident) if donor_path is not None and not keyword_only else None
+                if donor_check and donor_path is not None and donor is None:
+                    return {"code": DONOR_UNUSABLE}         # asked to copy: another embedder, chunker or an unreadable file is refused
                 try:
-                    return _sync(con, shelf_root, embedder, ident, now, only, limit, keyword_only, donor, career, budget_s)
+                    return _sync(con, shelf_root, embedder, ident, now, only, limit, keyword_only, donor, career, budget_s,
+                                 donor_check and donor is not None)
                 finally:
                     if donor is not None:
                         donor.close()

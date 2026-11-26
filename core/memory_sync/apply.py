@@ -107,6 +107,10 @@ WINDOW_TZ, WINDOW_END_HOUR = ZoneInfo("America/Chicago"), 6        # the standin
 EMBED_NETWORK = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$")
 EMBEDDER_URL = re.compile(r"^http://[a-z0-9][a-z0-9.-]{0,62}:[0-9]{2,5}$")       # an internal container name or loopback, no path
 SEED_ENDINGS = frozenset({"ok", "budget_spent", "outside_window"})            # a slice that ends like this is not a failure
+# The one-time copy (#660, the owner's decision of 26 Nov): the Mac's own meaning index, taken from the latest published production
+# snapshot, lends its vectors to the seed. Lives beside the seed index until the seed completes; the seed spot-checks what it lends.
+DONOR_NAME, DONOR_DOC = "mac-donor.sqlite", "DONOR.json"
+DONOR_FAILURES = frozenset({"donor_mismatch", "donor_unusable"})                 # the seed folder is discarded whole; the next slice embeds
 # A whole batch fails its chain or its encryption: reject it (ack every manifest version) and never retry that batch id.
 INTEGRITY = frozenset({"complete_unreadable", "manifest_mismatch", "manifest_unreadable", "manifest_format", "ciphertext_mismatch",
                        "plaintext_mismatch", "decrypt_failed", "archive_unsafe", "batch_doc_unreadable", "batch_doc_mismatch",
@@ -191,11 +195,12 @@ def window_deadline(now: datetime) -> float:
 
 # ── the index runner: where the index is written and probed ──
 def index_step(shelf: Path, index: Path, only: list | None, *, embedder=None, update_all: bool = False,
-               budget_s: float | None = None) -> dict:
+               budget_s: float | None = None, donor_path: Path | None = None) -> dict:
     """Update (``only`` = record ids) or rebuild (``only`` = None) the index file ``index`` from ``shelf`` (the shelf is only read: the docker
     runner mounts it read-only). Keyword-only without ``embedder``; with one (#660), a meaning index: ``only`` updates and embeds new chunk
     text, ``update_all`` brings the whole index up to date with the shelf (the seed's slice, within ``budget_s``; a promotion), and a rebuild
-    reuses the old file's vectors. Runs in-process for ``host`` and as ``vault_apply.py index-step`` inside the image for ``docker:``. Counts
+    reuses the old file's vectors. ``donor_path`` (the seed only): the Mac's index lends vectors, spot-checked against this embedder.
+    Runs in-process for ``host`` and as ``vault_apply.py index-step`` inside the image for ``docker:``. Counts
     and a fixed code only."""
     from core.memory_index import indexer
     shelf, index = Path(shelf), Path(index)
@@ -205,7 +210,8 @@ def index_step(shelf: Path, index: Path, only: list | None, *, embedder=None, up
         else:
             out = indexer.update(shelf, None, index_path=index, keyword_only=True, only=list(only), min_free_bytes=None)
     elif update_all:
-        out = indexer.update(shelf, embedder, index_path=index, min_free_bytes=None, budget_s=budget_s)
+        out = indexer.update(shelf, embedder, index_path=index, min_free_bytes=None, budget_s=budget_s, donor_path=donor_path,
+                             donor_check=donor_path is not None)
     elif only is None:
         out = indexer.rebuild(shelf, embedder, index_path=index, min_free_bytes=None, reuse_vectors=True)
     else:
@@ -230,12 +236,13 @@ class HostRunner:
         return _checked(index_step(build / "shelf", build / "index" / P.INDEX_NAME, only, embedder=self.embedder if meaning else None,
                                    update_all=update_all))
 
-    def seed(self, shelf: Path, seed_index: Path, budget_s: float, deadline: float | None) -> dict:
+    def seed(self, shelf: Path, seed_index: Path, budget_s: float, deadline: float | None, donor: bool = False) -> dict:
         old = os.environ.get("MOI_BATCH_DEADLINE_EPOCH")
         if deadline is not None:
             os.environ["MOI_BATCH_DEADLINE_EPOCH"] = repr(deadline)
         try:
-            return index_step(shelf, seed_index, None, embedder=self.embedder, update_all=True, budget_s=budget_s)
+            return index_step(shelf, seed_index, None, embedder=self.embedder, update_all=True, budget_s=budget_s,
+                              donor_path=seed_index.parent / DONOR_NAME if donor else None)
         finally:
             if old is None:
                 os.environ.pop("MOI_BATCH_DEADLINE_EPOCH", None)
@@ -277,11 +284,12 @@ class DockerRunner:
                 "index-step", "--shelf", "/shelf", "--index", f"/index/{P.INDEX_NAME}", *tail,
                 *(["--embedder-url", self.embedder_url] if meaning else [])]
 
-    def seed_argv(self, shelf: Path, seed_dir: Path, budget_s: float, deadline: float | None) -> list:
+    def seed_argv(self, shelf: Path, seed_dir: Path, budget_s: float, deadline: float | None, donor: bool = False) -> list:
         env = {} if deadline is None else {"MOI_BATCH_DEADLINE_EPOCH": repr(deadline)}
         return [*self._base(self.network, env), "-v", f"{shelf}:/shelf:ro", "-v", f"{seed_dir}:/index",
                 "--entrypoint", "python3", self.image, "-I", "-B", "/app/scripts/vault/vault_apply.py", "index-step", "--shelf", "/shelf",
-                "--index", f"/index/{P.INDEX_NAME}", "--update-all", "--budget-s", str(int(budget_s)), "--embedder-url", self.embedder_url]
+                "--index", f"/index/{P.INDEX_NAME}", "--update-all", "--budget-s", str(int(budget_s)), "--embedder-url", self.embedder_url,
+                *(["--donor", f"/index/{DONOR_NAME}"] if donor else [])]
 
     def _one_line(self, argv: list, timeout: float) -> dict:
         try:
@@ -307,10 +315,10 @@ class DockerRunner:
             only_file.unlink(missing_ok=True)
         return _checked(out)
 
-    def seed(self, shelf: Path, seed_index: Path, budget_s: float, deadline: float | None) -> dict:
+    def seed(self, shelf: Path, seed_index: Path, budget_s: float, deadline: float | None, donor: bool = False) -> dict:
         if not self.meaning:
             raise BackupError("bad_arguments")
-        out = self._one_line(self.seed_argv(shelf, seed_index.parent, budget_s, deadline), budget_s + SEED_TIMEOUT_GRACE_S)
+        out = self._one_line(self.seed_argv(shelf, seed_index.parent, budget_s, deadline, donor), budget_s + SEED_TIMEOUT_GRACE_S)
         if out.get("protocol") != INDEX_PROTOCOL:
             raise BackupError("index_runner_incompatible")
         return out
@@ -1060,6 +1068,17 @@ def seed_doc(seed_dir: Path) -> dict | None:
     return doc if isinstance(doc, dict) else None
 
 
+def seed_donor_doc(seed_dir: Path) -> dict | None:
+    """The waiting copy's evidence (``DONOR.json``), when the copy is in place."""
+    if not (seed_dir / DONOR_NAME).is_file():
+        return None
+    try:
+        doc = json.loads((seed_dir / DONOR_DOC).read_text())
+    except (OSError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
 def seed_complete(seed_dir: Path) -> bool:
     """The last slice covered the whole shelf it ran on, and the seed file is a meaning index made with the pinned embedder."""
     doc = seed_doc(seed_dir)
@@ -1114,23 +1133,145 @@ def run_seed(*, vault_root: str, index_runner, owner_uid: int = 0, reader_uid: i
             have = seed_index.stat().st_size if seed_index.is_file() else 0
             base_bytes = base_index.stat().st_size if base_index.is_file() else 0
             B.ensure_space(lay.work, max(0, 3 * base_bytes - have) + P.SLACK, usage=usage)   # vectors make the index ~3x a keyword one
+            donor = (seed_dir / DONOR_NAME).is_file() and (seed_dir / DONOR_DOC).is_file()
             before = time.monotonic()
-            out = runner.seed(base / "shelf", seed_index, slice_s, window_deadline(started))
+            if donor:
+                out = runner.seed(base / "shelf", seed_index, slice_s, window_deadline(started), donor=True)
+            else:
+                out = runner.seed(base / "shelf", seed_index, slice_s, window_deadline(started))
             code = str(out.get("code"))
             counts = {k: v for k, v in out.items() if isinstance(v, int) and not isinstance(v, bool) and V.CODE.match(k)}
-            for extra in seed_dir.iterdir():                     # the indexer's lock and journal: never anything else of value
-                if extra.name not in (P.INDEX_NAME, SEED_DOC):
+            if code in DONOR_FAILURES:
+                # A lent vector disagreed with this embedder (or the copy is not usable here): nothing built with it is kept.
+                if not B.remove_tree(seed_dir):
+                    raise BackupError("cleanup_failed")
+                raise BackupError(f"seed_failed:{code}")
+            keep = {P.INDEX_NAME, SEED_DOC} | ({DONOR_NAME, DONOR_DOC} if donor and code != "ok" else set())
+            for extra in seed_dir.iterdir():                     # the indexer's lock and journal (and, once complete, the copy)
+                if extra.name not in keep:
                     extra.unlink()
+            previous = seed_doc(seed_dir) or {}
             doc = {"format": "vault-meaning-seed/1", "release": current, "complete": code == "ok", "code": code if V.CODE.match(code) else
                    "unknown", "at": _utc(clock()), "seconds": round(time.monotonic() - before, 1), "counts": counts}
+            if donor or previous.get("donor"):                  # the copy's evidence, summed over the slices that used it
+                was = previous.get("donor") or {}
+                doc["donor"] = {"vectors": int(was.get("vectors", 0)) + counts.get("donor_vectors", 0),
+                                "checked": int(was.get("checked", 0)) + counts.get("donor_checked", 0),
+                                "min_cosine": DONOR_MIN_COSINE_TEXT}
             V.write_json_atomic(seed_dir / SEED_DOC, doc)
             if code not in SEED_ENDINGS:
                 raise BackupError(f"seed_failed:{doc['code']}")
-            return {"code": code, "complete": code == "ok", "release": current, **counts}
+            return {"code": code, "complete": code == "ok", "release": current, "donor": donor, **counts}
         finally:
             lock.__exit__(None, None, None)
     finally:
         os.umask(old_umask)
+
+
+DONOR_MIN_COSINE_TEXT = "0.999"                  # core.memory_index.indexer.DONOR_MIN_COSINE, as text (the host needs no index code)
+
+
+def run_seed_donor(*, dest: str, vault_root: str, identity_spec: str, age_bin: str = "age", expect_age: str | None = None,
+                   aws_bin: str = "aws", owner_uid: int = 0, reader_uid: int = 0, reader_gid: int = 0, require_root: bool = True,
+                   run=subprocess.run, fetch=B.fetch_identity, usage=shutil.disk_usage, now=None, allow_outside_window: bool = False,
+                   admission: "P.Admission | None" = None) -> dict:
+    """The one-time copy (#660): put the Mac's meaning index, from the latest COMPLETE published production snapshot, beside the seed as
+    its donor. Chain -> ciphertext hash -> decrypt with the root-only identity -> plaintext hash -> the copy must be a meaning index made
+    with the pinned embedder, one vector per chunk, ``quick_check`` ok. Downloads only the index object, never the shelf. Never touches a
+    release, ``current`` or the seed index; the seed slices then borrow its vectors (spot-checked) and drop it once complete.
+    Returns ``{"code": donor_ready | donor_present | seed_not_needed | outside_window, ...}``."""
+    if require_root and os.geteuid() != 0:
+        raise BackupError("root_required")
+    clock = now or (lambda: datetime.now(timezone.utc))
+    if not allow_outside_window and not in_window(clock()):
+        return {"code": "outside_window"}
+    old_umask = os.umask(0o077)
+    try:
+        B.check_age(age_bin, expect_age)
+        d = B.Dest(dest, aws_bin=aws_bin, run=run)
+        lay = P.Layout(vault_root, owner_uid=owner_uid, reader_uid=reader_uid, reader_gid=reader_gid)
+        lay.prepare()
+        lay.prepare_work()
+        with P.admitted(admission, lay):
+            current = lay.current_attempt()
+            if current is None:
+                raise BackupError("nothing_installed")
+            kind, digest = index_kind(lay.releases / current / "index" / P.INDEX_NAME)
+            seed_dir = lay.work / SEED_DIR
+            if kind == "meaning" and digest == pinned_digest():
+                return {"code": "seed_not_needed", "release": current}
+            if seed_dir.is_symlink() or (seed_dir.exists() and not seed_dir.is_dir()):
+                raise BackupError("seed_unsafe")
+            if (seed_dir / DONOR_NAME).is_file() and (seed_dir / DONOR_DOC).is_file():
+                return {"code": "donor_present", **{k: v for k, v in (P._json(seed_dir / DONOR_DOC, "donor_unreadable")).items()
+                                                    if k in ("attempt", "chunks")}}
+            B.ensure_space(lay.work, 4 << 20, usage=usage)
+            scratch = Path(tempfile.mkdtemp(prefix=".work-", dir=lay.work))
+            try:
+                os.chmod(scratch, 0o700)
+                pointer, _complete, manifest, manifest_sha, folder = P._fetch_chain(d, scratch)
+                try:
+                    want = manifest["objects"]["index"]
+                    build = manifest["index"]["build"]
+                    need = int(want["bytes"]) + 2 * int(want["plaintext_bytes"]) + P.SLACK
+                except (KeyError, TypeError, ValueError):
+                    raise BackupError("manifest_format") from None
+                if build.get("embedder_digest") != pinned_digest() or build.get("dims") != "768":
+                    raise BackupError("donor_not_pinned")                   # the published index was not made with the pinned embedder
+                B.ensure_space(lay.work, need, usage=usage)
+                cipher, plain = scratch / P.INDEX_OBJECT, scratch / DONOR_NAME
+                d.get(f"{folder}/{want['name']}", cipher)
+                if B.sha256_file(cipher) != want["sha256"] or cipher.stat().st_size != want["bytes"]:
+                    raise BackupError("ciphertext_mismatch")
+                identity = fetch(identity_spec)
+                try:
+                    B.decrypt(age_bin, identity, cipher, plain, scratch)
+                finally:
+                    identity = None
+                cipher.unlink()
+                if B.sha256_file(plain) != want["plaintext_sha256"]:
+                    raise BackupError("plaintext_mismatch")
+                facts = donor_facts(plain)
+                seed_dir.mkdir(mode=0o700, exist_ok=True)
+                os.chown(seed_dir, owner_uid, -1)
+                os.chmod(seed_dir, 0o700)
+                os.chown(plain, owner_uid, -1)
+                os.chmod(plain, 0o600)
+                P._sync_file(plain)
+                os.rename(plain, seed_dir / DONOR_NAME)
+                doc = {"format": "vault-meaning-donor/1", "attempt": pointer["attempt"], "manifest_sha256": manifest_sha,
+                       "created_utc": manifest.get("created_utc"), "plaintext_sha256": want["plaintext_sha256"], "chunks": facts["chunks"],
+                       "embedder_digest": facts["embedder_digest"], "at": _utc(clock())}
+                V.write_json_atomic(seed_dir / DONOR_DOC, doc)
+                P._fsync_dir(seed_dir)
+                return {"code": "donor_ready", "release": current, "attempt": pointer["attempt"], "chunks": facts["chunks"]}
+            finally:
+                if not B.remove_tree(scratch):
+                    raise BackupError("cleanup_failed")
+    finally:
+        os.umask(old_umask)
+
+
+def donor_facts(path: Path) -> dict:
+    """The copy must be a meaning index made with the pinned embedder, with one vector per chunk. Reads plain tables only (no extension)."""
+    try:
+        con = P._ro(path)
+        try:
+            quick = con.execute("PRAGMA quick_check").fetchone()[0]
+            meta = dict(con.execute("SELECT key, value FROM meta").fetchall())
+            chunks = con.execute("SELECT count(*) FROM chunks").fetchone()[0]
+            vec_rows = con.execute("SELECT count(*) FROM vec_rowids").fetchone()[0]
+        finally:
+            con.close()
+    except sqlite3.DatabaseError:
+        raise BackupError("donor_unreadable") from None
+    if quick != "ok":
+        raise BackupError("donor_unreadable")
+    if meta.get("keyword_only") == "1" or meta.get("embedder_digest") != pinned_digest() or meta.get("dims") != "768":
+        raise BackupError("donor_not_pinned")
+    if vec_rows != chunks or chunks == 0:
+        raise BackupError("donor_incomplete")
+    return {"chunks": int(chunks), "embedder_digest": meta["embedder_digest"]}
 
 
 def plan_apply(*, vault_root: str) -> dict:
@@ -1156,7 +1297,9 @@ def plan_apply(*, vault_root: str) -> dict:
         except (BackupError, OSError) as exc:
             out["state_error"] = getattr(exc, "code", "unreadable")
         doc = seed_doc(lay.work / SEED_DIR) if lay.work.is_dir() else None
-        out["meaning_seed"] = None if doc is None else {k: doc.get(k) for k in ("release", "complete", "code", "at", "seconds", "counts")}
+        out["meaning_seed"] = None if doc is None else {k: doc.get(k) for k in ("release", "complete", "code", "at", "seconds", "counts", "donor")}
+        donor = seed_donor_doc(lay.work / SEED_DIR) if lay.work.is_dir() else None
+        out["meaning_donor"] = None if donor is None else {k: donor.get(k) for k in ("attempt", "created_utc", "chunks", "at")}
     if state.root.is_dir():
         try:
             applied = state.read_applied()
