@@ -20,4 +20,12 @@ def install(app):
     app.jinja_env.globals['founders_ui_version'] = hashlib.sha256(b''.join(p.read_bytes() for p in assets if p.is_file())).hexdigest()[:16]
     @app.get("/founders-ui/<path:filename>")
     def founders_ui_asset(filename):
-        return send_from_directory(Path(__file__).parent / "static", filename)
+        # A page names these with ?v=<revision>, so the default cache is right. MC's conversation.js imports partner-menu.js
+        # by its plain path (a module cannot read the revision), and a phone then kept the old menu for hours after a deploy
+        # (staging, 26 Nov). A plain-path request is checked with the server every time (ETag, 304 when unchanged).
+        from flask import request
+        if request.args.get("v"):
+            return send_from_directory(Path(__file__).parent / "static", filename)
+        response = send_from_directory(Path(__file__).parent / "static", filename, max_age=0)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
