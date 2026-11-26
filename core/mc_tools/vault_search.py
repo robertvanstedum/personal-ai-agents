@@ -1,4 +1,8 @@
-"""MC's Vault search (#594): one read-only keyword search of the Vault through ``vault-ask-mc``, from the portal's tools door.
+"""MC's Vault search (#594): one read-only search of the Vault through ``vault-ask-mc``, from the portal's tools door.
+
+Both lists the Ask returns reach MC (#660): exact-word (``keyword``) and meaning (``meaning``) matches, deduplicated by citation, each
+labelled with its list. When MC's index is a meaning index but the meaning half failed this time (the embedder was down or refused),
+the words say only exact words were searched, so MC never presents half a search as a complete one.
 
 What MC can find is decided before it asks: ``vault-ask-mc`` serves only Master Craftsman's own index, built with the career
 filter at index time (``core/memory_index/career_filter.py``, ``mc_index.py``), and refuses any other index
@@ -21,7 +25,7 @@ import json
 import re
 from urllib.parse import urlsplit
 
-TIMEOUT_S = 15                       # a keyword query takes 2 to 5 s in production (13 Nov check)
+TIMEOUT_S = 15                       # a keyword query takes 2 to 5 s in production (13 Nov check); a meaning query adds ~0.3-2.5 s
 MAX_BYTES = 512_000
 OUTPUT_BYTES = 12_000
 PASSAGE_CHARS = 1_200
@@ -43,6 +47,9 @@ WORDS = {
     "vault_unavailable": "The Vault search didn't answer. Nothing was changed. You may retry once; don't infer that nothing exists.",
     "vault_arguments_invalid": "Those search arguments were refused. Use topic words, optional after/before dates (YYYY-MM-DD).",
 }
+MEANING_DOWN = ("Only exact words were searched this time (the meaning search was unavailable), so a passage worded differently may "
+                "be missed; say so if it matters.")
+_MEANING_OFF = frozenset({None, "vector_unavailable", "overview"})        # a keyword-only index or an overview: nothing was missed
 
 
 def check_url(url: str) -> str | None:
@@ -91,13 +98,24 @@ def _hit(hit: dict, label: str) -> dict:
 
 def shape(answer: dict) -> tuple[str, dict]:
     """(words for MC, bounded data) from the Ask service's answer."""
-    hits = [_hit(h, "keyword") for h in answer.get("keyword") or [] if isinstance(h, dict)]
+    hits, cited = [], set()
+    for label in ("keyword", "meaning"):
+        for h in answer.get(label) or []:
+            if isinstance(h, dict):
+                r = _hit(h, label)
+                if r["cite"] not in cited:
+                    cited.add(r["cite"])
+                    hits.append(r)
     slot = answer.get("adjacent")
     if isinstance(slot, dict) and slot.get("passage"):
-        hits.append(_hit(slot, "adjacent"))
+        r = _hit(slot, "adjacent")
+        if r["cite"] not in cited:
+            hits.append(r)
+    status = answer.get("status") or {}
+    meaning = "ok" if status.get("meaning") == "ok" else "off" if status.get("meaning") in _MEANING_OFF else "unavailable"
     data = {"results": hits, "count": len(hits),
             "searched": "raw and curated" if answer.get("tier") == "all" else "curated only",
-            "index_updated_at": (answer.get("status") or {}).get("index_updated_at")}
+            "meaning": meaning, "index_updated_at": status.get("index_updated_at")}
     while len(json.dumps(data, ensure_ascii=False).encode("utf-8")) > OUTPUT_BYTES and data["results"]:
         longest = max(data["results"], key=lambda r: len(r["passage"]))
         if len(longest["passage"]) <= 200:
@@ -105,10 +123,11 @@ def shape(answer: dict) -> tuple[str, dict]:
             data["truncated"] = True
             continue
         longest["passage"] = longest["passage"][: len(longest["passage"]) // 2] + " …"
+    down = [MEANING_DOWN] if meaning == "unavailable" else []
     if not hits:
-        return ("The Vault has no matching passage MC may see. Try other topic words or a date range; don't conclude it "
-                "never happened."), data
-    lines = [HEAD] + [f"- {r['source']}, {r['date']} ({r['tier']}, {r['cite']}): {r['passage'][:160]}" for r in data["results"]]
+        return " ".join(["The Vault has no matching passage MC may see. Try other topic words or a date range; don't conclude it "
+                         "never happened.", *down]), data
+    lines = [HEAD] + [f"- {r['source']}, {r['date']} ({r['tier']}, {r['cite']}): {r['passage'][:160]}" for r in data["results"]] + down
     return "\n".join(lines), data
 
 

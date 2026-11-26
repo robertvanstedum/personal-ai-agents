@@ -12,6 +12,9 @@ services:
       COS_GUILDHALL_DIR: /var/lib/minimoi-guildhall
       COS_MEETING_RECORDS_URL: http://minimoi-records:18880
       COS_MEETING_OBSERVE_TOKEN_FILE: /run/secrets/guildhall/meeting-observe.token
+      # Lane G (#681): Robert's "yes P-XXXX" for a CoS card goes to the portal, signed. Off unless .env sets 1.
+      MINIMOI_COS_ROOM_APPROVALS: ${MINIMOI_COS_ROOM_APPROVALS:-0}
+      COS_ROOM_APPROVE_URL: http://portal:5011
     volumes:
       - type: bind
         source: ${MINIMOI_COS_GUILDHALL_SECRETS:?existing production-only secrets required}
@@ -33,6 +36,10 @@ services:
       MINIMOI_MC_ROOMS_STATE_DIR: /app/runtime/guild/mc-rooms
       MINIMOI_MC_ROOMS_WORK_TOKEN_FILE: /run/secrets/guildhall-mc-work/work.token
       MINIMOI_MC_ROOMS_TOKEN_SHA256: ${MINIMOI_MC_ROOMS_TOKEN_SHA256:?hash of the guildhall-mc service token required}
+      # Lane G (#681): the portal confirms CoS room approvals as the owner named here (production's portal auth id).
+      # Off unless .env sets both; the flag on without the id is refused at start (cos_room_approvals_config_required).
+      MINIMOI_COS_ROOM_APPROVALS: ${MINIMOI_COS_ROOM_APPROVALS:-0}
+      MINIMOI_ROOMS_OWNER_AUTH_ID: ${MINIMOI_ROOMS_OWNER_AUTH_ID:-}
     volumes:
       - type: bind
         source: ${MINIMOI_MC_ROOMS_WORK_SECRETS:?existing production-only secrets required}

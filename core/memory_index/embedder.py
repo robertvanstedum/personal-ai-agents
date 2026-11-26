@@ -9,6 +9,14 @@ nomic-embed-text expects task prefixes (``search_document:`` / ``search_query:``
 so cosine distance in sqlite-vec is well defined whatever the server returns.
 
 ``Embedder`` is the interface; ``OllamaEmbedder`` the real one; tests use their own deterministic implementation.
+
+The real client's identity check (#660) is stricter than the name and digest prefix: a server reporting a full digest must report
+exactly ``PIN_DIGEST_FULL``, and once per process per server a **known-answer probe** embeds a fixed sentence and compares it with
+the reference vector made on the workstation's pinned model (``embedder_probe.json``). A server that names the right digest but
+serves other weights or another quantization is refused (``PinMismatch``).
+
+``release`` unloads the model (``keep_alive=0``) unless ``MOI_OLLAMA_IDLE_KEEP_ALIVE`` says how long to keep it: the shared
+workstation unloads at once; the server's dedicated embedder keeps it loaded between queries.
 """
 from __future__ import annotations
 
@@ -16,12 +24,19 @@ from core.jobs import batch_window
 
 import json
 import math
+import os
 import urllib.error
 import urllib.request
+import re
 from dataclasses import dataclass
+from pathlib import Path
 
 PIN_NAME = "nomic-embed-text"
 PIN_DIGEST = "0a109f422b47"
+PIN_DIGEST_FULL = "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f"
+PROBE_PATH = Path(__file__).with_name("embedder_probe.json")
+IDLE_KEEP_ALIVE_ENV = "MOI_OLLAMA_IDLE_KEEP_ALIVE"
+_KEEP_ALIVE = re.compile(r"^(0|[1-9][0-9]{0,3}[smh])$")
 DIMS = 768
 DOC_PREFIX, QUERY_PREFIX = "search_document: ", "search_query: "
 DEFAULT_URL = "http://127.0.0.1:11434"
@@ -50,6 +65,29 @@ class Identity:
 
     def label(self) -> str:
         return f"{self.name}@{self.version}"
+
+
+def load_probe(path: Path = PROBE_PATH) -> tuple[str, list[float], float]:
+    """(text, unit reference vector, minimum cosine). A missing or malformed probe file refuses (never skips the check)."""
+    try:
+        doc = json.loads(path.read_text())
+        text, vec, floor = doc["text"], doc["vector"], float(doc["min_cosine"])
+        if (doc.get("digest") != PIN_DIGEST_FULL or not isinstance(text, str) or not text or not isinstance(vec, list)
+                or len(vec) != DIMS or not 0.9 <= floor < 1):
+            raise ValueError
+        return text, normalize([float(x) for x in vec]), floor
+    except (OSError, ValueError, KeyError, TypeError, EmbedderUnavailable):
+        raise PinMismatch("embedder probe reference missing or malformed") from None
+
+
+def cosine(a: list[float], b: list[float]) -> float:
+    return sum(x * y for x, y in zip(a, b))           # both unit vectors
+
+
+def idle_keep_alive(environ=None) -> str:
+    """How long the server keeps the model after a run or query: ``0`` (unload now, the default) or ``<n>s|m|h``."""
+    value = (os.environ if environ is None else environ).get(IDLE_KEEP_ALIVE_ENV) or "0"
+    return value if _KEEP_ALIVE.match(value) else "0"
 
 
 def normalize(vec: list[float]) -> list[float]:
@@ -90,11 +128,29 @@ class Embedder:
         """Unload the model now (end of a run or a one-off query). Best effort; never raises."""
 
 
+_PROBED: set[tuple[str, str]] = set()     # (server url, digest) that passed the known-answer probe in this process
+
+
 class OllamaEmbedder(Embedder):
     def __init__(self, url: str = DEFAULT_URL, model: str = f"{PIN_NAME}:latest", timeout: float = 120.0):
         self.url, self.model, self.timeout = url.rstrip("/"), model, timeout
         self._ident: Identity | None = None
         self._used = False
+
+    def check_pin(self, name: str = PIN_NAME, digest: str = PIN_DIGEST) -> Identity:
+        ident = super().check_pin(name, digest)
+        if name != PIN_NAME or digest != PIN_DIGEST:
+            return ident                              # a caller checking another pin gets the base check only
+        if ident.digest != PIN_DIGEST_FULL:
+            raise PinMismatch(f"embedder digest is {ident.digest[:12]}..., not the pinned full digest")
+        key = (self.url, ident.digest)
+        if key not in _PROBED:
+            text, reference, floor = load_probe()
+            got = normalize(self._embed([text])[0])
+            if cosine(got, reference) < floor:
+                raise PinMismatch("embedder failed the known-answer probe: another model behind the pinned name")
+            _PROBED.add(key)
+        return ident
 
     def _post(self, path: str, doc: dict | None, *, cleanup=False) -> dict:
         data = None if doc is None else json.dumps(doc).encode()
@@ -140,11 +196,13 @@ class OllamaEmbedder(Embedder):
         if not self._used:
             return
         try:
-            self._post("/api/embed", {"model": self.model, "input": ["release"], "keep_alive": 0}, cleanup=True)
+            keep = idle_keep_alive()
+            self._post("/api/embed", {"model": self.model, "input": ["release"], "keep_alive": 0 if keep == "0" else keep},
+                       cleanup=True)
         except EmbedderUnavailable:
             pass
         self._used = False
 
 
 __all__ = ["Embedder", "OllamaEmbedder", "Identity", "EmbedderUnavailable", "PinMismatch", "PIN_NAME", "PIN_DIGEST",
-           "DIMS", "normalize"]
+           "PIN_DIGEST_FULL", "DIMS", "normalize", "load_probe", "idle_keep_alive"]

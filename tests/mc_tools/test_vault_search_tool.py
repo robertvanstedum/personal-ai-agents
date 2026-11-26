@@ -199,3 +199,47 @@ class Wiring(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MeaningResults(unittest.TestCase):
+    """#660: MC gets the meaning list too, deduplicated, and is told when the meaning half was unavailable."""
+
+    def run_search(self, doc):
+        return VaultSearch(URL, lambda: TOKEN, http_post=Stub(Reply(doc))).search({"query": "where do the meeting workers live"})
+
+    def test_meaning_hits_are_added_labelled_and_deduplicated(self):
+        doc = answer([hit(1)])
+        doc["meaning"] = [hit(1), hit(2, chair="Grok", passage="the rooms worker image sits in the cos-scheduler repository")]
+        doc["adjacent"] = hit(2)
+        doc["status"]["meaning"] = "ok"
+        state, message, data = self.run_search(doc)
+        self.assertEqual(state, "ok")
+        self.assertEqual([(r["list"], r["source"]) for r in data["results"]], [("keyword", "Claude Code"), ("meaning", "Grok")])
+        self.assertEqual(data["meaning"], "ok")
+        self.assertIn("Grok, 2026-11-13", message)
+        self.assertNotIn("Only exact words", message)
+
+    def test_a_meaning_only_hit_reaches_mc(self):
+        doc = answer([])
+        doc["meaning"] = [hit(3, passage="the note worded quite differently")]
+        doc["status"]["meaning"] = "ok"
+        state, message, data = self.run_search(doc)
+        self.assertEqual((state, data["count"], data["results"][0]["list"]), ("ok", 1, "meaning"))
+
+    def test_a_down_embedder_is_said_not_hidden(self):
+        for status in ("embedder_unavailable", "pin_mismatch"):
+            doc = answer([hit(1)])
+            doc["status"]["meaning"] = status
+            state, message, data = self.run_search(doc)
+            self.assertEqual((state, data["meaning"]), ("ok", "unavailable"))
+            self.assertIn("Only exact words were searched", message)
+            empty = answer([])
+            empty["status"]["meaning"] = status
+            self.assertIn("Only exact words were searched", self.run_search(empty)[1])
+
+    def test_a_keyword_only_index_says_nothing_extra(self):
+        doc = answer([hit(1)])
+        doc["status"]["meaning"] = "vector_unavailable"
+        state, message, data = self.run_search(doc)
+        self.assertEqual(data["meaning"], "off")
+        self.assertNotIn("Only exact words", message)

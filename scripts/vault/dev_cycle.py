@@ -23,6 +23,8 @@ import uuid
 ROOT = Path("/opt/minimoi-staging")
 MAX_ARCHIVE = 256 * 1024 * 1024
 NAME = re.compile(r"dev--(?:c-[0-9a-f]{12}|legacy-[0-9a-f]{16})\.json\Z")
+EMBEDDER_URL = re.compile(r"^http://[a-z0-9][a-z0-9.-]{0,62}:[0-9]{2,5}\Z")
+NETWORK = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}\Z")
 
 
 def failed_status():
@@ -106,9 +108,9 @@ def prune(scratch, now=None):
     return count
 
 
-def run_worker(command, worker):
+def run_worker(command, worker, timeout=300):
     try:
-        subprocess.run(command, check=True, timeout=300)
+        subprocess.run(command, check=True, timeout=timeout)
     finally:
         subprocess.run(["docker", "rm", "-f", worker], stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL, timeout=30)
@@ -118,7 +120,7 @@ def run_worker(command, worker):
             raise ValueError("worker_cleanup_failed")
 
 
-def cycle(image, principal):
+def cycle(image, principal, embed=None):
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", image) or not re.fullmatch(r"[A-Za-z0-9_.@+-]{1,128}", principal):
         raise ValueError("invalid_operator_input")
     if not ROOT.is_dir():
@@ -161,7 +163,9 @@ def cycle(image, principal):
                       (data / "memory", "/vault/memory", "rw"), (data / "memory-index", "/vault/memory-index", "rw"),
                       (data / "vault-jobs", "/vault/jobs", "rw")]
             worker = "dev-memory-feed-" + uuid.uuid4().hex
-            command = ["docker", "run", "--name", worker, "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL",
+            # #660: with the embedder, the worker joins its internal network (no route out) instead of none.
+            network = embed[1] if embed else "none"
+            command = ["docker", "run", "--name", worker, "--rm", "--network", network, "--read-only", "--cap-drop", "ALL",
                        "--security-opt", "no-new-privileges", "--memory", "512m", "--cpus", "1", "--pids-limit", "64",
                        "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--entrypoint", "python"]
             for src, dst, mode in mounts:
@@ -170,8 +174,10 @@ def cycle(image, principal):
                         "/source/mc", "--shelf-root", "/vault/memory", "--index-path", "/vault/memory-index/memory.sqlite",
                         "--jobs-root", "/vault/jobs",
                         # #594: MC's own index beside the full one; a failed MC build never fails the feed.
-                        "--mc-index-path", "/vault/memory-index/memory-mc.sqlite"]
-            run_worker(command, worker)
+                        "--mc-index-path", "/vault/memory-index/memory-mc.sqlite",
+                        *(["--embedder-url", embed[0]] if embed else [])]
+            # #660: the first run with the embedder embeds the whole Dev shelf once (later runs borrow the last index's vectors).
+            run_worker(command, worker, 1800 if embed else 300)
             publish_status()
 
 
@@ -179,10 +185,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True)
     parser.add_argument("--principal", required=True)
+    parser.add_argument("--embedder-url", help="#660: e.g. http://vault-embedder:11434 (with --embed-network)")
+    parser.add_argument("--embed-network", help="#660: the embedder's internal network, e.g. minimoi-vault-embed")
     args = parser.parse_args()
     os.umask(0o077)
+    if bool(args.embedder_url) != bool(args.embed_network) or (args.embedder_url and not (
+            EMBEDDER_URL.match(args.embedder_url) and NETWORK.match(args.embed_network))):
+        print('{"state":"failed","code":"bad_embedder_arguments"}')
+        raise SystemExit(2)
     try:
-        cycle(args.image, args.principal)
+        cycle(args.image, args.principal, (args.embedder_url, args.embed_network) if args.embedder_url else None)
     except BlockingIOError:
         print('{"state":"busy"}')
         raise SystemExit(0)

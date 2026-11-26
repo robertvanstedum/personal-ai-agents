@@ -58,7 +58,16 @@ def test_valid_vector_and_request_preserved(monkeypatch):
 
 
 def test_valid_model_and_pin_preserved(monkeypatch):
-    replies(monkeypatch, {'models': [{'name': E.PIN_NAME + ':latest', 'digest': E.PIN_DIGEST + 'f' * 52}]})
+    # The real client also wants the full pinned digest and the known-answer probe (#660): both answered here.
+    text, reference, _floor = E.load_probe()
+    def urlopen(request, **kwargs):
+        if request.full_url.endswith('/api/tags'):
+            doc = {'models': [{'name': E.PIN_NAME + ':latest', 'digest': E.PIN_DIGEST_FULL}]}
+        else:
+            doc = {'embeddings': [reference]}
+        return io.BytesIO(json.dumps(doc).encode())
+    monkeypatch.setattr(E.urllib.request, 'urlopen', urlopen)
+    monkeypatch.setattr(E, '_PROBED', set())
     adapter = E.OllamaEmbedder()
     assert adapter.check_pin().dims == E.DIMS
     assert adapter.identity() is adapter.identity()
@@ -71,7 +80,8 @@ def test_bad_reply_preserves_old_index_on_rebuild(tmp_path, monkeypatch, bad_vec
     path = indexer.default_index_path(shelf.root)
     before = path.read_bytes()
     adapter = E.OllamaEmbedder()
-    adapter._ident = E.Identity(E.PIN_NAME + ':latest', E.PIN_DIGEST + 'f' * 52, E.DIMS)
+    adapter._ident = E.Identity(E.PIN_NAME + ':latest', E.PIN_DIGEST_FULL, E.DIMS)
+    monkeypatch.setattr(E, '_PROBED', {(adapter.url, E.PIN_DIGEST_FULL)})     # probe passed: the batch reply is what fails
     def malformed_batch(request, **kwargs):
         count = len(json.loads(request.data)['input'])
         return io.BytesIO(json.dumps({'embeddings': [bad_vector] * count}).encode())

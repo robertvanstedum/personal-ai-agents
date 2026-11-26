@@ -532,7 +532,8 @@
    "environment": [
     "MINIMOI_ROLE=production",
     "PYTHONDONTWRITEBYTECODE=1",
-    "MOI_OLLAMA_URL=http://127.0.0.1:9"
+    "MOI_OLLAMA_URL=http://vault-embedder:11434",
+    "MOI_OLLAMA_IDLE_KEEP_ALIVE=15m"
    ],
    "healthcheck": {
     "interval": "60s",
@@ -546,9 +547,10 @@
     "timeout": "5s"
    },
    "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}",
-   "mem_limit": "512m",
+   "mem_limit": "768m",
    "networks": [
-    "vault-internal"
+    "vault-internal",
+    "vault-embed-internal"
    ],
    "profiles": [
     "vault"
@@ -609,7 +611,8 @@
    "environment": [
     "MINIMOI_ROLE=production",
     "PYTHONDONTWRITEBYTECODE=1",
-    "MOI_OLLAMA_URL=http://127.0.0.1:9"
+    "MOI_OLLAMA_URL=http://vault-embedder:11434",
+    "MOI_OLLAMA_IDLE_KEEP_ALIVE=15m"
    ],
    "healthcheck": {
     "interval": "60s",
@@ -623,9 +626,10 @@
     "timeout": "5s"
    },
    "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}",
-   "mem_limit": "384m",
+   "mem_limit": "640m",
    "networks": [
-    "vault-mc-internal"
+    "vault-mc-internal",
+    "vault-embed-internal"
    ],
    "profiles": [
     "vault-mc"
@@ -674,6 +678,42 @@
      "target": "/vault-log",
      "type": "bind"
     }
+   ]
+  },
+  "vault-embedder": {
+   "cap_drop": [
+    "ALL"
+   ],
+   "container_name": "minimoi-vault-embedder",
+   "cpus": 1.5,
+   "healthcheck": {
+    "interval": "60s",
+    "retries": 3,
+    "start_period": "30s",
+    "test": [
+     "CMD-SHELL",
+     "ollama list | grep -Eq '^nomic-embed-text:latest[[:space:]]+0a109f422b47'"
+    ],
+    "timeout": "10s"
+   },
+   "image": "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler@${MINIMOI_VAULT_EMBEDDER_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}",
+   "mem_limit": "1g",
+   "memswap_limit": "1g",
+   "networks": [
+    "vault-embed-internal"
+   ],
+   "pids_limit": 128,
+   "profiles": [
+    "vault",
+    "vault-mc"
+   ],
+   "read_only": true,
+   "restart": "unless-stopped",
+   "security_opt": [
+    "no-new-privileges:true"
+   ],
+   "tmpfs": [
+    "/tmp:size=64m,mode=1777"
    ]
   }
  },
