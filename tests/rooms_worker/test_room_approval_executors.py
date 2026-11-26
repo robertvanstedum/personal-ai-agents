@@ -291,6 +291,66 @@ def test_containerized_mc_gets_its_copy_in_its_own_workspace_folder(tmp_path):
         assert mc_files.agent_dirs(dict(b.environ, **bad)) is None
 
 
+def _docx(paragraphs):
+    import io
+    import zipfile
+    body = "".join(f"<w:p><w:r><w:t>{p}</w:t></w:r></w:p>" for p in paragraphs)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/'
+           f'wordprocessingml/2006/main"><w:body>{body}</w:body></w:document>')
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("word/document.xml", xml)
+    return buf.getvalue()
+
+
+def _container_bridge(tmp_path, data, name):
+    import os
+    from minimoi_portal.guild_ui.mc_rooms_bridge import Bridge
+    b = Bridge.__new__(Bridge)
+    b.environ = {"MINIMOI_MC_AGENT_FILES_DIR": str(tmp_path / "mc-agent-evidence"),
+                 "MINIMOI_MC_AGENT_FILES_MC_DIR": "/home/node/.openclaw/workspace-mc/mc-evidence",
+                 "MINIMOI_MC_AGENT_FILES_UID": str(os.getuid() or 1000), "MINIMOI_MC_AGENT_FILES_GID": str(os.getgid() or 1000)}
+    b.services = SimpleNamespace(store=None)
+    b.principal, b.records = "robert", FakeRecords(data)
+    fact = dict(FACT, name=name, sha256=hashlib.sha256(data).hexdigest(), bytes=len(data))
+    turn = {"id": TURN, "room": ROOM, "claim_id": "claim-1",
+            "transcript": [{"seq": 3, "kind": "document", "text": f"(shared a file: {name})", "file": fact}]}
+    return b, turn
+
+
+def test_containerized_mc_gets_a_text_rendering_of_a_word_file(tmp_path):
+    """B2 on staging, 26 Nov: MC's host reader refuses every path in its workspace (.openclaw is denied), so a .docx
+    shared in a meeting could not be read. The portal now puts a verified text rendering beside the copy."""
+    data = _docx(["Reading list", "I need to read Copperleaf before December."])
+    b, turn = _container_bridge(tmp_path, data, "test_file.docx")
+    lines, gap = b.meeting_files(turn)
+    assert gap is None and len(lines) == 3
+    assert "test_file.docx: /home/node/.openclaw/workspace-mc/mc-evidence/r-" in lines[1]
+    assert "test_file.docx.txt: /home/node/.openclaw/workspace-mc/mc-evidence/r-" in lines[2]
+    assert "read this one, not the .docx" in lines[2]
+    files = {p.name: p for p in (tmp_path / "mc-agent-evidence").rglob("*") if p.is_file()}
+    assert files["01-test_file.docx"].read_bytes() == data                  # the original is still there, unchanged
+    assert "I need to read Copperleaf before December." in files["02-test_file.docx.txt"].read_text()
+    # A second turn over the same file reuses the verified copy (same request id, manifest still binds both rows).
+    again, gap = b.meeting_files(turn)
+    assert gap is None and again == lines and len(b.records.calls) == 1
+
+
+def test_a_word_file_the_reader_refuses_still_reaches_mc_with_a_plain_note(tmp_path):
+    b, turn = _container_bridge(tmp_path, b"not a zip at all", "broken.docx")
+    lines, gap = b.meeting_files(turn)
+    assert gap is None and len(lines) == 3
+    [note] = [p for p in (tmp_path / "mc-agent-evidence").rglob("02-broken.docx.txt")]
+    assert note.read_text().startswith("This Word file could not be turned into text (host_docx_refused)")
+
+
+def test_a_text_file_gets_no_extra_rendering(tmp_path):
+    b, turn = _container_bridge(tmp_path, NOTES, "notes.md")
+    lines, gap = b.meeting_files(turn)
+    assert gap is None and len(lines) == 2
+
+
 def test_a_changed_meeting_file_is_never_handed_to_mc(tmp_path):
     lines, gap = _file_bridge(tmp_path, FakeRecords(b"tampered")).meeting_files(_meeting_turn())
     assert lines == [] and "hash" in gap
