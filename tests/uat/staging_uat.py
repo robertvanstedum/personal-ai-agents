@@ -1116,9 +1116,26 @@ def case_b5(s: Session) -> dict:
     return ev
 
 
+# Each UAT chat lands in the vault, so asking the same question every run fills CoS's evidence budget with earlier UAT
+# chats and crowds out the target (release session, 26 Nov: an earlier C1 chat outranked gghhx28k). The wording
+# rotates by run id as a stopgap; the real fix is keeping UAT chats out of the vault index (follow-up).
+C1_QUESTIONS = [
+    "Did we ever talk about why I'm hearing back from employers less often lately?",
+    "Have we discussed the reasons companies seem to reply to me less these days?",
+    "Did we ever go over why fewer hiring managers are getting back to me recently?",
+    "Have we talked before about why my applications get fewer responses than they used to?",
+    "Did I ever bring up with you that recruiters and firms answer me less often now, and why?",
+    "Have we covered why the callbacks from prospective employers have dropped off?",
+]
+
+
+def _rotating(questions: list[str], run_id: str) -> str:
+    return questions[int(hashlib.sha256(run_id.encode()).hexdigest(), 16) % len(questions)]
+
+
 @case("C1", "CoS meaning search finds the employers conversation")
 def case_c1(s: Session) -> dict:
-    r = cos_ask(s, "Did we ever talk about why I'm hearing back from employers less often lately?", f"uat-{s.run_id} C1")
+    r = cos_ask(s, _rotating(C1_QUESTIONS, s.run_id), f"uat-{s.run_id} C1")
     m = match_c1(r["reply"])
     ev = {**r, **m}
     if not m["ok"]:
@@ -1128,8 +1145,12 @@ def case_c1(s: Session) -> dict:
 
 @case("C2", "MC meaning search finds the slip-ups discussion, no career material")
 def case_c2(s: Session) -> dict:
-    r = mc_ask(s, "Did we ever discuss collecting the foreign-language slip-ups from my day-to-day chats for a "
-                  "study list?", "c2")
+    r = mc_ask(s, _rotating([
+        "Did we ever discuss collecting the foreign-language slip-ups from my day-to-day chats for a study list?",
+        "Have we talked about gathering the language mistakes I make in everyday chats into something to review?",
+        "Did we ever plan to save the errors from my daily foreign-language messages so I can practise them later?",
+        "Have we discussed turning the little language blunders from my normal conversations into revision material?",
+    ], s.run_id), "c2")
     m = match_c2(r["reply"])
     ev = {"conversation_id": r["conversation_id"], "reply": r["reply"], "screenshots": [r["screenshot"]], **m}
     if not m["ok"]:
