@@ -1100,7 +1100,7 @@ def case_b5(s: Session) -> dict:
     ev["card"] = card
     if not card:
         said = ask.get("reply") or ""
-        if (re.search(r"no repository is configured", said, re.I)
+        if (re.search(r"no repository (?:is )?(?:configured|set)", said, re.I)
                 and re.search(r"nothing was (proposed|created)", said, re.I)
                 and not re.search(r"github\.com/[^\s]+/issues/\d+", said)):
             raise CaseSkip("staging has no repository for issue writes, so MC offers no card and writes nothing; "
