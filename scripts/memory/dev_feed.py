@@ -197,6 +197,8 @@ def run(*, cos_root, mc_root, shelf_root, index_path, jobs_root, min_free=MIN_FR
                 except cos.Refused as exc:
                     if str(exc) == "private":
                         counts["cos_private"] += 1
+                    elif str(exc) == "uat":              # the automatic UAT's own chats: a deliberate exclusion, not an error
+                        counts["cos_uat"] += 1
                     else:
                         errors[family + "_refused"] += 1
                 except (OSError, ValueError, TypeError, KeyError):

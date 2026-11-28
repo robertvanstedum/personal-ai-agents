@@ -146,7 +146,7 @@ class Policy(unittest.TestCase):
 
     def test_the_prod_revision_adds_only_this_rule(self):
         prod = json.loads((ROOT / "services/mc_operations/policy/mc-policy.prod.json").read_text())
-        self.assertEqual(prod["revision"], "mc-prod-20261125-work-documents")   # one revision with #594 vault_search_v1 and #599 work documents
+        self.assertEqual(prod["revision"], "mc-prod-20261127-delegate-result")   # after #594 vault_search_v1 and #599 work documents; #693 added delegate_result_v1
         handlers = [r["handler"] for r in prod["rules"]]
         self.assertEqual(handlers.index("web_fetch_v1"), handlers.index("open_card_v1") + 1)
 

@@ -144,8 +144,11 @@ class Worker:
                 with self._lock:
                     self._inflight.discard(item["turn_id"])
         if self.relay.ready():
-            self.work.call("POST", f"/hosted-teammates/{self.teammate}/reachable",
-                           {"readyz_at": datetime.now(timezone.utc).isoformat()}, key=str(uuid4()))
+            report = {"readyz_at": datetime.now(timezone.utc).isoformat()}
+            held = getattr(self.relay, "held_reason", None)
+            if held:                         # connected, and holding for the owner (a paused MC): not a failure
+                report["held"] = held
+            self.work.call("POST", f"/hosted-teammates/{self.teammate}/reachable", report, key=str(uuid4()))
         elif getattr(self.relay, "unready_reason", None):
             self.work.call("POST", f"/hosted-teammates/{self.teammate}/reachable",
                            {"readyz_at": datetime.now(timezone.utc).isoformat(), "unready": self.relay.unready_reason},
@@ -231,7 +234,9 @@ class Worker:
                 log(event="dispatch_refused", turn=turn["id"], state=result.get("state"))
                 return None
             if watcher.cancelled:
-                if getattr(transport, 'stop_guaranteed', True) is False:
+                # A stop cannot be confirmed for a transport that may already have acted, unless the transport says
+                # nothing was ever sent for this turn (a definite pre-dispatch refusal): then it is a plain stop.
+                if getattr(transport, 'stop_guaranteed', True) is False and result.get('nothing_sent') is not True:
                     self.fail(turn, turn['claim_id'], 'uncertain', 'stop_unconfirmed')
                     return None
                 if result["text"]:

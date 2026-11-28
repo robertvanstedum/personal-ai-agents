@@ -49,11 +49,13 @@ _SESSION_KEY = re.compile(r"agent:(?P<agent>[a-z][a-z0-9-]{0,63}):openai-user:(?
 STATUSES = ("done", "refused", "unknown")
 _SERVED_FIELD = re.compile(r"[A-Za-z0-9._:/-]{1,80}")
 # Per-turn admission limits for each bound tool (MC-equivalent defaults, design v0.1 §4).
-LIMITS = {"cos_actions": 20, "cos_tasks": 5, "cos_board": 20, "cos_send_to_mc": 3}
+# cos_tasks was 5 until #692: starting an initiative in one turn is find, list, file, sources, brief, status page and
+# state, about nine calls, and the sixth was refused on its first live run (Dev, 27 Nov 2026).
+LIMITS = {"cos_actions": 20, "cos_tasks": 12, "cos_board": 20, "cos_send_to_mc": 3}
 NATIVE_TOOLS = frozenset({"write", "edit", "exec", "apply_patch", "process"})
 # What a spoken lookup's turn may do (Robert, 8 Nov: reads need no yes, writes still do): read only. Anything else on
 # such a turn is refused before admission, so nothing changes and no quota is spent.
-READ_OPERATIONS = {"cos_tasks": frozenset({"status", "helper_result", "work_find", "work_read", "initiative_list", "initiative_read"}), "cos_actions": frozenset({"list", "get"}), "cos_board": frozenset({"read", "list", "result"})}
+READ_OPERATIONS = {"cos_tasks": frozenset({"status", "helper_result", "work_find", "work_read", "initiative_list", "initiative_read", "initiative_find", "initiative_doc_read"}), "cos_actions": frozenset({"list", "get"}), "cos_board": frozenset({"read", "list", "result"})}
 READ_ONLY_REFUSAL = ("Robert asked by voice for a lookup only, so nothing was changed. Answer from what you can read, "
                      "and tell him that a change needs him to ask for it, so he can confirm it.")
 _log = logging.getLogger("cos_tools")

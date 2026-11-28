@@ -220,7 +220,19 @@ vm.runInContext(String.raw`
   meeting.turns = [{id:'paused',addressee:'mc',state:'failed',disposition:'mc_paused'}];
   renderTurns();
   assert.ok(failureText('MC','mc_paused','mc').includes('earlier action is not replayed'));
-  assert.ok($('[data-rm-turns]').find('[href]').some(n=>n.attrs.href===page.urls.floor));
+  assert.ok(failureText('MC','mc_paused','mc').includes('holds MC everywhere (Craft, voice and meetings)'));
+  // #699: a paused MC is connected and waiting for the owner, and the other definite refusals say nothing was sent.
+  assert.equal(participantState({id:'mc',label:'MC',rsvp:'accepted',reach:{state:'reachable',reason:null,held:'mc_paused'}}),'Connected · paused, waiting for you');
+  assert.equal(participantState({id:'mc',label:'MC',rsvp:'accepted',reach:{state:'reachable',reason:null}}),'Available');
+  assert.equal(participantState({id:'mc',label:'MC',rsvp:'accepted',reach:{state:'away',reason:null,held:'mc_paused'}}),'Not reachable');
+  for (const reason of ['mc_busy','mc_queue_pending','admission_refused','admission_unavailable']) {
+    assert.ok(failureText('MC',reason,'mc').includes('Nothing was sent.'), reason);
+    assert.ok(!failureText('MC',reason,'mc').includes("reply failed"), reason);
+  }
+  // #690: the button asks Craft for the paused conversation, never the general page (which opens the last-used chat).
+  const review=$('[data-rm-turns]').find('[href]');
+  assert.equal(review.map(n=>n.attrs.href).join(' '),'/guild-next/guild/build?paused=1');
+  assert.equal(review[0].textContent,'Review in Craft');
   meeting.turns = [
     {id:'retry',addressee:'mc',state:'committed',trigger_seq:20,attempt:1},
     {id:'original',addressee:'mc',state:'failed',trigger_seq:20,attempt:0,round:{round_id:'round',position:0}}];

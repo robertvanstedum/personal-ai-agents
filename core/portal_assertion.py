@@ -71,12 +71,16 @@ def load_key(path):
 
 
 def sign(key, *, audience, subject, method, target, body: bytes, env, now=None, nonce=None,
-         lifetime=MAX_LIFETIME) -> str:
+         lifetime=MAX_LIFETIME, uat: bool = False) -> str:
+    """``uat=True`` adds the claim ``"uat": true`` (the staging UAT session, minimoi_portal/uat_signin.py); otherwise the
+    claim is absent and the assertion is byte for byte what it was before the claim existed."""
     kid, secret = key[0], _bytes(key[1])
     now = int(time.time()) if now is None else int(now)
     claims = {"aud": audience, "env": env, "kid": kid, "sub": subject, "iat": now, "exp": now + lifetime,
               "nonce": nonce or b64(os.urandom(18)), "method": method.upper(), "target": target,
               "body": hashlib.sha256(body or b"").hexdigest()}
+    if uat is True:
+        claims["uat"] = True
     payload = "v2." + b64(json.dumps(claims, separators=(",", ":"), sort_keys=True).encode("utf-8"))
     return payload + "." + b64(hmac.new(secret, payload.encode("ascii"), hashlib.sha256).digest())
 
@@ -90,6 +94,16 @@ def claimed_kid(header):
         return kid if isinstance(kid, str) and 0 < len(kid) <= 80 else None
     except Exception:
         return None
+
+
+def claimed_uat(header) -> bool:
+    """Whether an assertion carries ``"uat": true``. Read WITHOUT checking the MAC: meaningful only for a header that
+    ``verify`` has already accepted (domains/cos/owner_assertion.py asks in that order)."""
+    try:
+        claims = json.loads(unb64(header.split(".")[1]).decode("utf-8"))
+        return isinstance(claims, dict) and claims.get("uat") is True
+    except Exception:
+        return False
 
 
 def verify(header, key, *, audience, env, method, target, body, spend, now=None) -> str:

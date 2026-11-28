@@ -237,6 +237,24 @@ def test_unknown_finish_pauses_and_only_a_matching_continue_lifts_it(owner):
     assert admit(led, owner).result == "claimed"
 
 
+def test_paused_entry_names_the_conversation_holding_the_pause(owner):
+    """#690: the pause's own ledger entry, so a link can open its conversation; never a later or another owner's."""
+    led = ledger()
+    assert led.paused_entry(owner) is None
+    first = admit(led, owner, conv="c-earlier")
+    led.finish(first.claim, "answered", {})
+    assert led.paused_entry(owner) is None
+    a = admit(led, owner, conv="c-meeting-turn", note="room-abc-owner")
+    led.finish(a.claim, "unknown", {"failure_class": "timeout_uncertain"})
+    assert admit(led, owner, conv="c-later").result == "paused"
+    entry = led.paused_entry(owner)
+    assert (entry["id"], entry["conversation_id"], entry["note_request_id"]) == (a.entry["id"], "c-meeting-turn", "room-abc-owner")
+    assert led.paused_entry(owner + "-other") is None
+    assert admit(led, owner, conv="c-later").result == "paused"          # looking lifts nothing
+    led.continue_after(owner, a.entry["id"])
+    assert led.paused_entry(owner) is None
+
+
 def test_failure_after_dispatch_pauses_even_for_the_first_immediate_turn(owner):
     led = ledger()
     a = admit(led, owner)

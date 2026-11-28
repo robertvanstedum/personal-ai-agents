@@ -286,6 +286,57 @@ def test_continue_needs_the_write_guard_and_the_matching_entry(turned):
     assert r.status_code == 200 and "may still be running" in r.get_json()["message"]
 
 
+# ── "Review in Craft" from a paused meeting turn opens the paused conversation (#690) ──────────────────────────────
+
+class PausedLedger(FakeLedger):
+    def __init__(self, entry=None, fails=False):
+        super().__init__()
+        self.entry, self.fails, self.asked = entry, fails, []
+
+    def paused_entry(self, principal):
+        self.asked.append(principal)
+        if self.fails:
+            raise LedgerUnavailable("unavailable")
+        return self.entry
+
+
+def test_review_in_craft_opens_the_conversation_the_pause_names(turned):
+    """Staging, 26 Nov: the button opened Craft's general page, which shows the most recently used chat, so the paused
+    turn and its Continue were somewhere else. The link now lands on the paused entry's own conversation."""
+    client, token = owner(turned)
+    _keep(client, token, "a newer chat is the current one")
+    ledger = PausedLedger({"id": 41, "conversation_id": "c-meeting-turn", "note_request_id": "room-abc-owner",
+                           "state": "unknown"})
+    _ledger_on(turned, ledger)
+    r = client.get("/guild-next/guild/build?paused=1")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/guild-next/guild/build?c=c-meeting-turn")
+    assert len(ledger.asked) == 1
+    assert ledger.events == []                                   # read only: nothing admitted, continued or finished
+    assert client.get("/guild-next/guild/build").status_code == 200 and len(ledger.asked) == 1   # the usual page never asks
+
+
+@pytest.mark.parametrize("ledger,on", [
+    (PausedLedger(None), True),                                  # nothing is paused any more
+    (PausedLedger({"id": 41, "conversation_id": None}), True),   # an entry without a conversation
+    (PausedLedger(fails=True), True),                            # the ledger cannot be read
+    (FakeLedger(), True),                                        # a ledger without the lookup
+    (PausedLedger({"id": 41, "conversation_id": "c-x"}), False), # the ledger is off here
+])
+def test_review_in_craft_without_a_readable_pause_opens_the_usual_page(turned, ledger, on):
+    client, _ = owner(turned)
+    _ledger_on(turned, ledger, on=on)
+    r = client.get("/guild-next/guild/build?paused=1")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/guild-next/guild/build")
+
+
+def test_review_in_craft_tells_a_signed_out_visitor_nothing(turned):
+    ledger = PausedLedger({"id": 41, "conversation_id": "c-meeting-turn"})
+    _ledger_on(turned, ledger)
+    r = turned.app.test_client().get("/guild-next/guild/build?paused=1")
+    assert "c-meeting-turn" not in (r.headers.get("Location") or "") and b"c-meeting-turn" not in r.data
+    assert ledger.asked == []
+
+
 # ── Turn's mapping, including the stream end ──────────────────────────────────
 
 def _turn():

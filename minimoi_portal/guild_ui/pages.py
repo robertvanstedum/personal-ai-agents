@@ -264,6 +264,21 @@ def _mc_queue_on(c) -> bool:
     return ledger_gate.enabled(feature_environ()) and getattr(c["services"], "turn_ledger", None) is not None
 
 
+def _paused_conversation(c) -> str | None:
+    """The conversation holding the turn MC is paused on (#690), or None: no ledger here, nothing paused, or the
+    ledger cannot be read. One pause holds MC everywhere (Craft, voice and meetings), and its Continue is used in
+    that conversation. A link must never fail on this, so every error is None."""
+    if not _mc_queue_on(c):
+        return None
+    principal = (c["current_user"]() or {}).get("username") or "owner"
+    try:
+        entry = c["services"].turn_ledger.paused_entry(principal)
+    except Exception:
+        return None
+    conversation = (entry or {}).get("conversation_id")
+    return conversation if isinstance(conversation, str) and conversation else None
+
+
 def _mc_voice_on() -> bool:
     from . import mc_voice
     return mc_voice.enabled()
@@ -381,6 +396,11 @@ def rooms():
 def floor(*, embedded=False, domain=None):
     from .conversations import ConversationStoreUnavailable, conversations_of
     from minimoi_portal.companion import DOMAINS
+    if not embedded and request.args.get("paused") == "1":
+        # "Review in Craft" on a paused meeting turn (#690): open the exact conversation the pause names, where the
+        # paused turn and Continue are, not whichever chat was used last. Nothing paused: the usual page.
+        paused = _paused_conversation(cfg())
+        return redirect(url_for(".floor", c=paused) if paused else url_for(".floor"))
     domain_label = next((v for k, v in DOMAINS.items() if k.rsplit("/", 1)[-1] == domain), None) if embedded else None
     ctx = _context("floor", domain_label or "Build", domain_label or "Shop floor")
     if embedded:

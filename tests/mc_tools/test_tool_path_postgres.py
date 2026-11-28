@@ -593,6 +593,35 @@ class ToolTests(Base, unittest.TestCase):
         self.assertIsNotNone(grant[0])
         self.assertEqual(grant[1], 1)
 
+    def test_a_build_names_its_design_and_starts_only_on_a_yes_with_the_code_693(self):
+        """#693 on the real tables (the same path without PostgreSQL: tests/mc_tools/test_delegate_build.py)."""
+        from types import SimpleNamespace
+        art, text = "wa-" + "ab" * 16, "Add a dry-run flag to the planning mirror.\n"
+        self.service.tasks = SimpleNamespace(read_design=lambda artifact_id, revision: {
+            "status": "found", "artifact_id": artifact_id, "revision": revision, "title": "Dry run", "author": "mc",
+            "content": text, "superseded": False, "current_revision": revision})
+        r = self.call("minimoi_delegate_build", {"agent": "claude-code", "title": "Dry-run flag",
+                                                 "design_artifact_id": art, "design_revision": 2})
+        self.assertEqual(r["status"], "needs_confirmation")
+        code = r["data"]["code"]
+        self.assertIn(text, self.shown[-1][2])
+        self.assertIn(f"Reply “yes {code}” to start it", self.shown[-1][2])
+        started = []
+        proposals = ToolProposals(self.connect, policy=self.policy, principal=OWNER, environment="dev",
+                                  start_build=lambda p: started.append(p) or ("started", "job-1"))
+        plain = self.say(proposals, "yes", "note-confirm")           # his very next message, and still not enough
+        self.assertEqual(plain["operation"]["state"], "needs_code")
+        self.assertEqual(started, [])
+        done = self.say(proposals, f"yes {code}", "note-confirm-2")
+        self.assertEqual(done["operation"]["state"], "verified")
+        self.assertEqual(len(started), 1)
+        self.assertEqual(started[0]["payload"], {
+            "agent": "claude-code", "title": "Dry-run flag", "design_artifact_id": art, "design_revision": 2,
+            "design_title": "Dry run", "design_sha256": hashlib.sha256(text.encode()).hexdigest(),
+            "design_chars": len(text)})
+        self.assertEqual([x[:2] for x in self.receipts()],
+                         [("delegate.propose_build", "verified"), ("delegate.start_build", "verified")])
+
     def test_cancel_and_expiry_do_nothing(self):
         self.call("minimoi_delegate_research", {"agent": "claude-code", "title": "Look at the relay"})
         started = []

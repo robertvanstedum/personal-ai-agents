@@ -389,7 +389,7 @@ class AgentAskPolicyTests(unittest.TestCase):
             self.assertEqual((rule.capability, rule.tier, rule.max_operations_per_turn, rule.handler),
                              ("agent.ask.owner_note", 2, 1, "agent_ask_v1"), name)
         prod = json.loads((ROOT / "services/mc_operations/policy/mc-policy.prod.json").read_text())
-        self.assertEqual(prod["revision"], "mc-prod-20261125-work-documents")   # #584 web_fetch_v1, #594 vault_search_v1, then #599 work documents
+        self.assertEqual(prod["revision"], "mc-prod-20261127-delegate-result")   # #584 web_fetch_v1, #594 vault_search_v1, #599 work documents, then #693 delegate_result_v1
 
     def test_it_is_never_tier_1_or_3_and_mc_s_container_offers_it(self):
         self.assertEqual(P.HANDLERS["agent_ask_v1"].tiers, frozenset({2}))

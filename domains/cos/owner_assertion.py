@@ -57,6 +57,7 @@ def _config(environ):
 
 
 _CACHE = "minimoi.cos_owner_assertion"
+_UAT_CACHE = "minimoi.cos_owner_assertion.uat"
 MAX_BODY = 1_000_000          # default cap: owner writes are small JSON; uploads and audio pass their own route cap
 
 _log = logging.getLogger(__name__)
@@ -72,6 +73,17 @@ def verified_owner_write(environ=None, *, max_body=MAX_BODY):
     if subject and subject.startswith(SUBJECT_PREFIX) and len(subject) > len(SUBJECT_PREFIX):
         return subject[len(SUBJECT_PREFIX):]
     return None
+
+
+def verified_uat(environ=None, *, max_body=MAX_BODY) -> bool:
+    """True when THIS request is an owner write the portal signed for its staging UAT session (the ``uat`` claim, which
+    only minimoi_portal/uat_signin.py's door leads to), and this CoS is the staging standby itself. A conversation
+    created by such a request is marked ``uat`` and never reaches Vault search. A header, a body field or an unsigned
+    request can never say so, and outside staging the claim is ignored."""
+    env = os.environ if environ is None else environ
+    if (env.get("MINIMOI_ENV") or "").strip() != "staging" or (env.get("MINIMOI_ROLE") or "").strip() != "standby":
+        return False
+    return verified_subject(environ, max_body=max_body) is not None and request.environ.get(_UAT_CACHE) is True
 
 
 def verified_subject(environ=None, *, max_body=MAX_BODY):
@@ -110,6 +122,7 @@ def verified_subject(environ=None, *, max_body=MAX_BODY):
         return None
     if may(subject, request.path):                   # this key may sign this subject for this path (server-side map)
         cache[_CACHE] = subject
+        cache[_UAT_CACHE] = subject.startswith(SUBJECT_PREFIX) and PA.claimed_uat(header)
     else:
         _log.warning("cos signed write refused: key %s may not sign %s for %s", key[0], subject, request.path)
     return cache[_CACHE]

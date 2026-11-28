@@ -79,6 +79,10 @@ class ArtifactHelperTests(unittest.TestCase):
         bad=json.dumps({'files':[{'name':'../summary.md','text':'no'}]}).encode()
         self.assertFalse(H.run(request(bad),str(self.root))['verified'])
         self.assertFalse((self.root/'summary.md').exists())
+        # A .csv cannot be downloaded (mc_artifact_bundle allows .txt, .md, .json), so it cannot be saved either (28 Nov 2026).
+        csv=json.dumps({'files':[{'name':'table.csv','text':'a,b'}]}).encode()
+        self.assertFalse(H.run(request(csv),str(self.root))['verified'])
+        self.assertFalse(list(self.root.rglob('table.csv')))
         from core.mc_tools.catalogue import validate, ArgumentsRefused
         from core.mc_tools.host_artifacts import file_name
         self.assertEqual(file_name({'text':'hi'}),'artifact.txt')

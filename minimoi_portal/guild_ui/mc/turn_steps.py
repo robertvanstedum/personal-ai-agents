@@ -43,6 +43,7 @@ LABELS = {
     "minimoi_keep_preference": "Kept a preference", "minimoi_revoke_preference": "Undid a preference",
     "minimoi_record_gap": "Recorded a gap", "minimoi_withdraw_gap": "Withdrew a gap",
     "minimoi_delegate_research": "Proposed a research hand-off", "minimoi_delegate_build": "Proposed a build hand-off",
+    "minimoi_delegate_result": "Read a delegated job's result",
     "minimoi_access_invite": "Proposed a guest invite",
     "minimoi_board_notes_query": "Searched the Board", "minimoi_board_note_read": "Read a Board note",
     "minimoi_board_note_create": "Saved a Board note", "minimoi_board_note_update": "Changed a Board note",

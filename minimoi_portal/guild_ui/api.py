@@ -1506,10 +1506,37 @@ def _waiting_guest_actions(principal, env) -> bool:
                                                   and env.get("MINIMOI_MC_GUEST_ACTIONS_ENV") in ("dev", "prod")))
 
 
+def _approved_design(proposal):
+    """(design, None) for a confirmed build proposal: the working document read again at the revision the card showed,
+    only if its text is still exactly what the proposal recorded (sha256) and no newer revision has replaced it (#693).
+    Otherwise (None, "design_changed"), or (None, "design_unavailable") when the store cannot be read: nothing starts."""
+    from core.mc_tools import build_brief
+    from . import feature_environ
+    from .mc_tools_wiring import tasks_adapter
+    pay = proposal["payload"]
+    artifact_id, revision, digest = pay.get("design_artifact_id"), pay.get("design_revision"), pay.get("design_sha256")
+    if not isinstance(artifact_id, str) or type(revision) is not int or not isinstance(digest, str):
+        return None, "refused"                 # a card from before a build named its design: it cannot start anything
+    try:
+        adapter = tasks_adapter(feature_environ())
+        doc = adapter.read_design(artifact_id, revision) if adapter is not None else None
+    except Exception:
+        _mc_log().warning("build start: the approved design could not be read again; nothing was started")
+        return None, "design_unavailable"
+    if doc is None:
+        return None, "design_unavailable"
+    design, _code = build_brief.design_from(doc, artifact_id, revision)
+    if design is None or design["sha256"] != digest or design["title"] != pay.get("design_title"):
+        return None, "design_changed"
+    return design, None
+
+
 def _start_proposed_research(found, proposal, scope="research"):
-    """Start the research (or, scope="build", the build) MC proposed and the owner confirmed. The brief is the owner's
-    own kept note from the proposing turn, exactly as for "Ask Claude Code to research: …"; MC's title only names the
-    job. A build runs in a fresh checkout on its own branch, with no push or GitHub (core/mc_delegation_runner)."""
+    """Start the research (or, scope="build", the build) MC proposed and the owner confirmed. Research: the brief is the
+    owner's own kept note from the proposing turn, exactly as for "Ask Claude Code to research: …"; MC's title only
+    names the job. Build (#693): the brief is a fixed header, that same note of his, and the design the card showed,
+    read again at its exact revision and refused if it changed; the job carries the design's id, revision and sha256.
+    The runner (core/mc_delegation_runner) makes the branch, runs the tests and publishes; nothing here can."""
     from .jobs_api import manager
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
     mgr = manager()
@@ -1520,8 +1547,20 @@ def _start_proposed_research(found, proposal, scope="research"):
         return "refused", None
     agent, title = proposal["payload"]["agent"], proposal["payload"]["title"]
     who = "Claude Code" if agent == "claude-code" else "Codex"
+    extra = {}
+    if scope == "build":
+        from core.mc_tools import build_brief
+        from .jobs import job_id_for
+        running = mgr.store.get(conv["id"], job_id_for(proposal["owner_turn_id"]))
+        if running is not None:                 # this note's job already exists: never a second one, never re-judged
+            return "started", running["id"]
+        design, code = _approved_design(proposal)
+        if design is None:
+            return code, None
+        extra = {"brief": build_brief.compose(asked.get("text") or "", design),
+                 "design": {k: design[k] for k in ("artifact_id", "revision", "sha256", "title")}}
     job, refusal = mgr.start(conv, principal, asked, proposal["owner_turn_id"], None, title=f"{who}: {title}"[:80],
-                             agent=agent, scope=scope)
+                             agent=agent, scope=scope, **extra)
     if refusal is not None:
         return "refused", None
     mgr.wake.set()
@@ -2105,7 +2144,9 @@ def conversation_create():
         scope = body.get("scope")
         if scope is not None and (not isinstance(scope, str) or scope not in CHAT_SCOPES):
             return json_error("invalid", "Unknown conversation area.", 422), None
-        conv, repeated = store.create(_principal(), key=body["_key"], work_item=work_item, scope=scope)
+        from minimoi_portal import uat_signin
+        conv, repeated = store.create(_principal(), key=body["_key"], work_item=work_item, scope=scope,
+                                      uat=uat_signin.is_uat(cfg()["current_user"]()))
         return conv, ("repeated" if repeated else "created")
     return _conv_write(action)
 

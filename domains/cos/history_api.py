@@ -16,7 +16,9 @@ from domains.cos.history import History, HistoryRefused
 _STATUS = {"conversation_not_found": 404, "identity_required": 401}
 
 
-def create_blueprint(history: History, *, resolve_owner: Callable, stop_turn=None) -> Blueprint:
+def create_blueprint(history: History, *, resolve_owner: Callable, stop_turn=None, is_uat: Callable | None = None) -> Blueprint:
+    """``is_uat()``: whether this request is the staging UAT session's signed write (owner_assertion.verified_uat).
+    Never read from the body or a header."""
     bp = Blueprint("cos_history", __name__)
 
     def refused(exc: HistoryRefused):
@@ -56,7 +58,8 @@ def create_blueprint(history: History, *, resolve_owner: Callable, stop_turn=Non
             return refused(HistoryRefused("identity_required"))
         body = request.get_json(silent=True) or {}
         try:
-            doc = history.create(str(body.get("title") or ""), private=body.get("private") is True)
+            doc = history.create(str(body.get("title") or ""), private=body.get("private") is True,
+                                 uat=is_uat is not None and is_uat() is True)
             if body.get("select") is True:
                 history.select(resolve_owner(request), body.get("device"), doc["conversation_id"])
         except HistoryRefused as exc:

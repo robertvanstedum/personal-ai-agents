@@ -718,6 +718,18 @@ def _charters(environ):
         return None
 
 
+def delegation_job_reader(app, blueprint_name, principal):
+    """minimoi_delegate_result's source (#693): the mount's own job manager, asked for one delegated job of a
+    conversation and this owner. Resolved at call time (the manager is attached after this listener); with jobs off it
+    raises, and the tool says the records could not be read."""
+    def read(conversation_id, job_id=None):
+        mgr = (app.extensions.get(blueprint_name) or {}).get("jobs")
+        if mgr is None:
+            raise LookupError("jobs_off")
+        return mgr.report(conversation_id, principal, job_id)
+    return read
+
+
 def tasks_adapter(environ):
     """Partnership v1.1 (B4 v0.6): MC's tracked-work tools, seat ``mc``. Off unless the task service URL, MC's seat
     token file (private, held by this portal process, never by the agent), the card commit and the environment are
@@ -788,6 +800,7 @@ def attach(app, blueprint_name, services):
                                                   continuity_reader(services, cfg["principal"])),
                             build_log=build_log_store(environ))
     service.tasks = tasks_adapter(environ)
+    service.delegation_jobs = delegation_job_reader(app, blueprint_name, cfg["principal"])
     agent_worker_sha = (environ.get('MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256') or '').strip().lower()
     enrollment_path = environ.get('MINIMOI_MC_AGENT_ENROLLMENT')
     if enrollment_path and re.fullmatch('[0-9a-f]{64}',agent_worker_sha):

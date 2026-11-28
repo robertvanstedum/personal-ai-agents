@@ -7,6 +7,8 @@ from domains.cos.confer_service import ConferTurnRequest, ConferTurnService
 def test_connector_only_marks_an_explicit_final_response(finish):
     backend=object.__new__(OpenClawBackend)
     backend._agent_id="cos-agent-a"
+    # __init__ always sets the tool binder; None is a host without one, so a final reply keeps the connector's text.
+    backend._binder=None
     payload={"object":"chat.completion","model":"openclaw/cos-agent-a","choices":[
         {"finish_reason":finish,"message":{"role":"assistant","content":"Actual reply"}}]}
     backend._call_backend_payload=lambda *args:payload

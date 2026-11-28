@@ -1534,8 +1534,9 @@ if _history is not None:
         if _bindings is None:
             raise RuntimeError("stop_unavailable")
         _bindings.revoke(_receipt_turn_id(turn_id), "owner_stop")
+    from domains.cos.owner_assertion import verified_uat as _verified_uat
     app.register_blueprint(_history_blueprint(_history, resolve_owner=resolve_user_id,
-                                             stop_turn=_stop_history_turn))
+                                             stop_turn=_stop_history_turn, is_uat=_verified_uat))
 
 
 

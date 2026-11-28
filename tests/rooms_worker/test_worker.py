@@ -375,6 +375,22 @@ def test_stop_without_runtime_confirmation_stays_uncertain(env, monkeypatch):
     assert not any(e['actor'] == 'mc' and e['kind'] == 'message' for e in env.events())
 
 
+def test_stop_during_a_definite_pre_dispatch_refusal_is_a_plain_stop(env, monkeypatch):
+    """#699: the transport says nothing was ever sent for this turn, so there is no tool activity to confirm."""
+    monkeypatch.setattr(worker_module, 'HEARTBEAT_S', 0.05)
+    env.prove(); env.join(); env.say('Q')
+    env.relay.stop_guaranteed = False
+    def refused_before_dispatch(relay, messages):
+        env.call('POST', f'/rooms/{env.room}/stop', {})
+        assert relay.wait_for_stop(5)
+        return {'outcome': 'refused', 'text': '', 'nothing_sent': True}
+    env.relay.script = [refused_before_dispatch]
+    env.worker.run_once()
+    t = env.turns()[0]
+    assert t['state'] == 'cancelled' and t['stop_ack'] == 'worker'
+    assert not any(e['actor'] == 'mc' and e['kind'] == 'message' for e in env.events())
+
+
 def test_completed_discussion_failure_preserves_reason_and_posts_no_reply(env):
     env.prove(); env.join(); env.say("Q1")
     env.relay.script = [{"outcome": "refused", "text": "", "reason": "discussion_reply_limit"}]
