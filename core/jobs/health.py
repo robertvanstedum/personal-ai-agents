@@ -37,7 +37,8 @@ NEEDS_ACTION, WATCH, FINE = "needs action", "watch", "fine"
 SEVERITY_ORDER = {NEEDS_ACTION: 0, WATCH: 1, FINE: 2}
 RED_CODES = ("failed", "missed", "stuck", "never_ran", "no_success")
 REPO_CODES = ("repo_skipped", "repo_behind", "repo_unreadable")      # MC's repository copy (#585)
-WATCH_CODES = ("late", "warn", "skew", "report_stale", "report_missing", "report_unreadable") + REPO_CODES
+WATCH_CODES = ("late", "warn", "skew", "report_stale", "report_missing", "report_unreadable",
+               "no_progress", "progress_unknown") + REPO_CODES
 REPO_COPY_MAX = 1024                # the deploy writes one short line
 TAIL_BYTES = 4096
 TAIL_LINES = 5
@@ -50,7 +51,8 @@ HOW = {"failed": "last run failed", "missed": "no completed run in time", "stuck
        "never_ran": "never ran", "no_success": "no completed run on record", "late": "late",
        "warn": "last run finished with warnings", "skew": "status time is in the future (clock skew)",
        "not_due": "not due yet", "first_run": "first run in progress", "not_tracked": "not watched yet",
-       "report_stale": "no new watchdog report", "report_missing": "no watchdog report has arrived",
+       "report_stale": "no new watchdog report",
+       "no_progress": "has work waiting but made no progress", "progress_unknown": "progress not reported or unreadable", "report_missing": "no watchdog report has arrived",
        "report_unreadable": "watchdog report unreadable", "ok": "ok",
        "repo_skipped": "the deploy could not refresh MC's repository copy, so MC reads older code",
        "repo_behind": "MC's repository copy is not at the commit the deploy wanted",

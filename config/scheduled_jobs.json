@@ -139,7 +139,14 @@
       "defined_in": [
         "scripts/vault/vault_apply.py::7-59/15 0-5"
       ],
-      "active_from": "2026-11-26T06:00:00Z"
+      "active_from": "2026-11-26T06:00:00Z",
+      "progress_required": true,
+      "idle_allowed_s": 3600,
+      "progress_window": {
+        "start": "00:00",
+        "end": "06:00",
+        "tz": "America/Chicago"
+      }
     },
     {
       "id": "vault-mc-pull",
