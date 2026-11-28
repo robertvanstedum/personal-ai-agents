@@ -20,11 +20,13 @@ times at which each alert's underlying signal was last observed healthy.
   later evaluation times) **and** its underlying signal was seen healthy after the problem was last seen firing and
   within ``FRESH_S`` of now. Only this closes a problem.
 * ``observation_unknown``: an evaluation that is incomplete, older than ``FRESH_S``, dated in the future, under a
-  changed rule-set version, or the same evaluation seen again. It never closes anything and never counts toward
-  recovery; open problems record since when they cannot be seen.
+  changed rule-set version, or the same evaluation seen again. It never closes anything, never counts toward
+  recovery, and resets any clear samples already counted (recovery needs consecutive valid evaluations); open
+  problems record since when they cannot be seen. A healthy signal dated in the future is not evidence either.
 
-Notice writes are idempotent (each carries a stable key) and queued in the state file until the adapter accepts
-them, so a failed write is retried and a retry or a restart never creates a second problem or a second notice.
+Notice writes are idempotent (each carries a stable key), queued in the state file and delivered strictly in order
+(a failure stops the queue), so a failed write is retried, a close never precedes its open, and a retry or a restart
+never creates a second problem or a second notice. An unreadable or invalid state file is refused, never reset.
 State lives in one JSON file (``state/1-2/ops-problems.json`` in production, inside the Tier 1 backup).
 """
 from __future__ import annotations
@@ -44,6 +46,10 @@ REOPEN_S = 3600          # re-firing within this of a recovery re-opens the same
 UNKNOWN_NOTICE_S = 1800  # a problem that cannot be seen for this long gets a "cannot see" notice (once per episode)
 RECOVERY_SAMPLES = 2     # distinct valid evaluations without the alert, needed to close
 STATE_VERSION = 1
+
+
+class ProblemStateError(RuntimeError):
+    """The state file exists but is unreadable or not problem state. The helper reports it; nothing is overwritten."""
 
 
 @dataclass(frozen=True)
@@ -81,13 +87,19 @@ class ProblemTracker:
     # ---- state ------------------------------------------------------------------------------------------------------
 
     def _load(self) -> dict:
+        """A missing file is a fresh start. A file that exists but cannot be read or is not this state is refused
+        (``ProblemStateError``), never silently replaced: that would lose open incidents and queued notices."""
+        if not self.path.exists():
+            return {"schema_version": STATE_VERSION, "rules_version": None, "last_evaluation": None,
+                    "problems": {}, "outbox": [], "seq": 0}
         try:
             doc = json.loads(self.path.read_text("utf-8"))
-        except (OSError, ValueError):
-            doc = None
-        if not isinstance(doc, dict) or doc.get("schema_version") != STATE_VERSION:
-            doc = {"schema_version": STATE_VERSION, "rules_version": None, "last_evaluation": None,
-                   "problems": {}, "outbox": [], "seq": 0}
+        except (OSError, ValueError) as exc:
+            raise ProblemStateError("state_unreadable") from exc
+        if (not isinstance(doc, dict) or doc.get("schema_version") != STATE_VERSION
+                or not isinstance(doc.get("problems"), dict) or not isinstance(doc.get("outbox"), list)
+                or not isinstance(doc.get("seq"), int)):
+            raise ProblemStateError("state_invalid")
         return doc
 
     def _save(self) -> None:
@@ -102,10 +114,13 @@ class ProblemTracker:
         now = self.clock()
         written = self._flush()
         verdict = self._classify(ev, now)
+        if verdict == "same_evaluation":
+            return written                              # the same evaluation read again: neither evidence nor blindness
         if verdict != "valid":
             for p in self.state["problems"].values():
                 if p["status"] != "open":
                     continue
+                p["clear_samples"] = 0                  # recovery needs consecutive valid evaluations: blindness resets it
                 if not p.get("unknown_since"):
                     p["unknown_since"] = status.iso(now)
                 p["unknown_reason"] = verdict
@@ -128,7 +143,8 @@ class ProblemTracker:
                 p.pop(k, None)
             healthy = ev.healthy_at.get(fp)
             seen = status.parse_time(p["last_seen_at"])
-            if healthy is None or healthy <= seen or (now - healthy).total_seconds() > FRESH_S:
+            if (healthy is None or healthy <= seen or (now - healthy).total_seconds() > FRESH_S
+                    or (healthy - now).total_seconds() > SKEW_S):            # a future-dated signal is not evidence
                 p["absent_unverified"] = p.get("absent_unverified", 0) + 1     # absent, but no healthy evidence: open
                 continue
             p["clear_samples"] = p.get("clear_samples", 0) + 1
@@ -193,14 +209,17 @@ class ProblemTracker:
                                      "value": p.get("value"), "runbook": p.get("runbook")})
 
     def _flush(self) -> list[dict]:
-        sent, keep = [], []
-        for notice in self.state["outbox"]:
+        """Deliver queued notices strictly in order; stop at the first failure so a close can never be written before
+        the open it closes. The rest stay queued, in order, for the next attempt."""
+        sent, outbox = [], self.state["outbox"]
+        while outbox:
             try:
-                ok = bool(self.notices(dict(notice)))
+                ok = bool(self.notices(dict(outbox[0])))
             except Exception:                                    # noqa: BLE001
                 ok = False
-            (sent if ok else keep).append(notice)
-        self.state["outbox"] = keep
+            if not ok:
+                break
+            sent.append(outbox.pop(0))
         if sent:
             self._save()
         return sent

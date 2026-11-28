@@ -110,7 +110,6 @@ def test_one_incident_from_stall_to_verified_recovery_and_recurrence(tmp_path):
     for bad in (evaluate(jobs, now["t"], "e4", complete=False),
                 evaluate(jobs, now["t"] - 20 * M, "e5"),
                 evaluate(jobs, now["t"] + 10 * M, "e6"),
-                evaluate(jobs, T0 + 10 * M, "e3"),
                 evaluate(jobs, now["t"], "e7", rules="v2")):
         tracker.observe(bad)
         p = tracker.problems()[FP]
@@ -130,7 +129,7 @@ def test_one_incident_from_stall_to_verified_recovery_and_recurrence(tmp_path):
     tracker.observe(evaluate(jobs, now["t"], "e11", rules="v2"))
     assert tracker.problems()[FP]["status"] == "open"                      # one healthy sample so far
     tracker.observe(evaluate(jobs, now["t"], "e11", rules="v2"))           # the same evaluation again: not a second
-    assert tracker.problems()[FP]["status"] == "open"
+    assert tracker.problems()[FP]["status"] == "open" and tracker.problems()[FP]["clear_samples"] == 1
 
     # 6. a second distinct fresh evaluation with a healthy signal closes it once; the watchdog announces recovery once
     notes.fail = True
@@ -195,3 +194,77 @@ def test_an_old_closed_problem_is_not_reopened_after_the_hour(tmp_path):
     now["t"] = T0 + 3 * 60 * M
     tracker.observe(problems.Evaluation("d", now["t"], "v1", True, {FP: fire}, {}))
     assert tracker.problems()[FP]["id"] != first_id and notes.events().count("open") == 2
+
+
+# ---- Codex lifecycle code review (OPS_LIFECYCLE_CODE_REVIEW_v0.1, on e5174bd9) ----------------------------------------
+
+def _open_one(tmp_path, notes=None):
+    now = {"t": T0}
+    notes = notes or Notices()
+    tracker = problems.ProblemTracker(tmp_path / "s.json", notes, lambda: now["t"])
+    fire = problems.Firing("red", "vault", "no_progress", "red")
+    tracker.observe(problems.Evaluation("a", now["t"], "v1", True, {FP: fire}, {}))
+    return tracker, now, notes
+
+
+def test_a_future_dated_healthy_signal_never_closes(tmp_path):
+    tracker, now, notes = _open_one(tmp_path)
+    future = T0 + timedelta(days=365)
+    for i, eid in ((1, "b"), (2, "c"), (3, "d")):
+        now["t"] = T0 + i * 5 * M
+        tracker.observe(problems.Evaluation(eid, now["t"], "v1", True, {}, {FP: future}))
+    assert tracker.problems()[FP]["status"] == "open" and "close" not in notes.events()
+
+
+def test_an_outage_between_clear_samples_resets_the_count(tmp_path):
+    tracker, now, notes = _open_one(tmp_path)
+    now["t"] = T0 + 5 * M
+    tracker.observe(problems.Evaluation("b", now["t"], "v1", True, {}, {FP: now["t"] - M}))   # clear sample 1
+    for i in range(2, 14):                                                                      # an hour blind
+        now["t"] = T0 + i * 5 * M
+        tracker.observe(problems.Evaluation(f"x{i}", now["t"], "v1", False, {}, {}))
+    now["t"] = T0 + 75 * M
+    tracker.observe(problems.Evaluation("c", now["t"], "v1", True, {}, {FP: now["t"] - M}))   # one clear after it
+    assert tracker.problems()[FP]["status"] == "open"
+    now["t"] = T0 + 80 * M
+    tracker.observe(problems.Evaluation("d", now["t"], "v1", True, {}, {FP: now["t"] - M}))
+    assert tracker.problems()[FP]["status"] == "recovered"
+
+
+def test_notices_are_delivered_in_order_after_a_failed_open(tmp_path):
+    notes = Notices()
+    notes.fail = True
+    tracker, now, _ = _open_one(tmp_path, notes)                       # the open notice fails
+    notes.fail = False
+    calls = []
+    real = tracker.notices
+    def flaky(n):                                                      # the next attempt: open fails again, close would pass
+        calls.append(n["event"])
+        return False if n["event"] == "open" and calls.count("open") == 1 else real(n)
+    tracker.notices = flaky
+    for i, eid in ((1, "b"), (2, "c")):
+        now["t"] = T0 + i * 5 * M
+        tracker.observe(problems.Evaluation(eid, now["t"], "v1", True, {}, {FP: now["t"] - M}))
+    now["t"] = T0 + 15 * M
+    tracker.observe(problems.Evaluation("d", now["t"], "v1", True, {}, {FP: now["t"] - M}))
+    delivered = [n["event"] for n in notes.by_key.values()]
+    assert delivered == ["open", "close"]                              # never close before open
+
+
+def test_a_corrupt_state_file_is_refused_not_reset(tmp_path):
+    path = tmp_path / "s.json"
+    path.write_text("{not json")
+    try:
+        problems.ProblemTracker(path, Notices(), lambda: T0)
+    except problems.ProblemStateError:
+        pass
+    else:
+        raise AssertionError("a corrupt state file must be refused")
+    assert path.read_text() == "{not json"
+    path.write_text('{"schema_version": 1, "problems": []}')
+    try:
+        problems.ProblemTracker(path, Notices(), lambda: T0)
+    except problems.ProblemStateError:
+        pass
+    else:
+        raise AssertionError("an invalid state document must be refused")
