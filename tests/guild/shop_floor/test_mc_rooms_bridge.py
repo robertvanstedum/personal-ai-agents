@@ -182,6 +182,120 @@ def test_listener_requires_distinct_auth_and_no_browser_origin(world):
     assert client.post(PATH,json=IDS,headers=auth).json['outcome']=='done'
 
 
+# ── #699: every definite refusal before dispatch is answered as one (200, a reason), never a bare 409 ─────────────
+def _http(world):
+    app=Flask(__name__);token='room-only-test-token'
+    install(app,world.bridge,hashlib.sha256(token.encode()).hexdigest())
+    client=app.test_client();auth={'Authorization':'Bearer '+token}
+    return lambda body=IDS: client.post(PATH,json=body,headers=auth), lambda: client.get(PATH,headers=auth)
+
+
+@pytest.mark.parametrize('change', ['actor','origin','discussion','kind','empty'])
+def test_a_turn_the_owner_did_not_write_is_refused_with_a_plain_line(world, change):
+    t=world.records.turn
+    if change=='actor': t['trigger']['actor']='cos'
+    if change=='origin': t['trigger']['origin']={'mode':'agent_response'}
+    if change=='discussion': t['discussion_reply']={'question_event':'q'}
+    if change=='kind': t['trigger']['kind']='file'
+    if change=='empty': t['trigger']['text']='   '
+    post,_=_http(world)
+    r=post()
+    assert r.status_code==200 and r.json['outcome']=='done' and r.json['detail']=='owner_message_required'
+    assert r.json['text'].startswith('Platform: MC answers only a message you wrote yourself')
+    assert r.json['nothing_sent'] is True
+    assert not world.events and world.backend.calls==0      # nothing prepared, ledgered, bound or sent
+
+
+def test_a_shared_room_is_the_privacy_refusal_even_when_the_owner_did_not_write(world):
+    world.records.turn['room_members'].append({'id':'guest'})
+    world.records.turn['trigger']['actor']='cos'
+    r=_http(world)[0]()
+    assert r.json['detail']=='owner_room_required' and r.json['text'].startswith('Platform: MC answers only in meetings')
+    assert not world.events
+
+
+@pytest.mark.parametrize('answer,expected', [
+    ((200,{'dispatch':False,'state':'cancel_requested'}), dict(outcome='not_admitted',state='cancel_requested')),
+    ((200,{'dispatch':False,'state':'cancelled'}), dict(outcome='refused',reason='admission_refused',nothing_sent=True)),
+    ((409,{'error':'stale_claim'}), dict(outcome='refused',reason='admission_refused',nothing_sent=True)),
+    ((404,None), dict(outcome='refused',reason='admission_refused',nothing_sent=True)),
+    ((401,{'error':'unauthorized'}), dict(outcome='refused',reason='admission_unavailable',nothing_sent=True)),
+    ((500,None), dict(outcome='refused',reason='admission_unavailable',nothing_sent=True)),
+])
+def test_records_not_admitting_the_turn_is_a_definite_answer(world, answer, expected):
+    world.records.call=lambda *a,**k: answer
+    r=_http(world)[0]()
+    assert r.status_code==200 and {k:r.json.get(k) for k in expected}==expected
+    assert not world.events and world.backend.calls==0
+
+
+@pytest.mark.parametrize('change', ['room','claim','target','state'])
+def test_a_snapshot_for_another_claim_is_not_an_admission(world, change):
+    t=world.records.turn
+    if change=='room': t['room']='other'
+    if change=='claim': t['claim_id']='stale'
+    if change=='target': t['addressee']='cos'
+    if change=='state': t['state']='claimed'
+    r=_http(world)[0]()
+    assert r.status_code==200 and (r.json['outcome'],r.json['reason'])==('refused','admission_refused')
+    assert not world.events
+
+
+def test_a_late_admission_answer_is_asked_again_not_sent_on(world, monkeypatch):
+    import minimoi_portal.guild_ui.mc_rooms_bridge as module
+    ticks=iter([0.0,6.0])
+    monkeypatch.setattr(module.time,'monotonic',lambda: next(ticks))
+    r=_http(world)[0]()
+    assert (r.json['outcome'],r.json['state'])==('not_admitted','stale') and not world.events
+
+
+def test_a_stop_before_start_says_nothing_was_sent(world):
+    world.bridge.stop(IDS['correlation_id'])
+    out=world.bridge.run(IDS)
+    assert (out['outcome'],out['detail'],out['nothing_sent'])==('refused','stopped_before_start',True)
+
+
+def test_uncertain_answers_never_claim_nothing_was_sent(world):
+    """After preparation or dispatch the bridge stays cautious exactly as before (#699 keeps these)."""
+    def fail(): raise RuntimeError('provider interrupted')
+    world.backend.hook=fail
+    post,_=_http(world)
+    first=post().json
+    assert first['outcome']=='error' and 'nothing_sent' not in first and 'unknown' in world.events
+    again=post().json                                        # the same turn asked again: never sent to MC again
+    assert again==first and world.events.count('prepare')==1 and world.events.count('started')==1
+    assert post({**IDS,'prompt':'fake'}).status_code==409    # not the worker's request: no turn to refuse
+    world.records.call=lambda *a,**k: (_ for _ in ()).throw(RuntimeError('records down'))
+    assert post({**IDS,'turn_id':'turn-2'}).status_code==503
+
+
+@pytest.mark.parametrize('code,reason', [('busy','mc_busy'),('queue_pending','mc_queue_pending'),('ledger_unavailable',None)])
+def test_ledger_refusals_before_dispatch_carry_their_reason(world, code, reason):
+    from minimoi_portal.guild_ui.mc.ledger_gate import Refusal
+    def refuse(*args, **kwargs):
+        raise Refusal(code, 'Nothing was sent.', 409)
+    world.bridge.gate = refuse
+    out = world.bridge.run(IDS)
+    assert out['outcome']=='refused' and out.get('reason')==reason and out['nothing_sent'] is True
+    assert world.backend.calls==0 and 'bind' not in world.events
+
+
+def test_readiness_says_when_mc_is_paused_for_the_owner(world):
+    _,get=_http(world)
+    assert get().json=={'ready':True}                         # no ledger here: nothing to hold
+    paused=[{'id':7,'conversation_id':'c-abc'}]
+    world.bridge.services.turn_ledger=NS(paused_entry=lambda principal: paused[0] if principal=='robert' else None)
+    assert get().json=={'ready':True}                         # the ledger switch is off
+    world.bridge.environ={'MINIMOI_MC_TURN_LEDGER':'1'}
+    assert get().json=={'ready':True,'held':'mc_paused'}
+    paused[0]=None                                           # the owner's Continue lifted it
+    assert get().json=={'ready':True}
+    world.bridge.services.turn_ledger=NS(paused_entry=lambda principal: (_ for _ in ()).throw(RuntimeError('db')))
+    assert get().json=={'ready':True}
+    world.backend.connected=False
+    assert get().json=={'ready':False}
+
+
 def test_saved_pause_is_actionable_without_dispatch_or_replay(world):
     from minimoi_portal.guild_ui.mc.ledger_gate import Refusal
     def paused(*args, **kwargs):
@@ -189,6 +303,7 @@ def test_saved_pause_is_actionable_without_dispatch_or_replay(world):
     world.bridge.gate = paused
     first = world.bridge.run(IDS)
     assert first['outcome'] == 'refused' and first['reason'] == 'mc_paused'
+    assert first['nothing_sent'] is True
     assert world.bridge.run(IDS) == first
     assert world.backend.calls == 0 and 'bind' not in world.events
 

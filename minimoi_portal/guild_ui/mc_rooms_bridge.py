@@ -31,16 +31,65 @@ IDENT = re.compile(r'[A-Za-z0-9_-]{1,80}')
 _log = logging.getLogger('guild_ui.mc_rooms')
 
 
-class OwnerRoomRequired(ValueError):
-    """The room has someone besides the owner, MC and CoS: MC's private context and tools stay out (core.room_scope)."""
-
-
 CLOSED_ROOM_LINE = ('Platform: MC answers only in meetings with just you, MC and CoS, because it brings your private '
                     'context and tools. Start a meeting with just them to talk to MC.')
+OWNER_MESSAGE_LINE = ('Platform: MC answers only a message you wrote yourself in the meeting, because it acts with your '
+                      'private context and tools. Nothing was sent to MC. Ask MC directly to bring it in.')
+CODE = re.compile(r'[a-z0-9_]{1,40}')
+
+
+class Refused(ValueError):
+    """A definite refusal at admission (#699): Records admitted the turn, but MC does not take it. Nothing was
+    prepared, written to MC's ledger or sent. ``line`` is the plain platform line the room is shown as MC's reply."""
+    detail, line = 'refused', ''
+
+
+class OwnerRoomRequired(Refused):
+    """The room has someone besides the owner, MC and CoS: MC's private context and tools stay out (core.room_scope)."""
+    detail, line = 'owner_room_required', CLOSED_ROOM_LINE
+
+
+class OwnerMessageRequired(Refused):
+    """The turn was not started by the owner's own message (another member's message, a discussion reply, a relayed
+    or empty one): MC's private context and tools answer only the owner."""
+    detail, line = 'owner_message_required', OWNER_MESSAGE_LINE
+
+
+class NotAdmitted(ValueError):
+    """Records did not admit this turn for dispatch, or its answer was not for this claim. Nothing was prepared,
+    written to MC's ledger or sent. ``state`` is Records' own state for the turn, or a short code for why."""
+    def __init__(self, state):
+        super().__init__('records_admission_refused')
+        self.state = state
 
 
 def result(outcome, detail, text=''):
     return {'outcome': outcome, 'detail': detail, 'text': text, 'usage': None}
+
+
+def nothing_sent(output):
+    """Mark a definite pre-dispatch answer: the code knows nothing reached MC, so a stop that arrives meanwhile has
+    nothing to confirm. Never set once a turn may have started."""
+    output['nothing_sent'] = True
+    return output
+
+
+# MC's turn ledger refusals that mean "MC is here and holding", said to the room in their own words (rooms.js).
+HELD = {'paused': 'mc_paused', 'busy': 'mc_busy', 'queue_pending': 'mc_queue_pending'}
+
+
+def not_admitted(exc):
+    """The worker's answer for a turn Records did not admit at the portal (#699). A stop the owner asked for is
+    acknowledged as a stop, a late answer is asked again, and anything else is a definite failure with its reason:
+    never "outcome unknown", because nothing was prepared or sent."""
+    if exc.state in ('cancel_requested', 'stale'):
+        return {**result('not_admitted', 'dispatch_refused'), 'state': exc.state}
+    out = nothing_sent(result('refused', 'admission_refused'))
+    # Records answered and declined (or the claim is no longer this worker's): MC's route is fine. Records not
+    # answering the portal properly is a fault worth showing on MC's badge.
+    declined = exc.state in ('http_404', 'http_409') or not exc.state.startswith('http_')
+    out['reason'] = 'admission_refused' if declined else 'admission_unavailable'
+    return out
 
 
 def _is_docx(name) -> bool:
@@ -128,24 +177,43 @@ class Bridge:
         started = time.monotonic()
         status, body = self.records.call('POST', f"/turns/{ids['turn_id']}/heartbeat",
             {'claim_id': ids['claim_id'], 'intent': 'dispatch', 'snapshot': True}, key=str(uuid4()))
-        if status != 200 or body.get('dispatch') is not True or time.monotonic() - started >= 5:
-            raise ValueError('records_admission_refused')
+        body = body if isinstance(body, dict) else {}
+        if status != 200 or body.get('dispatch') is not True:
+            state = body.get('state') if status == 200 else None
+            raise NotAdmitted(state if isinstance(state, str) and CODE.fullmatch(state) else f'http_{status}')
+        if time.monotonic() - started >= 5:
+            raise NotAdmitted('stale')
         turn = body.get('turn') or {}
         trigger = turn.get('trigger') or {}
         from core.room_scope import owner_private
         people = turn.get('room_members') or []
-        # Initial deployment is the owner's private three-person room only. Do
-        # not leak the owner's tool output into a guest or externally shared room.
+        # The snapshot must be this worker's own running MC turn; anything else is not an admission for it.
         if (turn.get('id') != ids['turn_id'] or turn.get('room') != ids['room']
                 or turn.get('claim_id') != ids['claim_id'] or turn.get('addressee') != 'mc'
-                or turn.get('state') != 'running' or turn.get('discussion_reply')
+                or turn.get('state') != 'running'):
+            raise NotAdmitted('snapshot_mismatch')
+        # Initial deployment is the owner's private three-person room only. Do
+        # not leak the owner's tool output into a guest or externally shared room.
+        if not owner_private(people, self.principal):
+            raise OwnerRoomRequired('owner_room_required')
+        if (turn.get('discussion_reply')
                 or trigger.get('actor') != self.principal or trigger.get('kind') != 'message'
                 or trigger.get('origin') is not None or not isinstance(trigger.get('text'), str)
                 or not trigger['text'].strip()):
-            raise ValueError('owner_room_required')
-        if not owner_private(people, self.principal):
-            raise OwnerRoomRequired('owner_room_required')
+            raise OwnerMessageRequired('owner_message_required')
         return turn if snapshot else None
+
+    def held(self):
+        """'mc_paused' while the owner's turn ledger holds a pause (#699), else None. Read-only: nothing is released
+        or lifted here. The worker reports it with MC's readiness so the room shows MC connected and paused."""
+        from .mc import ledger_gate
+        ledger = getattr(self.services, 'turn_ledger', None)
+        if ledger is None or not ledger_gate.enabled(self.environ):
+            return None
+        try:
+            return 'mc_paused' if ledger.paused_entry(self.principal) else None
+        except Exception:
+            return None
 
     def _prepare(self, turn, operation):
         from .conversations import MEETING_TITLE, conversations_of, session_conversation_id
@@ -320,7 +388,7 @@ class Bridge:
             'generation': turn['generation']}).encode()).hexdigest()
         with self.lock:
             if self._stopped(correlation):
-                return result('refused', 'stopped_before_start')
+                return nothing_sent(result('refused', 'stopped_before_start'))
             try:
                 replay = self.journal.reserve(operation, fingerprint, {'ids': ids, 'snapshot': turn})
             except RoomBridgeError:
@@ -440,15 +508,20 @@ class Bridge:
                 ledger.finish_not_sent()
             return output
         except ledger_gate.Refusal as exc:
-            output = result('refused', exc.body['error'])
-            if exc.body['error'] == 'paused':
-                output['reason'] = 'mc_paused'
+            # Refused by MC's turn ledger before anything was recorded or sent. A pause, MC answering elsewhere or
+            # messages waiting in Craft are MC holding, not MC failing: each has its own reason for the room (#699).
+            code = exc.body['error']
+            output = result('refused', code)
+            if code in HELD:
+                output['reason'] = HELD[code]
+            if not str(code).startswith('already_'):      # an "already sent" answer speaks of an earlier dispatch
+                nothing_sent(output)
             self.journal.generated(operation, output)
             return output
         except RouteRefused as exc:    # raised before the turn is dispatched: nothing was sent
             if ledger is not None:
                 ledger.finish_not_sent()
-            output = result('refused', exc.code)
+            output = nothing_sent(result('refused', exc.code))
             self.journal.generated(operation, output)
             return output
         except Exception:
@@ -480,7 +553,9 @@ def install(app, bridge, token_sha256, *, forbidden_hashes=()):
                 or not hmac.compare_digest(hashlib.sha256(auth[7:].encode()).hexdigest(), token_sha256)):
             return jsonify(error='unauthorized'), 401
         if request.method == 'GET':
-            return jsonify(ready=bool(getattr(bridge.services.mc, 'connected', False)))
+            ready = bool(getattr(bridge.services.mc, 'connected', False))
+            held = bridge.held() if ready else None
+            return jsonify(ready=ready, held=held) if held else jsonify(ready=ready)
         if request.mimetype != 'application/json' or (request.content_length or 0) > 2048:
             return jsonify(error='invalid_request'), 400
         body = request.get_json(silent=True)
@@ -490,12 +565,15 @@ def install(app, bridge, token_sha256, *, forbidden_hashes=()):
                     raise ValueError('correlation_required')
                 return jsonify(bridge.stop(body['correlation_id']))
             return jsonify(bridge.run(body))
-        except OwnerRoomRequired:
-            # #687: the one definite refusal before anything reaches MC (the room is not owner-private). bridge.run still
-            # raises, so nothing is prepared or sent; the worker gets a plain platform line to post instead of a 409 it
-            # must read as "outcome unknown", and MC keeps its Connected badge.
-            return jsonify(result('done', 'owner_room_required', CLOSED_ROOM_LINE))
+        except Refused as exc:
+            # #687, #699: a definite refusal before anything reaches MC (the room is not owner-private, or the owner did
+            # not write the message). bridge.run still raises, so nothing is prepared or sent; the worker gets a plain
+            # platform line to post instead of a 409 it must read as "outcome unknown", and MC keeps its Connected badge.
+            return jsonify(nothing_sent(result('done', exc.detail, exc.line)))
+        except NotAdmitted as exc:
+            return jsonify(not_admitted(exc))        # #699: Records did not admit the turn; nothing was prepared or sent
         except ValueError:
+            # A request that is not the worker's four identifiers. No turn is named, so there is nothing to refuse.
             return jsonify(result('refused', 'admission_refused')), 409
         except Exception:
             return jsonify(result('error', 'bridge_unavailable')), 503
