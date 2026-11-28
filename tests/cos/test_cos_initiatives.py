@@ -185,3 +185,22 @@ def test_692_a_refused_update_says_nothing_changed(rig):
     owner_turn(history, bindings, "Mark PI-2026-0042 as started.")
     out = call(client, {"operation": "initiative_update", "initiative_id": "PI-2026-0042", "state": "started"})
     assert out["status"] == "refused" and out["message"].startswith("Nothing was filed or changed: no initiative")
+
+
+def test_692_the_whole_start_procedure_fits_in_one_owner_turn(rig):
+    """First live run on Dev (27 Nov 2026): the limit of five calls a turn refused the brief and the status page."""
+    tasks, history, bindings, files, client, _ = rig
+    owner_turn(history, bindings, "Start a professional initiative: a neighbourhood tool library. Write me a brief.")
+    steps = [{"operation": "initiative_find", "query": "tool library"}, {"operation": "initiative_list"},
+             {"operation": "initiative_file", "title": "Neighbourhood tool library", "summary": "A lending shelf."}]
+    out = [call(client, s, call_id=f"s{i}") for i, s in enumerate(steps)]
+    pid = out[2]["data"]["initiative_id"]
+    more = [{"operation": "initiative_attach_text", "initiative_id": pid, "name": "Original request", "text": "words"},
+            {"operation": "initiative_update", "initiative_id": pid, "state": "started"},
+            {"operation": "initiative_doc_save", "initiative_id": pid, "kind": "brief", "text": "# Brief"},
+            {"operation": "initiative_doc_save", "initiative_id": pid, "kind": "status", "text": "# Status"},
+            {"operation": "initiative_read", "initiative_id": pid},
+            {"operation": "initiative_doc_read", "initiative_id": pid, "kind": "brief"}]
+    out += [call(client, s, call_id=f"m{i}") for i, s in enumerate(more)]
+    assert [o["status"] for o in out] == ["done"] * 9, [(o["status"], o.get("code")) for o in out]
+    assert out[7]["data"]["initiative"]["documents"].keys() == {"brief", "status"}
