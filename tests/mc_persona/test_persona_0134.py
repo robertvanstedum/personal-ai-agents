@@ -70,7 +70,7 @@ def _skill(name: str) -> str:
 
 def test_0_1_34_is_the_pinned_release_and_loads_the_handbook_as_a_skill():
     # Pinned until 0.1.35 (#583); test_persona_0135.py checks the pin now. Its release folder stays as reviewed.
-    assert pinned_release() in ("0.1.34", "0.1.35", "0.1.36") and pinned_handbook() == "0.1.3"
+    assert pinned_release() in ("0.1.34", "0.1.35", "0.1.36", "0.1.37") and pinned_handbook() == "0.1.3"
     m = json.loads((NEW / "manifest.json").read_text())
     assert m["version"] == "0.1.34" and m["base"] == "0.1.33" and m["status"] == "candidate" and "DRAFT" in m["spec"]
     assert m["handbook"] == {**json.loads((OLD / "manifest.json").read_text())["handbook"], "load": "skill"}

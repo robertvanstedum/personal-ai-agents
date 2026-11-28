@@ -1,4 +1,4 @@
-# 0.1.37: from an issue to a build, through MC (CANDIDATE, not pinned)
+# 0.1.37: from an issue to a build, through MC
 
 27 November 2026 · Claude Code · #693. Base: 0.1.36. One card edited; AGENTS.md changes only its version heading, and SOUL.md, RUNTIME, the voice card and every other card are byte-identical to 0.1.36.
 
@@ -7,7 +7,7 @@
 
 - **Not in this release: the working-document line.** The 26 November notes called a different follow-up "persona 0.1.37": telling MC here, not only in each meeting turn (35ecb578), that a working document goes to `minimoi_work_save` and `minimoi_working_write` makes a download file. RUNTIME still says "Files for Robert: save with `minimoi_working_write`". Changing that needs room the base does not have (2 characters), so it is a release of its own.
 
-Not pinned: `pin.json`, the image, the Dev deploy and the voice walk still name 0.1.36. Pinning it is a separate change that Robert approves.
+Pinned 28 November: `pin.json`, the image, the Dev deploy and the voice walk name 0.1.37. Production takes it when an MC image is built from main after this merges.
 
 # 0.1.36: a vague message gets a question, even with state attached
 

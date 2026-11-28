@@ -8,14 +8,12 @@ NEW, OLD = RELEASES / "0.1.36", RELEASES / "0.1.35"
 
 
 def test_0_1_36_is_pinned_everywhere():
-    assert pinned_release() == "0.1.36" and pinned_handbook() == "0.1.3"
-    assert json.loads((REPO / "services/mc_operations/personas/mc-chat/pin.json").read_text()) == {"release": "0.1.36"}
+    # Pinned until 0.1.37 (#693); test_persona_0137.py checks the pin now. Its release folder stays as reviewed.
+    assert pinned_release() in ("0.1.36", "0.1.37") and pinned_handbook() == "0.1.3"
     m = json.loads((NEW / "manifest.json").read_text())
     assert m["version"] == "0.1.36" and m["base"] == "0.1.35" and m["status"] == "candidate"
     for name, digest in m["files"].items():
         assert sha((NEW / name).read_bytes()) == digest, name
-    dockerfile = (REPO / "docker/mc-agent-container/Dockerfile").read_text()
-    assert "releases/0.1.36/ /opt/minimoi/mc-agent/persona/" in dockerfile and "minimoi.persona=0.1.36" in dockerfile
 
 
 def test_only_agents_and_changes_differ():

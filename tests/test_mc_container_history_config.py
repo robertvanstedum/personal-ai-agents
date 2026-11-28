@@ -62,7 +62,7 @@ def test_the_conversation_lane_runs_cos_s_minimal_pattern_with_every_minimoi_too
     assert len(minimoi) == 56   # +web_fetch (#584), +vault_search (#594), +initiative_read (#680), +delegate_result (#693): read-only
     assert not set(BUILT_INS_DROPPED) & set(chat["alsoAllow"])
     # The cards, the persona and the handbook name no dropped tool.
-    texts = [p.read_text() for p in (REPO / "services/mc_operations/personas/mc-chat/releases/0.1.36").rglob("*.md")]
+    texts = [p.read_text() for p in (REPO / "services/mc_operations/personas/mc-chat/releases/0.1.37").rglob("*.md")]
     texts += [p.read_text() for p in (REPO / "services/mc_operations/handbook/v0.1.3").rglob("*.md")]
     for name in BUILT_INS_DROPPED:
         if name in ("write", "edit", "intent", "sessions"):        # ordinary English words; check them as tool names

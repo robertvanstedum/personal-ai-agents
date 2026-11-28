@@ -552,7 +552,7 @@ def test_every_claim_in_the_tool_text_matches_the_path():
     assert "Claude Code: cost cap 2 USD; Codex: time limit 30 minutes" in research and "His own message is the brief" in research
 
 
-def test_persona_0_1_37_is_a_whole_unpinned_candidate_that_gives_the_order_of_work():
+def test_persona_0_1_37_is_a_whole_release_that_gives_the_order_of_work():
     personas = ROOT / "services/mc_operations/personas/mc-chat"
     new, old = personas / "releases/0.1.37", personas / "releases/0.1.36"
     manifest = json.loads((new / "manifest.json").read_text())
@@ -565,7 +565,7 @@ def test_persona_0_1_37_is_a_whole_unpinned_candidate_that_gives_the_order_of_wo
     assert changed == ["AGENTS.md", "CHANGES.md", "manifest.json", "skills/mc-building/SKILL.md"]
     # AGENTS.md is injected every turn and 0.1.36 is 2 characters under its limit: only the version heading differs.
     assert (new / "AGENTS.md").read_text() == (old / "AGENTS.md").read_text().replace("persona 0.1.36", "persona 0.1.37", 1)
-    assert json.loads((personas / "pin.json").read_text()) == {"release": "0.1.36"}      # pinning is a separate, approved change
+    assert json.loads((personas / "pin.json").read_text()) == {"release": "0.1.37"}      # pinned (tests/mc_persona/test_persona_0137.py)
     card = (new / "skills/mc-building/SKILL.md").read_text()
     head = card.split("\n")[2]
     assert head.startswith("description: ") and len(head) - len("description: ") <= 300   # the loader's limit
