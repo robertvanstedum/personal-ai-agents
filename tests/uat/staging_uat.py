@@ -313,9 +313,9 @@ def build_marker_file(run_id: str | None) -> str:
 def build_request(run_id: str | None) -> str:
     """What B6 and B7 ask MC for: a tiny, test-only change, different on every run."""
     return ("Write a short design for this change and save it as a working document, then propose a build for it. "
-            f"Change: add a new test file {build_marker_file(run_id)} containing one pytest test that imports job_short "
-            "from core.mc_delegation_runner.runner and asserts job_short('30ff5b4d-b96b-517f-85eb-5b0b3f9b250d', 1) == "
-            "'30ff5b4d-g1'. Change nothing else.")
+            f"Change: add a new test file {build_marker_file(run_id)} containing one pytest test that imports digest "
+            "from core.canonical_json and asserts digest({'a': 1, 'b': 2}) == digest({'b': 2, 'a': 1}). "
+            "Change nothing else.")
 
 
 def build_e2e_on(env=None) -> bool:

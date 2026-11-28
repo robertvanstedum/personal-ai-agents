@@ -398,7 +398,7 @@ def test_build_request_names_a_file_of_its_own_per_run():
     assert uat.build_marker_file(RUN) == FILE
     req = uat.build_request(RUN)
     assert req.startswith("Write a short design for this change and save it as a working document, then propose a build")
-    assert FILE in req and "job_short('30ff5b4d-b96b-517f-85eb-5b0b3f9b250d', 1) == '30ff5b4d-g1'" in req
+    assert FILE in req and "digest({'a': 1, 'b': 2}) == digest({'b': 2, 'a': 1})" in req
     assert req.endswith("Change nothing else.") and uat.build_request("other") != req
     uat.guard_outgoing("B6", req)
     uat.guard_outgoing("B6", uat.BUILD_CLARIFY_ANSWER)                    # "Yes, exactly that…" is not an approval
