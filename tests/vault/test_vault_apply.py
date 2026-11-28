@@ -11,6 +11,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import re
 import os
 import shutil
 import sqlite3
@@ -599,7 +600,9 @@ def test_the_docker_index_runner_argv_and_protocol(tmp_path):
     only_file = build.parent / "only.json"
     # hardened: no network, read-only root filesystem, no capabilities, no privilege gain; the build's shelf (hard links into the live
     # release) read-only, only the build's index folder writable; never the whole build
-    assert seen[0][0] == ["docker", "run", "--rm", "--network", "none", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,nodev",
+    name = seen[0][0][seen[0][0].index("--name") + 1]
+    assert re.fullmatch(r"minimoi-vault-index-[0-9a-f]{12}", name)              # named, so a timed-out step can be removed (#660)
+    assert seen[0][0] == ["docker", "run", "--rm", "--name", name, "--network", "none", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,nodev",
                           "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", "0:0",
                           "-v", f"{build / 'shelf'}:/shelf:ro", "-v", f"{build / 'index'}:/index", "-v", f"{only_file}:/only.json:ro",
                           "--entrypoint", "python3", image, "-I", "-B", "/app/scripts/vault/vault_apply.py", "index-step",

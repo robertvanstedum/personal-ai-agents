@@ -15,7 +15,7 @@ Build spec: planning `operations/OPS-2026-11-25-big-build/SPEC_LANE_E_v0.2.md`.
 - **The embedder:** `docker/vault-embedder/Dockerfile`. Bases pinned by digest; the model is pulled at build and the build fails unless its manifest digest is `0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f`. CPU back ends only (~350 MB). Runs as uid 10001, read-only, no capabilities, 1 GiB and 1.5 CPU.
 - **Identity check:** every client (`core/memory_index/embedder.py`) requires the full digest and, once per process, a known-answer vector (`core/memory_index/embedder_probe.json`, cosine ≥ 0.999). Another model, digest or quantization is refused (`pin_mismatch`); vectors from two models are never mixed (index and query checks).
 - **Nothing changes until the seed is promoted:** while the serving index is keyword-only, `search` never calls the embedder.
-- **The seed** (`vault_apply.py seed`): one time-boxed slice (default 420 s) per run, only between 00:00 and 06:00 Chicago, under apply's lock, into `<vault>-work/meaning-seed/`. Resumable record by record. **Only apply promotes it**, inside its ordinary single build and switch, before its acks. The seed folder goes after the inventory.
+- **The seed** (`vault_apply.py seed`): one time-boxed slice (default 420 s) per run, only between 00:00 and 06:00 Chicago, under apply's lock, into `<vault>-work/meaning-seed/`. Resumable record by record, and inside a big record batch by batch (see *Slices that overrun* below). **Only apply promotes it**, inside its ordinary single build and switch, before its acks. The seed folder goes after the inventory.
 - **After promotion:** each apply copies the serving meaning index and embeds only the applied records' new text. An unreachable embedder fails that run (no switch, no ack; retried next run); the serving release keeps answering.
 - **MC's index** turns meaning only once the full index of the same release is meaning. The career filter runs before any vector is taken: the donor is asked only for the kept chunks, and only kept text reaches the embedder. MC's index holds no career vector.
 
@@ -47,6 +47,34 @@ Dependencies, in order:
 **Checks after promotion:** `plan` shows `index_kind: meaning` and `index_embedder_pinned: true`; a CoS question worded differently from a note finds it; MC's `minimoi_vault_search` returns results labelled `meaning`.
 
 **Rollback:** remove `--meaning-embedder`/`--embed-network` from the apply and MC cron lines and remove the seed line: the next apply rebuilds a keyword-only index by itself (a non-keyword serving index is reseeded keyword-only, as before #660). Stop `vault-embedder`; `search` never calls an embedder on a keyword index. An image rollback is the previous digest in `.env` and `up -d vault-embedder`.
+
+## Slices that overrun (production, 26-28 Nov; fixed in the seed-resume PR)
+
+What production showed: records of up to ~1,200 new chunks were embedded in one go, far past the 420 s slice. At 720 s the `docker run`
+client was killed (`index_runner_failed`) but its container kept embedding and kept the seed index locked, so the next slice found
+`index_busy`, and two clients on the 1.5-CPU embedder pushed batches of 16 past the 120 s request timeout (`embedder_unavailable`).
+
+What the code does now:
+- **Named containers.** The seed's index step runs as `minimoi-vault-seed`; apply's index steps as `minimoi-vault-index-<12 hex>`. A step
+  that times out has its container removed (`docker rm -f`) before it fails `index_runner_timeout`. If docker still lists it, the step
+  fails `index_runner_orphaned`: look with `docker ps -a --filter name=minimoi-vault-`.
+- **Leftovers cleared first.** Each seed slice (under the vault lock, which every index step holds) removes any `minimoi-vault-seed` or
+  `minimoi-vault-index-*` container before it starts, and reports `leftover_containers_removed` in `SEED.json`'s counts. A container it
+  cannot remove stops the slice (`index_runner_orphaned`); a slice never runs beside an orphan. Containers from before this change have
+  no name: check `docker ps` once before the first window after the deploy.
+- **Resume inside a record.** New chunk text is embedded batch by batch and each batch is saved in the index's `pending_vectors` table
+  before the next starts. The slice's budget is checked between batches, so a slice overruns by at most one batch, and the next slice
+  carries on from the saved batches. A written or held record clears its rows; a run that visits the whole shelf clears the table.
+- **Server batches.** Server-side embedders (the index step, MC's index build) send 8 texts per request; one request may take
+  `max(120 s, 20 s x batch)` (160 s at 8; the workstation keeps 16 per request, now 320 s).
+
+## Seeding by day (the owner, by hand)
+
+`seed --execute --allow-outside-window` runs a slice outside 00:00-06:00 Chicago. Cron never passes it. By day the slice has no 06:00
+guard; its budget (`--slice-s`) still bounds it. Nothing else in the chain waits for the window: once a slice ends `complete: true`,
+the next 15-minute apply promotes the seed, and MC's index turns meaning on its next scheduled run (or run its cron line by hand).
+Slices and apply share the vault lock: while a slice runs, apply refuses quietly (`apply_busy`, a warn) and the Mac's batches wait
+for the next free run. Nothing is lost.
 
 ## Dev and staging (the AWS staging host)
 

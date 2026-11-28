@@ -15,6 +15,9 @@ exactly ``PIN_DIGEST_FULL``, and once per process per server a **known-answer pr
 the reference vector made on the workstation's pinned model (``embedder_probe.json``). A server that names the right digest but
 serves other weights or another quantization is refused (``PinMismatch``).
 
+Batches: ``BATCH`` (16) texts per request on the workstation, ``SERVER_BATCH`` (8) on the server's CPU embedder; one request may take
+``request_timeout(batch)`` = max(120 s, 20 s x batch).
+
 ``release`` unloads the model (``keep_alive=0``) unless ``MOI_OLLAMA_IDLE_KEEP_ALIVE`` says how long to keep it: the shared
 workstation unloads at once; the server's dedicated embedder keeps it loaded between queries.
 """
@@ -41,6 +44,8 @@ DIMS = 768
 DOC_PREFIX, QUERY_PREFIX = "search_document: ", "search_query: "
 DEFAULT_URL = "http://127.0.0.1:11434"
 BATCH = 16                        # small batches: the Mac is 8 GB and shared
+SERVER_BATCH = 8                  # the server's CPU embedder (1.5 CPUs): 8 long texts stay well inside one request's timeout (#660)
+TIMEOUT_FLOOR_S, TIMEOUT_PER_TEXT_S = 120.0, 20.0     # one request's timeout: max(floor, per text x batch)
 RUN_KEEP_ALIVE = "2m"             # keep the model loaded between batches of one run...
 # ...and unload it when the run ends (``release``), so the ~300 MB embedder is resident only while it works.
 
@@ -100,7 +105,15 @@ def normalize(vec: list[float]) -> list[float]:
     return [x / norm for x in vec]
 
 
+def request_timeout(batch: int) -> float:
+    """How long one embedding request may take: ``max(120 s, 20 s x batch)`` (production measured up to ~7 s per long text on a
+    shared CPU embedder; a batch of 16 then passed the old fixed 120 s)."""
+    return max(TIMEOUT_FLOOR_S, TIMEOUT_PER_TEXT_S * max(1, int(batch)))
+
+
 class Embedder:
+    batch = BATCH                     # texts per embedding request
+
     def identity(self) -> Identity:
         raise NotImplementedError
 
@@ -115,9 +128,9 @@ class Embedder:
 
     def embed_documents(self, texts: list[str], max_chars: int) -> list[list[float]]:
         out: list[list[float]] = []
-        for i in range(0, len(texts), BATCH):
+        for i in range(0, len(texts), self.batch):
             batch_window.remaining()
-            batch = [DOC_PREFIX + t[:max_chars] for t in texts[i:i + BATCH]]
+            batch = [DOC_PREFIX + t[:max_chars] for t in texts[i:i + self.batch]]
             out.extend(normalize(v) for v in self._embed(batch))
         return out
 
@@ -132,8 +145,12 @@ _PROBED: set[tuple[str, str]] = set()     # (server url, digest) that passed the
 
 
 class OllamaEmbedder(Embedder):
-    def __init__(self, url: str = DEFAULT_URL, model: str = f"{PIN_NAME}:latest", timeout: float = 120.0):
-        self.url, self.model, self.timeout = url.rstrip("/"), model, timeout
+    def __init__(self, url: str = DEFAULT_URL, model: str = f"{PIN_NAME}:latest", timeout: float | None = None, batch: int = BATCH):
+        if not 1 <= int(batch) <= 64:
+            raise ValueError("batch")
+        self.batch = int(batch)
+        self.url, self.model = url.rstrip("/"), model
+        self.timeout = request_timeout(self.batch) if timeout is None else timeout
         self._ident: Identity | None = None
         self._used = False
 
@@ -205,4 +222,4 @@ class OllamaEmbedder(Embedder):
 
 
 __all__ = ["Embedder", "OllamaEmbedder", "Identity", "EmbedderUnavailable", "PinMismatch", "PIN_NAME", "PIN_DIGEST",
-           "PIN_DIGEST_FULL", "DIMS", "normalize", "load_probe", "idle_keep_alive"]
+           "PIN_DIGEST_FULL", "DIMS", "normalize", "load_probe", "idle_keep_alive", "request_timeout", "BATCH", "SERVER_BATCH"]

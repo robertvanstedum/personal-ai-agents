@@ -5,6 +5,9 @@ sha256) with what was indexed; an unchanged record costs one ``stat``. A changed
 reused for chunks whose exact text was already embedded for that record (an appended event shifts every line
 number but changes no text), and only new text is embedded. Records gone from the shelf lose their chunks.
 Every record is its own transaction, so an interrupted run leaves a consistent index that the next run finishes.
+A big record's new text is embedded batch by batch and each batch is saved (``store.pending_vectors``) before the next, so a run
+stopped inside it (``budget_s``, the batch window, the embedder) loses at most the batch in flight, and the next run carries on
+from the saved batches (#660: production's seed records of up to ~1,200 chunks). ``budget_s`` is checked between batches too.
 
 ``rebuild`` is the recovery story: wipe nothing in place; build a complete new file next to the old one from the
 shelf alone (no vector is carried over), then swap it in atomically. A failed rebuild leaves the old index as it was.
@@ -77,6 +80,10 @@ class IndexBusy(RuntimeError):
 
 class DonorMismatch(RuntimeError):
     """A donor's vector is not what this embedder makes for the same text."""
+
+
+class _BudgetSpent(Exception):
+    """``budget_s`` ran out between two embedding batches of one record: its batches so far are saved, the record is not written."""
 
 
 def _unpack(blob: bytes) -> list[float]:
@@ -163,8 +170,9 @@ KEYWORD_ONLY_EMBEDDER = ("none", "0")      # (name, version) on chunk rows writt
 
 class _Run:
     def __init__(self, con, shelf_root: Path, embedder: Embedder | None, ident: Identity | None, now: Callable[[], datetime],
-                 keyword_only: bool = False, donor=None, career=None, donor_check: bool = False):
+                 keyword_only: bool = False, donor=None, career=None, donor_check: bool = False, stop_at: float | None = None):
         self.con, self.root, self.embedder, self.ident, self.now = con, shelf_root, embedder, ident, now
+        self.stop_at = stop_at          # time.monotonic() past which no further embedding batch starts (``budget_s``)
         self.donor_check = donor_check  # spot-check lent vectors against this embedder (a donor made on another machine)
         self.career = career            # career_filter.CareerFilter, or None (the full index)
         self.keyword_only = keyword_only
@@ -188,6 +196,8 @@ class _Run:
 
     def _hold(self, rid, rel, st, sha, meta, reason) -> None:
         store.delete_record_chunks(self.con, rid, vectors=not self.keyword_only)
+        if not self.keyword_only:
+            store.clear_pending(self.con, rid)
         self._upsert(rid, rel, st, sha, meta, "held", reason, 0)
         self.held[reason] += 1
 
@@ -261,8 +271,9 @@ class _Run:
             embedder_name, embedder_version = KEYWORD_ONLY_EMBEDDER
         else:
             # The donor lends what this index lacks; this index's own vectors win (#660: MC's index borrows the full index's).
+            # Batches an interrupted run already embedded for this record count as its own (same index, same pinned embedder).
             kept = {c.text_hash for c in chunks}
-            own = store.old_vectors(self.con, rid)
+            own = {**{h: v for h, v in store.pending_vectors(self.con, rid).items() if h in kept}, **store.old_vectors(self.con, rid)}
             lent = {h: v for h, v in (store.old_vectors(self.donor, rid, kept) if self.donor is not None else {}).items() if h not in own}
             reuse = {**lent, **own}
             if lent:
@@ -270,12 +281,12 @@ class _Run:
                 if self.donor_check:
                     self._spot_check(chunks, lent)
             todo = [c for c in chunks if c.text_hash not in reuse]
-            fresh = self.embedder.embed_documents([c.text for c in todo], chunker.EMBED_MAX_CHARS) if todo else []
-            vectors = {c.text_hash: sqlite_vec.serialize_float32(v) for c, v in zip(todo, fresh)}
-            self.counts["embedded_chunks"] += len(todo)
+            vectors = self._embed_saving(rid, todo)
             self.counts["reused_vectors"] += len(chunks) - len(todo)
             embedder_name, embedder_version = self.ident.name, self.ident.version
         store.delete_record_chunks(self.con, rid, vectors=not self.keyword_only)
+        if not self.keyword_only:
+            store.clear_pending(self.con, rid)
         tier, canary, edition_hash = policy.effective_tier(meta), int(policy.is_canary(meta)), meta["edition_hash"]
         times = [c.at or meta.get("created") for c in chunks]
         known = [t for t in times if t]
@@ -296,6 +307,24 @@ class _Run:
         self._upsert(rid, rel, st, sha, meta, "indexed", None, len(chunks), activity)
         self.con.commit()
         self.counts["reindexed" if row else "indexed"] += 1
+
+    def _embed_saving(self, rid: str, todo: list) -> dict[str, bytes]:
+        """Embed ``todo`` one embedder batch at a time, saving each batch before the next starts. Stops with ``_BudgetSpent`` when the
+        budget runs out between batches (the saved batches stay for the next run)."""
+        vectors: dict[str, bytes] = {}
+        self.counts["embedded_chunks"] += 0             # reported (0) even when the record needed nothing new
+        step = max(1, int(getattr(self.embedder, "batch", 0) or 16))
+        for i in range(0, len(todo), step):
+            if i and self.stop_at is not None and time.monotonic() >= self.stop_at:
+                raise _BudgetSpent()
+            part = todo[i:i + step]
+            fresh = self.embedder.embed_documents([c.text for c in part], chunker.EMBED_MAX_CHARS)
+            got = {c.text_hash: sqlite_vec.serialize_float32(v) for c, v in zip(part, fresh)}
+            store.save_pending(self.con, rid, got)
+            self.con.commit()
+            vectors.update(got)
+            self.counts["embedded_chunks"] += len(part)
+        return vectors
 
     def _spot_check(self, chunks, lent: dict) -> None:
         """Embed a sample of the lent chunks here; any disagreement stops the run before this record is written."""
@@ -334,7 +363,7 @@ def _sync(con, shelf_root: Path, embedder: Embedder | None, ident: Identity | No
           donor_check: bool = False) -> dict:
     started = time.monotonic()
     stop_at = None if budget_s is None else started + max(0.0, float(budget_s))
-    run = _Run(con, shelf_root, embedder, ident, now, keyword_only, donor, career, donor_check)
+    run = _Run(con, shelf_root, embedder, ident, now, keyword_only, donor, career, donor_check, stop_at)
     entries = shelf_entries(shelf_root)
     if only is not None:
         wanted = set(only)
@@ -348,6 +377,9 @@ def _sync(con, shelf_root: Path, embedder: Embedder | None, ident: Identity | No
                 con.commit()
                 return run.result(BUDGET_SPENT, started)
             run.record(rid, rel, path)
+    except _BudgetSpent:
+        con.commit()
+        return run.result(BUDGET_SPENT, started)
     except batch_window.BatchDeadline as exc:
         con.commit()
         return run.result(exc.code, started)
@@ -367,6 +399,8 @@ def _sync(con, shelf_root: Path, embedder: Embedder | None, ident: Identity | No
         return run.result(exc.code, started)
     if only is None and limit is None:
         run.drop_missing({e[0] for e in entries})
+        if not keyword_only:
+            store.clear_pending(con)                    # every record was visited: nothing is left half-embedded
     store.set_meta(con, updated_at=_utc(now()))
     con.commit()
     return run.result(OK, started)

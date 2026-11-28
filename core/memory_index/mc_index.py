@@ -191,8 +191,8 @@ def main(argv=None) -> int:
         donor = target / "index" / "memory.sqlite"      # the same resolved release's full index (#660)
     embedder = None
     if a.embedder_url:
-        from core.memory_index.embedder import OllamaEmbedder
-        embedder = OllamaEmbedder(a.embedder_url)
+        from core.memory_index.embedder import SERVER_BATCH, OllamaEmbedder
+        embedder = OllamaEmbedder(a.embedder_url, batch=SERVER_BATCH)      # an explicit URL is a server embedder (#660)
     out = build(shelf, a.out, career, release=release, embedder=embedder, donor_path=donor)
     print(json.dumps(out, sort_keys=True), flush=True)
     return EXIT_OK if out.get("code") in (OK, NOOP) else EXIT_FAIL

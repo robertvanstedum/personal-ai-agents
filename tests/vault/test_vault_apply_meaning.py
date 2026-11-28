@@ -268,3 +268,49 @@ def test_the_cli_seed_refuses_without_the_embedder_and_is_quiet_outside_the_wind
     monkeypatch.setattr(va.apply, "in_window", lambda now: False)
     rc = va.main(cli(w, tmp_path / "jobs") + ["--index-runner", "host", "--meaning-embedder", "http://127.0.0.1:11434", "seed", "--execute"])
     assert rc == 0 and "outside_window" in capsys.readouterr().out and not (tmp_path / "jobs" / "vault-meaning-seed.json").exists()
+
+
+# ── the owner's daytime seed (28 Nov: "Deploy, seed now") ──
+def test_without_the_owner_flag_a_daytime_seed_is_still_a_no_op(w):
+    emb = Pinned()
+    out = A.run_seed(vault_root=str(w.vault), index_runner=A.HostRunner(emb), owner_uid=os.geteuid(), reader_uid=os.geteuid(),
+                     reader_gid=os.getegid(), slice_s=600, require_root=False, now=lambda: DAY, allow_outside_window=False)
+    assert out == {"code": "outside_window"} and not seed_dir(w).exists() and emb.seen == []
+
+
+def test_with_the_owner_flag_a_daytime_slice_runs_without_the_0600_guard(w, monkeypatch):
+    monkeypatch.undo()                                      # the real window_deadline: by day it must not be passed to the slice
+    emb = Pinned()
+    deadlines = []
+    real_seed = A.HostRunner.seed
+
+    def seed(self, shelf, seed_index, budget_s, deadline, donor=False):
+        deadlines.append(deadline)
+        return real_seed(self, shelf, seed_index, budget_s, deadline, donor)
+    monkeypatch.setattr(A.HostRunner, "seed", seed)
+    out = A.run_seed(vault_root=str(w.vault), index_runner=A.HostRunner(emb), owner_uid=os.geteuid(), reader_uid=os.geteuid(),
+                     reader_gid=os.getegid(), slice_s=600, require_root=False, now=lambda: DAY, allow_outside_window=True)
+    assert out["code"] == "ok" and out["complete"] and out["by_day"] and deadlines == [None]
+    assert A.seed_complete(seed_dir(w)) and emb.seen
+
+
+def test_the_cli_seed_runs_by_day_only_with_the_owner_flag(w, tmp_path, capsys, monkeypatch):
+    va = load("vault_apply")
+    monkeypatch.setattr(va.apply, "in_window", lambda now: False)
+    emb = Pinned()
+    monkeypatch.setattr(va.apply, "make_index_runner", lambda *a, **k: A.HostRunner(emb))
+    base = cli(w, tmp_path / "jobs") + ["--index-runner", "host", "--meaning-embedder", "http://127.0.0.1:11434"]
+    assert va.main(base + ["seed", "--execute"]) == 0
+    assert "outside_window" in capsys.readouterr().out and not (tmp_path / "jobs" / "vault-meaning-seed.json").exists()
+    assert va.main(base + ["seed", "--execute", "--allow-outside-window"]) == 0
+    assert "seed complete" in capsys.readouterr().out and A.seed_complete(seed_dir(w))
+
+
+def test_a_seed_completed_by_day_is_promoted_by_the_next_daytime_apply(w):
+    """Apply has no window: the 15-minute apply after a daytime ``complete: true`` promotes it, in daytime."""
+    emb = Pinned()
+    assert A.run_seed(vault_root=str(w.vault), index_runner=A.HostRunner(emb), owner_uid=os.geteuid(), reader_uid=os.geteuid(),
+                      reader_gid=os.getegid(), slice_s=600, require_root=False, now=lambda: DAY, allow_outside_window=True)["complete"]
+    out = apply(w, index_runner=A.HostRunner(emb), now=Clock(DAY))
+    assert out["built"] and out["seed_promoted"] and out["index_kind"] == "meaning"
+    assert A.index_kind(serving_index(w))[0] == "meaning"
