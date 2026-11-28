@@ -130,6 +130,9 @@ def conversations(guild_dir: Path, principal: str, counts: Counter) -> list[tupl
         if conv.get("record_mode", "on_record") != "on_record":
             counts["off_record"] += 1                      # no record carries one today; fail closed if one ever does
             continue
+        if conv.get("uat") not in (None, False):
+            counts["uat"] += 1                             # the staging automatic UAT's own chats never reach the Vault
+            continue
         if legacy and legacy.group(1) != hashlib.sha256(principal.encode()).hexdigest()[:16]:
             counts["unreadable_record"] += 1               # a legacy file must be this owner's own (conversations._path)
             continue

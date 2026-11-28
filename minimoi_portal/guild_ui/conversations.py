@@ -51,7 +51,8 @@ MEETING_TITLE = "Guildhall · "       # mc_rooms_bridge: the working conversatio
 # default title, nothing pinned, attached or turned" is the shell. Anything else on the record keeps it a real chat.
 EMPTY_PRUNE_AFTER_S = 24 * 3600
 _SHELL_KEYS = frozenset({"id", "principal", "title", "title_source", "created_at", "updated_at", "pinned", "archived",
-                         "archived_at", "work_item", "legacy", "notes_floor", "created_key", "scope", "scope_day", "routes"})
+                         "archived_at", "work_item", "legacy", "notes_floor", "created_key", "scope", "scope_day", "routes",
+                         "uat"})
 
 
 def is_empty_chat(conv: dict) -> bool:
@@ -294,18 +295,22 @@ class ConversationStore:
                 return max(rows, key=lambda c: c.get("updated_at") or "")
             return self._new(principal, key=None, scope=scope, day=day)
 
-    def _new(self, principal, *, key, work_item=None, scope=None, day=None):
-        # Caller holds the store lock.
+    def _new(self, principal, *, key, work_item=None, scope=None, day=None, uat=False):
+        # Caller holds the store lock. ``uat``: created by the staging UAT session (api decides, from the portal session);
+        # the exporter never sends such a chat to the Vault (scripts/vault/export_mc_conversations.py).
         cid = "c-" + secrets.token_hex(6)
         now = now_iso()
         conv = {"id": cid, "principal": principal, "title": DEFAULT_TITLE, "title_source": "default",
                 "created_at": now, "updated_at": now, "pinned": False, "archived": False, "archived_at": None,
                 "work_item": work_item, "legacy": False, "notes_floor": f"{self.base_floor}/{cid}",
                 "created_key": key, "scope": scope, "scope_day": day}
+        if uat is True:
+            conv["uat"] = True                      # absent on every ordinary chat
         return self._write(conv)
 
     # ── writes (no model call anywhere) ────────────────────────────────
-    def create(self, principal: str, *, key: str, work_item: dict | None = None, scope: str | None = None) -> tuple[dict, bool]:
+    def create(self, principal: str, *, key: str, work_item: dict | None = None, scope: str | None = None,
+               uat: bool = False) -> tuple[dict, bool]:
         """(conversation, repeated): one conversation per idempotency key."""
         with self._lock():
             self._migrate(principal)
@@ -313,7 +318,7 @@ class ConversationStore:
                 if conv.get("created_key") == key and conv.get("principal") == principal:
                     return conv, True
             return self._new(principal, key=key, work_item=work_item, scope=scope,
-                             day=local_day() if scope else None), False
+                             day=local_day() if scope else None, uat=uat), False
 
     def _change(self, cid: str, principal: str, fn) -> dict:
         if not isinstance(cid, str) or not ID_RE.fullmatch(cid):

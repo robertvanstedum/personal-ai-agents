@@ -2144,7 +2144,9 @@ def conversation_create():
         scope = body.get("scope")
         if scope is not None and (not isinstance(scope, str) or scope not in CHAT_SCOPES):
             return json_error("invalid", "Unknown conversation area.", 422), None
-        conv, repeated = store.create(_principal(), key=body["_key"], work_item=work_item, scope=scope)
+        from minimoi_portal import uat_signin
+        conv, repeated = store.create(_principal(), key=body["_key"], work_item=work_item, scope=scope,
+                                      uat=uat_signin.is_uat(cfg()["current_user"]()))
         return conv, ("repeated" if repeated else "created")
     return _conv_write(action)
 

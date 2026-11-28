@@ -116,6 +116,10 @@ services:
       # Production intake activation never enables the staging receiver/sender.
       - MINIMOI_LIBRARY_INTAKE=0
       - BASE_URL=https://dev.minimoi.ai
+      # Automatic UAT (SPEC_AUTOMATIC_UAT §2): the staging-only sign-in door. The hash of the SSM token, never the
+      # token; empty keeps the door closed. Never set in production (tests/test_uat_signin.py).
+      - MINIMOI_ENV=staging
+      - MINIMOI_UAT_SIGNIN_SHA256=${MINIMOI_UAT_SIGNIN_SHA256:-}
       - CURATOR_BACKEND=http://curator:8766
       - GERMAN_BACKEND=http://german:8767
       - PORTUGUESE_BACKEND=http://portuguese:8770

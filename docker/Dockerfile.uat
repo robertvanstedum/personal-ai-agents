@@ -1,0 +1,6 @@
+# The automatic staging UAT runner (SPEC_AUTOMATIC_UAT v0.1 §3). The official Playwright image ships the browsers and
+# their system libraries but not the Python package, so this adds it at the matching version. The base is pinned by
+# digest; bump both lines together.
+FROM mcr.microsoft.com/playwright/python:v1.49.1-noble@sha256:42e251ec3238672c931be6c3565ff279690ae072c3e22058128d0412494f6866
+RUN python3 -m pip install --no-cache-dir --break-system-packages playwright==1.49.1 \
+ && python3 -c "import playwright.sync_api"
