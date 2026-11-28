@@ -35,7 +35,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from core.jobs import health, registry, status  # noqa: E402
+from core.jobs import health, locks, registry, status  # noqa: E402
 
 ALIASES_PATH = REPO / "config" / "metrics_public_aliases.json"
 DEFAULT_OUT = "/var/lib/minimoi-metrics/minimoi.prom"
@@ -55,13 +55,19 @@ HELP = {
     "minimoi_job_phase": "1 for the job's reported phase.",
     "minimoi_job_last_refusal_timestamp_seconds": "The last run refused at its lock.",
     "minimoi_job_threshold_seconds": "The registry's thresholds, so rules and the registry cannot drift.",
+    "minimoi_lock_state": "1 for each Vault lock's probed state (held, free, absent, unknown); never inferred from file age.",
+    "minimoi_docker_readable": "1 when the container list could be read, 0 when docker could not say (counts below absent).",
+    "minimoi_vault_containers": "Running Vault index containers by kind (an inventory figure, not proof of an orphan).",
+    "minimoi_vault_orphan_containers": "Over budget, owner lock not held and owner job not running.",
+    "minimoi_vault_container_oldest_age_seconds": "Age of the oldest running Vault index container by kind.",
 }
 
 
 class Aliases:
     def __init__(self, doc: dict):
         self.allowed = {k: frozenset(doc.get(k) or ()) for k in
-                        ("hosts", "job_ids", "codes", "phases", "refusal_reasons", "threshold_kinds")}
+                        ("hosts", "job_ids", "codes", "phases", "refusal_reasons", "threshold_kinds", "locks",
+                         "lock_states", "container_kinds")}
 
     @classmethod
     def load(cls, path=ALIASES_PATH) -> "Aliases":
@@ -77,7 +83,7 @@ class Snapshot:
 
     def add(self, name: str, value, **labels) -> None:
         kinds = {"host": "hosts", "job_id": "job_ids", "code": "codes", "phase": "phases", "reason": "refusal_reasons",
-                 "kind": "threshold_kinds"}
+                 "kind": "threshold_kinds", "lock": "locks", "state": "lock_states", "container": "container_kinds"}
         for key, val in labels.items():
             if key not in kinds or not self.aliases.ok(kinds[key], val):
                 self.dropped += 1
@@ -115,8 +121,25 @@ def _ts(value) -> float | None:
     return moment.timestamp() if moment else None
 
 
-def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: datetime) -> str:
+def vault_traps(snap: "Snapshot", vault_root, containers, owner_running: bool) -> None:
+    """Lock states and Vault index containers (WS3 C1.3). ``containers`` is the docker listing or None (unreadable)."""
+    states = {name: locks.probe(path) for name, path in locks.lock_paths(vault_root).items()}
+    for name, state in states.items():
+        snap.add("minimoi_lock_state", 1, lock=name, state=state)
+    if containers == "skip":
+        return                                              # container checks not enabled on this host
+    kinds = locks.classify(containers, states["vault_refresh"], owner_running, snap.now)
+    snap.add("minimoi_docker_readable", 0 if kinds is None else 1)
+    for kind, row in (kinds or {}).items():
+        snap.add("minimoi_vault_containers", row["count"], container=kind)
+        snap.add("minimoi_vault_orphan_containers", row["orphans"], container=kind)
+        snap.add("minimoi_vault_container_oldest_age_seconds", row["oldest_s"], container=kind)
+
+
+def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: datetime, vault_root=None,
+          containers="skip") -> str:
     snap = Snapshot(aliases)
+    snap.now = now
     for h in sorted(set(reg.hosts()) - {"github"}):
         report = health.read_report(health_dir, h)
         if report is None:
@@ -167,6 +190,14 @@ def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: dateti
             if ts is not None:
                 snap.add("minimoi_job_last_progress_timestamp_seconds", ts, job_id=job.id, host=host)
             snap.add("minimoi_job_phase", 1, job_id=job.id, host=host, phase=progress.get("phase"))
+    if vault_root:
+        running = False
+        for jid in ("vault-apply", "vault-meaning-seed"):
+            j = reg.get(jid)
+            root = roots.get(j.status_root) or roots.get("jobs") if j else None
+            d = status.read_status(root, j.status_file, j.id) if (j and root) else None
+            running = running or bool(d and d.get("state") == "running")
+        vault_traps(snap, vault_root, containers, running)
     snap.add("minimoi_exporter_snapshot_timestamp_seconds", now.timestamp())
     snap.rows.append(("minimoi_exporter_dropped", (), float(snap.dropped)))
     snap.rows.append(("minimoi_exporter_invalid", (), float(snap.invalid)))
@@ -196,7 +227,10 @@ def run(*, environ=None, now: Callable[[], datetime] = lambda: datetime.now(time
     for key, value in env.items():
         if key.startswith("MINIMOI_JOBS_ROOT_") and value:
             roots[key[len("MINIMOI_JOBS_ROOT_"):].lower().replace("_", "-")] = value
-    text = build(reg, env.get("MINIMOI_JOBS_HEALTH_DIR", ""), roots, env.get("MINIMOI_JOBS_HOST", "ec2"), aliases, now())
+    vault_root = env.get("MINIMOI_VAULT_ROOT") or None
+    containers = locks.list_containers() if (vault_root and env.get("MINIMOI_METRICS_DOCKER") == "on") else "skip"
+    text = build(reg, env.get("MINIMOI_JOBS_HEALTH_DIR", ""), roots, env.get("MINIMOI_JOBS_HOST", "ec2"), aliases, now(),
+                 vault_root=vault_root, containers=containers)
     try:
         publish(text, env.get("MINIMOI_METRICS_FILE") or DEFAULT_OUT)
     except OSError as exc:

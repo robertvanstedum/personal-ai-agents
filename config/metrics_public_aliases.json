@@ -94,5 +94,22 @@
     "stuck_after_s",
     "overdue_after_s",
     "idle_allowed_s"
+  ],
+  "locks": [
+    "vault_refresh",
+    "seed_index",
+    "cos_export",
+    "mc_export"
+  ],
+  "lock_states": [
+    "held",
+    "free",
+    "absent",
+    "unknown"
+  ],
+  "container_kinds": [
+    "seed",
+    "index_step",
+    "unknown_holder"
   ]
 }
