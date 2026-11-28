@@ -36,9 +36,38 @@ def open_read_only(path):
         # Only a read-only location's refusal (a read-only mount, or a folder without write permission); anything else is a real failure.
         if not any(text in str(exc) for text in ('unable to open database file','attempt to write a readonly database')):raise
         return sqlite3.connect(uri+'?mode=ro&immutable=1',uri=True)
-def schema_hash(db):
-    rows=db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
+def schema_rows(db):
+    return db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
+def rows_hash(rows):
     return hashlib.sha256(json.dumps(rows,separators=(',',':')).encode()).hexdigest()
+def schema_hash(db):
+    return rows_hash(schema_rows(db))
+# Reviewed additive schema steps that Records' own startup applies after preparation. Preparation records the schema
+# fingerprint once; a later release whose startup adds tables (room_approval, #686: Records ran it from 26 Nov) left
+# production's schema = fingerprint + those tables, and every preflight after that refused prepared_schema_mismatch.
+# A step names a module whose SCHEMA is plain CREATE ... IF NOT EXISTS DDL with no other side effect. Its objects are
+# recognised only with the exact sqlite_master rows that DDL creates. Steps are cumulative, in this order; the live
+# schema must equal the fingerprint plus steps 1..k exactly. Any other difference (a missing object, a changed
+# definition, an unregistered object, a step applied out of order) is still refused. Preflight stays read-only: it
+# never migrates and never rewrites the fingerprint. Adding a step is a reviewed code change.
+ADDITIVE_SCHEMA_STEPS=(('room_approval_20261125','domains.records.room_approval'),)
+def step_rows(module_name):
+    import importlib
+    ddl=importlib.import_module(module_name).SCHEMA
+    with closing(sqlite3.connect(':memory:')) as mem:
+        mem.executescript(ddl);return schema_rows(mem)
+def recognised_schema(db,prepared_sha256,steps=ADDITIVE_SCHEMA_STEPS):
+    """The registered steps applied on top of the prepared schema, () when the schema is exactly the prepared one,
+    or None when the live schema is anything else."""
+    rows=schema_rows(db)
+    if rows_hash(rows)==prepared_sha256:return ()
+    live=set(rows);applied=[]
+    for name,module in steps:
+        expected=set(step_rows(module))
+        if not expected or not expected<=live:return None
+        rows=[r for r in rows if r not in expected];live-=expected;applied.append(name)
+        if rows_hash(rows)==prepared_sha256:return tuple(applied)
+    return None
 def preflight(data_dir,environ,*,port=18880):
     """Read-only verification BEFORE Store can create a DB/key/owner/schema."""
     env=dict(environ)
@@ -58,7 +87,7 @@ def preflight(data_dir,environ,*,port=18880):
     refuse(len(owner)>=32 and len(session)>=32 and hashlib.sha256(owner).hexdigest()==marker['owner_key_sha256'] and hashlib.sha256(session).hexdigest()==marker['session_key_sha256'],'prepared_store_keys_required')
     private_file(root/'records.sqlite3',512*1024*1024,metadata_only=True)
     with closing(open_read_only(root/'records.sqlite3')) as db:
-        refuse(schema_hash(db)==marker['schema_sha256'],'prepared_schema_mismatch')
+        steps=recognised_schema(db,marker['schema_sha256']);refuse(steps is not None,'prepared_schema_mismatch')
         tables={r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")};refuse(REQUIRED_TABLES<=tables,'prepared_schema_incomplete')
         refuse(db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()==('5',),'prepared_schema_version_required')
         refuse(db.execute("SELECT value FROM meta WHERE key='rooms_r1_schema'").fetchone()==('1',),'prepared_rooms_schema_required')
@@ -68,7 +97,7 @@ def preflight(data_dir,environ,*,port=18880):
         missing=db.execute("SELECT COUNT(*) FROM principals p LEFT JOIN client_installations i ON i.id='legacy:'||p.id LEFT JOIN client_credentials c ON c.id='legacy:'||p.id WHERE i.id IS NULL OR c.id IS NULL").fetchone()[0]
         refuse(missing==0,'prepared_legacy_import_required')
         refuse(db.execute('SELECT COUNT(*) FROM rooms WHERE id NOT IN (SELECT room FROM room_generations)').fetchone()[0]==0,'prepared_generations_required')
-    return {'profile':'production','schema_sha256':marker['schema_sha256'],'provisioned_here':False}
+    return {'profile':'production','schema_sha256':marker['schema_sha256'],'schema_steps':list(steps),'provisioned_here':False}
 def build_app(data_dir,environ):
     preflight(data_dir,environ)
     from domains.records.app import create_app
