@@ -20,7 +20,8 @@ than 24 h; ``core.jobs.health.severity``). Kept in ``health-daily-state.json`` i
   (``watchdog-state.json``: same job, same condition, same occurrence key); it is repeated on later days. ``alerts: on`` in a report proves
   no delivery, so another host's red items (the Mac's) are told here too: a duplicate beats silence;
 * a told condition is announced as recovered only on affirmative evidence: its host's report is fresh (not stale, not
-  dated in the future) **and** lists the same job green (``ok``). A job observed yellow ``late``/``warn`` is announced as
+  dated in the future) **and** lists the same job green (``ok``) with a last success *newer than the incident* (a retry
+  still running beside an older success is green to the judge but is not a recovery). A job observed yellow ``late``/``warn`` is announced as
   improved. Anything else (a missing or stale report, the job absent from the report, ``not_tracked``, unknown,
   ``skew``, ``not_due``) is lost observation: the condition is carried, unresolved. A job retired or removed from the
   registry is dropped without a message. A recovery whose message fails is retried on the next run. (This host's watchdog may also
@@ -97,7 +98,7 @@ def build(reg, health_dir, now: datetime) -> dict:
     fresh = sorted(h for h, r in reporting.items() if _fresh(h, r, now))
     # What each fresh host's report says about every job, unfiltered (daily_items drops ok and not_tracked): recovery
     # and improvement are announced only from a present, positive observation of the same job.
-    observed = {h: {i["id"]: {"light": i.get("light"), "code": i.get("code")}
+    observed = {h: {i["id"]: {"light": i.get("light"), "code": i.get("code"), "last_success_at": i.get("last_success_at")}
                     for i in reporting[h]["items"] if isinstance(i, dict) and isinstance(i.get("id"), str)}
                 for h in fresh}
     for item in items:
@@ -176,7 +177,11 @@ def notify(daily: dict, told: dict, sender, now: datetime | None = None, watchdo
             current[job_id] = prior                     # cannot see that host now: carried, never called recovered
             continue
         seen = observed.get(host, {}).get(job_id) or {}
-        if seen.get("light") == "green" and seen.get("code") == "ok":
+        condition, _, _ = _split(prior)
+        off_since = status.parse_time(condition.split("|", 1)[1] if "|" in condition else None)
+        success = status.parse_time(seen.get("last_success_at"))
+        newer = success is not None and (off_since is None or success > off_since)   # completed after the incident
+        if seen.get("light") == "green" and seen.get("code") == "ok" and newer:
             text = f"minimoi health, recovered: {job_id} ({host}) is green again"
         elif seen.get("light") == "yellow" and seen.get("code") in ("late", "warn") and job_id in by_id:
             text = f"minimoi health, improved: {health.line(by_id[job_id])}"   # an observed operational downgrade

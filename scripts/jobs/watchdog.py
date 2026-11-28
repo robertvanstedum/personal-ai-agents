@@ -114,6 +114,7 @@ def check(jobs_root, jobs, state: dict, sender, now, roots=None, alerts=True) ->
             mark = {"condition": verdict.code, "key": verdict.key}
             if prior and {k: prior.get(k) for k in mark} == mark:
                 continue                                                        # already told
+            mark["since"] = (doc or {}).get("last_success_at")                  # the last success the incident follows
             if verdict.code == "failed" and doc and doc.get("alert") == "sent":
                 state[job.id] = mark                                            # the wrapper already told Robert
                 continue
@@ -122,13 +123,33 @@ def check(jobs_root, jobs, state: dict, sender, now, roots=None, alerts=True) ->
                 state[job.id] = mark
             else:
                 delivered = False
-        elif verdict.code in ("ok", "warn") and prior:   # affirmative recovery only (WS3 C0.2): a completed run.
-            # A running first run, late, unknown or skew is not proof the incident is over; the state is kept.
+        elif verdict.code in ("ok", "warn") and prior and _recovered(doc, prior):
+            # Affirmative recovery only (WS3 C0.2; Codex stack integration review): a run that *completed after* the
+            # incident. A retry still running beside a recent old success, a first run, late, unknown or skew is not
+            # proof the incident is over; the state is kept.
             if _send(sender, f"minimoi job {job.id} on {job.host}: recovered, now {verdict.code}"):
                 state.pop(job.id, None)
             else:
                 delivered = False
     return codes, delivered
+
+
+def _recovered(doc: dict | None, prior: dict) -> bool:
+    """True when ``doc`` records a completed run newer than the incident in ``prior``: its state is ok or warn and its
+    ``last_success_at`` is later than the success the incident followed (``since``, or for a legacy mark of a missed
+    job its key). Without such ordering evidence it is not a recovery."""
+    if not doc or doc.get("state") not in ("ok", "warn"):
+        return False
+    success = status.parse_time(doc.get("last_success_at"))
+    if success is None:
+        return False
+    if "since" in prior:
+        before = status.parse_time(prior.get("since"))
+        return before is None or success > before
+    before = status.parse_time(prior.get("key"))                         # a missed job's key is its last success
+    if before is not None:
+        return success > before
+    return bool(doc.get("run_id")) and doc.get("run_id") != prior.get("key")   # legacy failed mark: a different run
 
 
 QUIET = ("ok", "not_tracked", "not_due")             # dropped first when the codes do not fit the status file

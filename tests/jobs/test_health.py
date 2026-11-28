@@ -715,7 +715,7 @@ def test_a_report_just_within_the_skew_tolerance_is_fresh(tmp_path):
         doc["checked_at"] = status.iso(NOW + 2 * H + timedelta(seconds=30))
         for i in doc["items"]:
             if i["id"] == "broken":
-                i.update(light="green", code="ok")
+                i.update(light="green", code="ok", last_success_at=status.iso(NOW + H))   # a newer completion
     sent, told = _told_then_publish(tmp_path, near_green)
     assert len(sent) == 2 and "recovered" in sent[1] and "broken" not in told
 
@@ -808,3 +808,68 @@ def test_a_watchdog_record_of_an_older_run_does_not_suppress_a_new_failed_run(tm
     sent = []
     code, _ = run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
     assert code == 0 and len(sent) == 1 and "needs action" in sent[0]
+
+
+# ---- Codex stack integration review (OPS_STACK_INTEGRATION_REVIEW_v0.1): a running retry is not a recovery --------
+
+def _failed_then(jobs, r, *, retry_state, retry_success, run="r2"):
+    """A failed run whose last success is recent (1 h ago), then a retry document."""
+    j = r.get("broken")
+    status.write_status(jobs, j.status_file, status.build(
+        job_id=j.id, host="ec2", run_id=run, state=retry_state, started_at=NOW - 5 * timedelta(minutes=1),
+        finished_at=None if retry_state == "running" else NOW - timedelta(minutes=1),
+        exit_code=None if retry_state == "running" else 0, summary="x", last_success_at=retry_success))
+
+
+def test_watchdog_a_running_retry_beside_a_recent_old_success_is_not_recovered(tmp_path):
+    path = registry_file(tmp_path, job(id="broken", status_file="broken.json"))
+    r = registry.load(path)
+    jobs, state, sent = tmp_path / "jobs", {}, []
+    put(jobs, r.get("broken"), state="failed", finished=NOW - 30 * timedelta(minutes=1), success=NOW - H)
+    wd.check(jobs, [r.get("broken")], state, lambda t: sent.append(t) or "sent", NOW)
+    assert len(sent) == 1 and state["broken"]["since"] == status.iso(NOW - H)
+    _failed_then(jobs, r, retry_state="running", retry_success=NOW - H)                  # retry in progress
+    assert health.observe(r.get("broken"), {"jobs": str(jobs)}, NOW)[1].code == "ok"     # the judge says green
+    wd.check(jobs, [r.get("broken")], state, lambda t: sent.append(t) or "sent", NOW)
+    assert len(sent) == 1 and "broken" in state                                          # no recovery yet
+    _failed_then(jobs, r, retry_state="ok", retry_success=NOW - H, run="stale")          # completion, old success
+    wd.check(jobs, [r.get("broken")], state, lambda t: sent.append(t) or "sent", NOW)
+    assert len(sent) == 1 and "broken" in state                                          # stale completion: no
+    _failed_then(jobs, r, retry_state="ok", retry_success=NOW - timedelta(minutes=1))     # a newer success
+    restarted = json.loads(json.dumps(state))                                           # state survives a restart
+    wd.check(jobs, [r.get("broken")], restarted, lambda t: sent.append(t) or "sent", NOW)
+    wd.check(jobs, [r.get("broken")], restarted, lambda t: sent.append(t) or "sent", NOW + H)
+    assert len(sent) == 2 and "recovered" in sent[1] and "broken" not in restarted       # exactly one recovery
+
+
+def test_watchdog_a_legacy_mark_without_since_still_needs_a_newer_run(tmp_path):
+    path = registry_file(tmp_path, job(id="broken", status_file="broken.json"))
+    r = registry.load(path)
+    jobs, sent = tmp_path / "jobs", []
+    _failed_then(jobs, r, retry_state="ok", retry_success=NOW - H, run="r1")
+    state = {"broken": {"condition": "failed", "key": "r1"}}                              # the run that failed
+    wd.check(jobs, [r.get("broken")], state, lambda t: sent.append(t) or "sent", NOW)
+    assert sent == [] and "broken" in state
+    _failed_then(jobs, r, retry_state="ok", retry_success=NOW - H, run="r2")
+    wd.check(jobs, [r.get("broken")], state, lambda t: sent.append(t) or "sent", NOW)
+    assert len(sent) == 1 and "recovered" in sent[0]
+
+
+def test_daily_a_running_retry_beside_a_recent_old_success_is_not_recovered(tmp_path):
+    path = registry_file(tmp_path, job(id="broken", status_file="broken.json"))
+    r = registry.load(path)
+    jobs, folder, sent = tmp_path / "jobs", tmp_path / "health", []
+    put(jobs, r.get("broken"), state="failed", finished=NOW - 30 * timedelta(minutes=1), success=NOW - H)
+    _republish(folder, r, jobs, NOW)
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    assert len(sent) == 1
+    _failed_then(jobs, r, retry_state="running", retry_success=NOW - H)
+    _republish(folder, r, jobs, NOW + timedelta(minutes=10))
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + timedelta(minutes=10))
+    assert len(sent) == 1                                                                # green, but not newer
+    assert "broken" in json.loads((jobs / "health-daily-state.json").read_text())["told"]
+    _failed_then(jobs, r, retry_state="ok", retry_success=NOW + timedelta(minutes=15))
+    _republish(folder, r, jobs, NOW + timedelta(minutes=20))
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + timedelta(minutes=20))
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + timedelta(minutes=25))
+    assert len(sent) == 2 and "recovered" in sent[1]
