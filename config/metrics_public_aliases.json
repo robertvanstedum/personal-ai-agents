@@ -111,5 +111,48 @@
     "seed",
     "index_step",
     "unknown_holder"
+  ],
+  "vault_services": [
+    "vault-ask",
+    "vault-ask-mc"
+  ],
+  "vault_checks": [
+    "policy",
+    "meta",
+    "structure",
+    "mode",
+    "mode_match",
+    "objective",
+    "privacy",
+    "canary"
+  ],
+  "vault_results": [
+    "blocked",
+    "corrupt",
+    "empty",
+    "error",
+    "fallback",
+    "incompatible",
+    "inconsistent",
+    "invalid",
+    "keyword",
+    "match",
+    "meaning",
+    "met",
+    "mismatch",
+    "miss",
+    "missing",
+    "missing_tables",
+    "not_configured",
+    "not_required",
+    "ok",
+    "pass",
+    "pending",
+    "stale",
+    "stamp_ok",
+    "unknown",
+    "unverified",
+    "verified",
+    "violated"
   ]
 }

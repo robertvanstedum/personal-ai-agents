@@ -35,7 +35,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from core.jobs import health, locks, registry, status  # noqa: E402
+from core.jobs import health, locks, registry, status, vault_checks  # noqa: E402
 
 ALIASES_PATH = REPO / "config" / "metrics_public_aliases.json"
 DEFAULT_OUT = "/var/lib/minimoi-metrics/minimoi.prom"
@@ -55,6 +55,7 @@ HELP = {
     "minimoi_job_phase": "1 for the job's reported phase.",
     "minimoi_job_last_refusal_timestamp_seconds": "The last run refused at its lock.",
     "minimoi_job_threshold_seconds": "The registry's thresholds, so rules and the registry cannot drift.",
+    "minimoi_vault_check": "1 for each Vault correctness result per service (meta, mode, mode_match, objective, privacy, canary). A mode match never certifies the objective.",
     "minimoi_lock_state": "1 for each Vault lock's probed state (held, free, absent, unknown); never inferred from file age.",
     "minimoi_docker_readable": "1 when the container list could be read, 0 when docker could not say (counts below absent).",
     "minimoi_vault_containers": "Running Vault index containers by kind (an inventory figure, not proof of an orphan).",
@@ -68,7 +69,7 @@ class Aliases:
     def __init__(self, doc: dict):
         self.allowed = {k: frozenset(doc.get(k) or ()) for k in
                         ("hosts", "job_ids", "codes", "phases", "refusal_reasons", "threshold_kinds", "locks",
-                         "lock_states", "container_kinds")}
+                         "lock_states", "container_kinds", "vault_services", "vault_checks", "vault_results")}
 
     @classmethod
     def load(cls, path=ALIASES_PATH) -> "Aliases":
@@ -84,7 +85,8 @@ class Snapshot:
 
     def add(self, name: str, value, **labels) -> None:
         kinds = {"host": "hosts", "job_id": "job_ids", "code": "codes", "phase": "phases", "reason": "refusal_reasons",
-                 "kind": "threshold_kinds", "lock": "locks", "state": "lock_states", "container": "container_kinds"}
+                 "kind": "threshold_kinds", "lock": "locks", "state": "lock_states", "container": "container_kinds",
+                 "service": "vault_services", "check": "vault_checks", "result": "vault_results"}
         for key, val in labels.items():
             if key not in kinds or not self.aliases.ok(kinds[key], val):
                 self.dropped += 1
@@ -138,8 +140,33 @@ def vault_traps(snap: "Snapshot", vault_root, containers, owner_running) -> None
         snap.add("minimoi_vault_container_oldest_age_seconds", row["oldest_s"], container=kind)
 
 
+def vault_correctness(snap: "Snapshot", desired_path, now: datetime) -> None:
+    """Per Vault ask service: policy, metadata, structure, declared mode, mode match against the approved state,
+    privacy and the objective (WS3 C1.4). Read-only; no query here. Each service is evaluated inside its own boundary:
+    a malformed policy or an unexpected error gives that service fixed unknown/invalid codes and never stops the
+    snapshot or echoes the input."""
+    doc = vault_checks.load_desired(desired_path)
+    services = (doc or {}).get("services") or {}
+    for service in ("vault-ask", "vault-ask-mc"):
+        result = {"policy": "invalid" if doc is not None else "unknown", "meta": "unknown", "structure": "unknown",
+                  "mode": "unknown", "mode_match": "unknown", "privacy": "unknown", "objective": "unknown",
+                  "canary": "unknown"}
+        try:
+            policy = vault_checks.validate_service(services.get(service)) if doc is not None else None
+            spec = vault_checks.validate_canary(doc, service)
+            canary = "invalid" if spec == "invalid" else "not_configured" if spec is None else "unknown"
+            if isinstance(policy, dict):
+                meta_state, meta, structure = vault_checks.inspect_index(policy["index_path"])
+                result = vault_checks.check_service(policy, meta_state, meta, structure, now, None)
+            result["canary"] = canary                         # a configured canary reports through its own job
+        except Exception:                                     # noqa: BLE001
+            result = {k: "unknown" for k in result}
+        for check, value in result.items():
+            snap.add("minimoi_vault_check", 1, service=service, check=check, result=value)
+
+
 def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: datetime, vault_root=None,
-          containers="skip") -> str:
+          containers="skip", desired_path=None) -> str:
     snap = Snapshot(aliases)
     snap.now = now
     for h in sorted(set(reg.hosts()) - {"github"}):
@@ -204,6 +231,8 @@ def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: dateti
                 running = True
         running = True if running else (None if unreadable else False)
         vault_traps(snap, vault_root, containers, running)
+    if desired_path:
+        vault_correctness(snap, desired_path, now)
     snap.add("minimoi_exporter_snapshot_timestamp_seconds", now.timestamp())
     snap.rows.append(("minimoi_exporter_dropped", (), float(snap.dropped)))
     snap.rows.append(("minimoi_exporter_invalid", (), float(snap.invalid)))
@@ -236,7 +265,7 @@ def run(*, environ=None, now: Callable[[], datetime] = lambda: datetime.now(time
     vault_root = env.get("MINIMOI_VAULT_ROOT") or None
     containers = locks.list_containers() if (vault_root and env.get("MINIMOI_METRICS_DOCKER") == "on") else "skip"
     text = build(reg, env.get("MINIMOI_JOBS_HEALTH_DIR", ""), roots, env.get("MINIMOI_JOBS_HOST", "ec2"), aliases, now(),
-                 vault_root=vault_root, containers=containers)
+                 vault_root=vault_root, containers=containers, desired_path=env.get("MINIMOI_VAULT_DESIRED") or None)
     try:
         publish(text, env.get("MINIMOI_METRICS_FILE") or DEFAULT_OUT)
     except OSError as exc:
