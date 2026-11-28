@@ -249,7 +249,7 @@ def test_a_build_result_note_leads_with_what_the_runner_recorded(w):
                     "- Changed files: yes\n"
                     "- Tests (run by the runner): `pytest tests/test_planning_mirror.py -q`, exit code 0. 18 passed in 2.1s\n"
                     "- Draft pull request: https://github.com/example/repo/pull/7\n"
-                    "Nothing was merged, released or deployed.\n\n"
+                    "Nothing was merged, released or deployed.\n\nClaude Code's own account, not verified by the runner:\n\n"
                     "I added the flag and a test.")                    # the footer is not said twice
     assert w.manager.store.read_result(w.cid, jid) == "I added the flag and a test.\n\n" + FOOTER   # the kept result is whole
     assert job["result_in_note_cut"] is False
@@ -278,7 +278,7 @@ def test_without_the_structured_record_the_runners_footer_leads_the_note_and_is_
     [text] = agent_notes(w)
     lines = FOOTER.split("\n")[1:]
     assert text == ("Build result, as the runner recorded it:\n" + "\n".join("- " + line for line in lines)
-                    + "\nNothing was merged, released or deployed.\n\n"
+                    + "\nNothing was merged, released or deployed.\n\nClaude Code's own account, not verified by the runner:\n\n"
                     "I added the flag.\n\nBranch: the agent's own words stay where they are.")
     got = w.manager.report(w.cid, w.principal)
     assert got["summary_lines"] == lines and got["detail"] is None and got["text"].endswith(FOOTER)

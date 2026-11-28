@@ -180,6 +180,9 @@ def build_footer(text: str):
     return [line.rstrip()[:400] for line in tail[1:]], "\n".join(lines[:-6]).rstrip()
 
 
+AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
+
+
 def build_summary(detail) -> str:
     """The lead of a build's result note (#693) from the runner's structured record: what the RUNNER recorded, never the
     agent's own account. "" when the runner supplied nothing usable. A fact that was not recorded is said as missing."""
@@ -682,6 +685,9 @@ class JobManager:
                         body = rest or frozen
                         lead = lead or "\n".join(["Build result, as the runner recorded it:", *("- " + line for line in footer),
                                                   "Nothing was merged, released or deployed."])
+                if lead and body.strip():
+                    # The runner's record and the agent's account must not read as one voice (first live run, 27 Nov).
+                    lead += "\n\n" + AGENT_NAMES.get(j.get("agent"), "The agent") + "'s own account, not verified by the runner:"
                 j["result_pending"] = (lead + "\n\n" + shown_in_note(body, NOTE_SHOWN_MAX - len(lead) - 2)) if lead else shown_in_note(frozen)
                 j["result_truncated"], j["result_chars"], j["result_in_note_cut"] = truncated, len(frozen), not j["result_pending"].endswith(body)
         job = self.store.mutate(cid, jid, freeze)

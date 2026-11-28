@@ -325,6 +325,9 @@ def job_short(request_id, generation) -> str:
     return workspace.branch_name(request_id, generation)[len("mc/"):]
 
 
+_DESIGN_TITLE = re.compile(r"^--- Approved design: (.{1,160}?) \(revision [0-9]+, sha256 [0-9a-f]{12,64}\) ---$", re.M)
+
+
 def _issue_number(brief):
     """The first issue number the brief names ("#693", "issue 693"), or None. Used for wording only."""
     m = _ISSUE.search(brief or "")
@@ -471,8 +474,11 @@ def build_footer(build) -> str:
 def pr_text(env, build) -> tuple:
     """(title, body) of the draft pull request, from fixed fields only."""
     job, n, tests = job_short(env.request_id, env.generation), _issue_number(env.brief), build["tests"]
-    first = _one_line(env.brief.strip().splitlines()[0] if env.brief.strip() else "", 100)
-    title = f"Delegated build {job}" + (f" (#{n})" if n else "") + (f": {first}" if first else "")
+    # The approved design's own title when the brief names one (#693: "--- Approved design: <title> (revision N, ..."),
+    # else the brief's first line. The first live run (27 Nov) showed the brief's fixed header as the title.
+    m = _DESIGN_TITLE.search(env.brief or "")
+    first = _one_line(m.group(1) if m else (env.brief.strip().splitlines()[0] if env.brief.strip() else ""), 100)
+    title = (f"{first} " if first else "") + f"(delegated build {job}" + (f", #{n}" if n else "") + ")"
     quoted = "\n".join("> " + line for line in env.brief[:BRIEF_QUOTE_CHARS].splitlines())
     code = "none" if tests.get("exit_code") is None else tests["exit_code"]
     fence = "`" * 3

@@ -692,3 +692,21 @@ def test_the_installer_turns_builds_on_and_never_reads_a_publish_credential():
     assert not any("gh auth" in line and "echo" not in line for line in code)       # the installer never asks gh
     touching = [line for line in code if "minimoi_delegation_publish" in line]
     assert touching and all("find-generic-password" in line and "-w" not in line.split() for line in touching)
+
+
+def test_the_pull_request_title_is_the_approved_designs_title_not_the_briefs_header():
+    """First live run, 27 Nov 2026: the title was the brief's fixed header line."""
+    from types import SimpleNamespace
+    from core.mc_delegation_runner import runner as R
+    brief = ("Build task from Robert, started by his own yes in MiniMoi. Build the approved design below.\n\n"
+             "--- Robert's message ---\nAdd the sentence.\n\n"
+             "--- Approved design: Test sentence in supervision runbook (revision 1, sha256 " + "a" * 64 + ") ---\n# Design\n")
+    env = SimpleNamespace(request_id="30ff5b4d-b96b-517f-85eb-5b0b3f9b250d", generation=1, brief=brief, ref="b" * 40)
+    build = {"branch": "mc/30ff5b4d-g1", "commit": "c" * 40, "changed": True,
+             "tests": {"command": None, "exit_code": None, "summary": "", "duration_s": 0.0, "timed_out": False,
+                       "note": "no_tests_selected"}}
+    title, body = R.pr_text(env, build)
+    assert title == "Test sentence in supervision runbook (delegated build 30ff5b4d-g1)"
+    assert "Draft: not reviewed, not merged." in body
+    env.brief = "Plain first line\nmore"
+    assert R.pr_text(env, build)[0] == "Plain first line (delegated build 30ff5b4d-g1)"
