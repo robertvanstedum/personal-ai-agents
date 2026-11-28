@@ -12,8 +12,9 @@ a status file, a severity, and how long a job has been off.
     words(items, ...)                   -> short plain text, problems first, with durations
 
 Severity:
-    needs action  red: failed, missed, stuck, never ran, no completed run on record
-    watch         yellow late or warn; a clock skew; a host whose watchdog report is stale or missing
+    needs action  red: failed, missed, stuck, never ran, no completed run on record; any yellow job off for more than
+                  24 h (YELLOW_ESCALATE_S); a host silent for more than 72 h
+    watch         yellow late or warn for up to 24 h; a clock skew; a host whose watchdog report is stale or missing
     fine          not due yet, a first run in progress
 
 Never any content: a report holds job ids, names from the registry, fixed codes and times only.
@@ -43,6 +44,8 @@ TAIL_LINES = 5
 REPORT_STALE_S = 3 * 3600           # a host's watchdog report older than this is itself a problem (hourly watchdogs)
 STALE_AFTER_S = {"mac": 36 * 3600}  # the Mac's watchdog runs daily at 09:00 Chicago, and only while the Mac is awake
 SILENT_ACTION_S = 72 * 3600         # no report for this long: needs action (a host or its watchdog is down)
+YELLOW_ESCALATE_S = 24 * 3600       # a yellow job off for longer than this needs action: no yellow sits unseen (WS3 C0.1)
+REPORT_CODES = ("report_stale", "report_missing", "report_unreadable")
 HOW = {"failed": "last run failed", "missed": "no completed run in time", "stuck": "stuck, still running",
        "never_ran": "never ran", "no_success": "no completed run on record", "late": "late",
        "warn": "last run finished with warnings", "skew": "status time is in the future (clock skew)",
@@ -175,6 +178,7 @@ def host_report(reg, host: str, roots: dict, now: datetime, previous: dict | Non
         doc, verdict = observe(job, roots, now)
         since = _off_since(verdict.code, doc, job, prior_items.get(job.id), now)
         items.append({"id": job.id, "name": job.name, "host": host, "light": verdict.state, "code": verdict.code,
+                      "key": verdict.key,
                       "evidence": job.evidence.get("kind", "status_file"),
                       "last_success_at": (doc or {}).get("last_success_at"), "off_since": since,
                       "summary": (doc or {}).get("summary", "")
@@ -198,6 +202,8 @@ def severity(item: dict) -> str:
     if code == "report_stale" and (item.get("off_for_s") or 0) > SILENT_ACTION_S:
         return NEEDS_ACTION
     if code in WATCH_CODES or item.get("light") == "yellow":
+        if item.get("light") == "yellow" and code not in REPORT_CODES and (item.get("off_for_s") or 0) > YELLOW_ESCALATE_S:
+            return NEEDS_ACTION                       # yellow for more than a day: escalated, never left unseen
         return WATCH
     return FINE
 

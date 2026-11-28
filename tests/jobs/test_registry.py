@@ -99,3 +99,18 @@ def test_load_reports_unreadable_and_invalid_files(tmp_path):
     good = tmp_path / "good.json"
     good.write_text(json.dumps(GOOD))
     assert registry.load(good).get("memory-watch")
+
+
+def test_every_active_status_file_job_has_a_real_active_from():
+    """WS3 C0.3 (28 Nov 2026): a status-file job with no active_from reads "not due / fine" for ever when its file is
+    missing, and a far-future sentinel (the meaning seed's 2099) did the same. Every active status-file job names when it
+    went live, at most a week ahead (a job registered just before its install)."""
+    from datetime import datetime, timedelta, timezone
+    horizon = datetime.now(timezone.utc) + timedelta(days=7)
+    bad = []
+    for job in registry.load().jobs:
+        if job.retired or job.evidence.get("kind", "status_file") != "status_file":
+            continue
+        if job.active_from is None or job.active_from > horizon:
+            bad.append(f"{job.id}: {job.active_from}")
+    assert not bad, "status-file jobs without a real active_from: " + ", ".join(bad)

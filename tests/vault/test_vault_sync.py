@@ -476,10 +476,11 @@ def test_the_launchd_agent_comes_only_from_the_pinned_runtime_and_the_registry_e
     capsys.readouterr()
     reg = registry.load()
     sync_job, apply_job = reg.get("vault-sync"), reg.get("vault-apply")
+    live = registry.parse_time("2026-11-13T15:00:00Z")      # WS3 C0.3: a live date, so a missing file is red
     assert (sync_job.host, sync_job.schedule["every_s"], sync_job.expected_every_s, sync_job.missed_after_s, sync_job.stuck_after_s,
-            sync_job.status_file, sync_job.active_from) == ("mac", 7200, 7200, 21600, 3600, "vault-sync.json", None)
+            sync_job.status_file, sync_job.active_from) == ("mac", 7200, 7200, 21600, 3600, "vault-sync.json", live)
     assert (apply_job.host, apply_job.schedule["every_s"], apply_job.expected_every_s, apply_job.missed_after_s, apply_job.stuck_after_s,
-            apply_job.status_file, apply_job.active_from) == ("ec2", 900, 900, 7200, 3600, "vault-apply.json", None)
+            apply_job.status_file, apply_job.active_from) == ("ec2", 900, 900, 7200, 3600, "vault-apply.json", live)
     assert sync_job.runbook == "core/memory_sync/sync.py" and apply_job.runbook == "core/memory_sync/apply.py"
     assert S.job_definition().id == "vault-sync"
 
