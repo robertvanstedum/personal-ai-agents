@@ -9,10 +9,17 @@ Rules it keeps (spec section 3):
 * agent replies are checked against facts (ids, key words), never exact wording;
 * every run uses new chats and a new meeting named ``uat-<run id>`` with only MC and CoS;
 * it never answers "yes" to anything that reaches outside mini-moi: :func:`approval_text` refuses "yes" for every case
-  except B1 (a CoS task inside mini-moi), and B5 can only ever answer "no";
+  except B1 (a CoS task inside mini-moi), and B5 can only ever answer "no". One switch opens one more: with
+  ``UAT_BUILD_E2E=1`` in the environment, B7 answers "yes P-XXXX" to its own build card, which opens a real DRAFT pull
+  request on the public repository. Without the switch B7 is a skip, and B6 (always on) only ever sends a plain "yes",
+  and only after the card itself has said that a plain yes starts nothing;
 * it never starts a voice call or spends voice minutes, and it puts Robert's saved Voice back after A2;
 * the sign-in token is read from an environment variable, sent only in the sign-in header, and scrubbed from every
   report.
+
+Which cases run: all of them, or the comma list in ``--only`` (or, when ``--only`` is not given, in the environment
+variable ``UAT_CASES``, which ``run_staging_uat.sh`` passes into the container). The report, the totals and the exit
+code cover only the cases that ran.
 
 Exit code: 0 when no case failed or errored, 1 when any did, 2 for a usage or configuration problem.
 
@@ -58,6 +65,14 @@ PHONE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/
 
 REPLY_TIMEOUT_S = 180                            # per agent reply
 POLL_S = 3.0
+
+CASES_ENV = "UAT_CASES"                          # comma list of case ids; unset or empty = every case
+BUILD_E2E_ENV = "UAT_BUILD_E2E"                  # "1" lets B7 start a real build (a draft pull request on the public repo)
+BUILD_REPO = "robertvanstedum/personal-ai-agents"
+CARD_GRACE_S = 45                                # a card may land a moment after the reply it belongs to
+PLAIN_YES_WAIT_S = 30                            # B6: how long a wrongly started build gets to show itself
+BUILD_WAIT_S = 25 * 60                           # B7: the runner builds, tests and publishes
+BUILD_POLL_S = 20.0
 
 STATUSES = ("pass", "fail", "skip", "manual", "error")
 
@@ -243,9 +258,190 @@ def issue_line_ok(text: str | None) -> dict:
     return {"ok": m is not None and not waiting, "first_issue": m.group(0) if m else None, "waiting_like": waiting}
 
 
+# ── MC build hand-off (B6, B7): pure matchers ───────────────────────────────────────────────────────────────────
+
+BUILD_RESULT_MARK = "Build result, as the runner recorded it:"
+BUILD_CLARIFY_ANSWER = "Yes, exactly that. Go ahead: save the design and propose the build."
+BUILD_QUESTION = "How did the build go?"
+_BUILD_OFF = re.compile(
+    r"\b(?:builds?|build hand-?offs?|delegat\w+|hand-?offs?|claude code|runner)\b[^.\n]{0,120}"
+    r"(?:\bnot (?:available|switched on|turned on|enabled|set up|configured)\b|\b(?:switched|turned) off\b"
+    r"|\bis(?:n['’]t| not) (?:available|on|enabled)\b|\bare(?:n['’]t| not) (?:available|on|enabled)\b"
+    r"|\bunavailable\b|\bdisabled\b|\bis off\b|\bare off\b)"
+    r"|\b(?:not (?:available|switched on|enabled)|switched off|turned off|unavailable|disabled)\b[^.\n]{0,80}"
+    r"\b(?:builds?|build hand-?offs?|delegat\w+)\b"
+    r"|\b(?:don['’]t|do not|doesn['’]t|does not) have\b[^.\n]{0,60}\b(?:build|delegat\w+)\b[^.\n]{0,30}\btool\b"
+    r"|\b(?:delegation|build_jobs)_off\b", re.I)
+_NOT_PICKED_UP = re.compile(                       # the job ended without a runner ever taking it
+    r"\b(?:not|never|wasn['’]t|hasn['’]t been|isn['’]t) (?:been )?picked up\b|\bno runner\b"
+    r"|\b(?:did not|didn['’]t|never) start(?:ed)?\b|\b(?:could not|couldn['’]t) be started\b"
+    r"|\brunner (?:is |was )?(?:offline|not running|unavailable|not reachable|unreachable)\b", re.I)
+_STILL_WAITING = re.compile(                       # the same thing once the whole wait is over; mid-wait it is normal
+    r"\bnot (?:yet )?(?:been )?started\b|\bwaiting for (?:a|the) runner\b|\bstill (?:queued|waiting)\b|\bqueued\b", re.I)
+_START_REFUSED = re.compile(r"could not be started|nothing is running|nothing was (?:done|started)"
+                            r"|can(?:['’]t|not) be approved|not switched on|cannot confirm it started", re.I)
+_NEGATION = re.compile(r"\b(?:no|not|nothing|never|none|without|cannot|can't|unless)\b|n['’]t\b", re.I)
+_STARTED = re.compile(r"\bStarted:|\bis (?:now )?building\b|\b(?:build|job) (?:has |was |is )?(?:now )?(?:started|running)\b"
+                      r"|\b(?:has|have) started\b|\bstarted (?:building|the build)\b", re.I)
+_TESTS_PASSED = re.compile(r"\btests?\b[^.\n]{0,60}\b(?:pass(?:ed|es|ing)?|succeeded|green)\b|\ball green\b", re.I)
+_MERGED = re.compile(r"\b(?:was|were|is|are|has been|have been|got|been)\s+(?:merged|released|deployed)\b", re.I)
+_ASKS_FOR_CODE = re.compile(r"needs? (?:its|the|that|a) code|plain\W{0,3}yes\W{0,3}(?:starts|approves|does) nothing"
+                            r"|with (?:its|the) code", re.I)
+_PLAIN_YES_STARTS_NOTHING = re.compile(r"plain\W{0,3}yes\W{0,3}starts nothing|always needs its code", re.I)
+
+
+def _claims(pattern: re.Pattern, text: str | None) -> bool:
+    """Whether ``text`` says the thing ``pattern`` describes, leaving out sentences that deny it ("Nothing was
+    merged", "tests were not run")."""
+    text = text or ""
+    for m in pattern.finditer(text):
+        lead = re.split(r"[.!?\n]", text[max(0, m.start() - 60):m.start()])[-1]
+        if not _NEGATION.search(lead + m.group(0)):
+            return True
+    return False
+
+
+def run_marker(run_id: str | None) -> str:
+    """The run id as lower-case letters and digits only: safe inside a file name."""
+    return re.sub(r"[^a-z0-9]", "", (run_id or "").lower())
+
+
+def build_marker_file(run_id: str | None) -> str:
+    return f"tests/mc_delegation_runner/test_uat_marker_{run_marker(run_id)}.py"
+
+
+def build_request(run_id: str | None) -> str:
+    """What B6 and B7 ask MC for: a tiny, test-only change, different on every run."""
+    return ("Write a short design for this change and save it as a working document, then propose a build for it. "
+            f"Change: add a new test file {build_marker_file(run_id)} containing one pytest test that imports job_short "
+            "from core.mc_delegation_runner.runner and asserts job_short('30ff5b4d-b96b-517f-85eb-5b0b3f9b250d', 1) == "
+            "'30ff5b4d-g1'. Change nothing else.")
+
+
+def build_e2e_on(env=None) -> bool:
+    return ((os.environ if env is None else env).get(BUILD_E2E_ENV) or "").strip() == "1"
+
+
+def build_unavailable(text: str | None) -> bool:
+    """MC (or the platform) says builds cannot be handed off on this server."""
+    return bool(_BUILD_OFF.search(text or ""))
+
+
+def build_not_picked_up(text: str | None, wait_over: bool = False) -> bool:
+    """No runner took the job. ``wait_over`` also counts "still queued" and "not started yet", which are normal while
+    the wait is running and mean the same thing once it is over."""
+    text = text or ""
+    return bool(_NOT_PICKED_UP.search(text) or (wait_over and _STILL_WAITING.search(text)))
+
+
+def start_refused(text: str | None) -> bool:
+    """The platform's answer to "yes P-XXXX" says plainly that nothing is running."""
+    return bool(_START_REFUSED.search(text or ""))
+
+
+def says_started(text: str | None) -> bool:
+    return _claims(_STARTED, text)
+
+
+def card_text(text: str | None, code: str) -> str:
+    """The card inside a reply: from "Proposal P-XXXX" on, or the whole text when that heading is not there."""
+    text = text or ""
+    at = text.find(f"Proposal {code}")
+    return text[at:] if at >= 0 else text
+
+
+def match_build_card(text: str | None, code: str, marker_file: str) -> dict:
+    """B6/B7: the build card shows which design it would hand over (its title or the file it is about), the design's
+    revision, and how to approve it by code."""
+    t = _norm(card_text(text, code))
+    title = re.search(r'Design:\s*"([^"]+)"', t)
+    names_file = Path(marker_file).name in t
+    revision = bool(re.search(r"\brevision\b", t, re.I))
+    yes_code = bool(re.search(r"\byes\s+" + re.escape(code) + r"\b", t, re.I))
+    is_build = bool(re.search(r"\bbuild\b", t, re.I))
+    ok = bool(title or names_file) and revision and yes_code and is_build
+    return {"ok": ok, "design_title": title.group(1) if title else None, "names_file": names_file, "revision": revision,
+            "yes_code_instruction": yes_code, "is_build_card": is_build,
+            "says_plain_yes_starts_nothing": bool(_PLAIN_YES_STARTS_NOTHING.search(t))}
+
+
+def match_plain_yes(text: str | None, code: str) -> dict:
+    """B6: everything said after a plain "yes". It must ask for the code and must not start or report a build."""
+    t = _norm(text)
+    asks = bool(re.search(r"\byes\s+" + re.escape(code) + r"\b", t, re.I) or _ASKS_FOR_CODE.search(t))
+    started = says_started(t)
+    result = BUILD_RESULT_MARK in (text or "")
+    return {"ok": asks and not started and not result, "asks_for_code": asks, "says_started": started,
+            "result_note": result}
+
+
+def match_withdrawn(text: str | None) -> bool:
+    t = (text or "").lower()
+    return match_b5_declined(text) or "withdrawn" in t or "dropped" in t
+
+
+def parse_build_result(text: str | None) -> dict:
+    """The facts in a build result note, read only from the runner's own part: everything from "Build result, as the
+    runner recorded it:" up to the agent's own account, which the runner did not verify and which counts for nothing
+    here. ``ok`` needs a branch at a commit, changed files, tests the runner ran with exit code 0, and a draft pull
+    request on the repository."""
+    text = text or ""
+    at = text.find(BUILD_RESULT_MARK)
+    if at < 0:
+        return {"found": False, "ok": False, "problems": ["no build result note"]}
+    own = text[at:]
+    cut = re.search(r"^[^\n]*\bown account\b[^\n]*not verified by the runner", own, re.I | re.M)
+    runner = own[:cut.start()] if cut else own
+    branch = re.search(r"^\s*-\s*Branch:\s*(mc/[0-9a-f]{8}-g\d+)\s+at commit\s+([0-9a-f]{7,40})\b", runner, re.M)
+    changed = re.search(r"^\s*-\s*Changed files:\s*(\w+)", runner, re.M)
+    tests = re.search(r"^\s*-\s*(Tests\b[^\n]*)", runner, re.M)
+    tests_line = tests.group(1).strip() if tests else None
+    tests_run = bool(tests_line and re.match(r"Tests \(run by the runner\)", tests_line))
+    code = re.search(r"\bexit code\s+(-?\d+)", tests_line or "") if tests_run else None
+    tests_exit = int(code.group(1)) if code else None
+    pr = re.search(r"^\s*-\s*Draft pull request:\s*(https://github\.com/" + re.escape(BUILD_REPO) + r"/pull/\d+)\b",
+                   runner, re.M)
+    out = {"found": True, "branch": branch.group(1) if branch else None, "commit": branch.group(2) if branch else None,
+           "changed_files": changed.group(1).lower() if changed else None, "tests_line": tests_line,
+           "tests_run_by_runner": tests_run, "tests_exit_code": tests_exit, "pr_url": pr.group(1) if pr else None,
+           "nothing_merged_line": "Nothing was merged, released or deployed." in runner,
+           "agent_account_separate": cut is not None}
+    problems = []
+    if not branch:
+        problems.append("no branch mc/… at a commit")
+    if out["changed_files"] != "yes":
+        problems.append("changed files is not yes")
+    if not tests_run:
+        problems.append("tests were not run by the runner")
+    elif tests_exit != 0:
+        problems.append(f"the runner's tests did not exit 0 (exit code {tests_exit})")
+    if not pr:
+        problems.append(f"no draft pull request on {BUILD_REPO}")
+    out["problems"] = problems
+    out["ok"] = not problems
+    return out
+
+
+def match_build_answer(answer: str | None, facts: dict) -> dict:
+    """B7: MC's own answer to "How did the build go?" carries the same pull request and claims no more than the
+    runner recorded: no "tests passed" unless the runner's line says exit code 0, and nothing merged or deployed."""
+    a = answer or ""
+    same_pr = bool(facts.get("pr_url")) and facts["pr_url"] in a
+    tests_claim = _claims(_TESTS_PASSED, a)
+    over_tests = tests_claim and facts.get("tests_exit_code") != 0
+    over_merge = _claims(_MERGED, a)
+    return {"ok": same_pr and not over_tests and not over_merge, "same_pr_url": same_pr,
+            "says_tests_passed": tests_claim, "overclaims_tests": over_tests, "claims_merged_or_deployed": over_merge}
+
+
 # ── The "never yes outside mini-moi" guard ───────────────────────────────────────────────────────────────────────
 
-YES_ALLOWED = frozenset({"B1"})   # B1 confirms a CoS task inside mini-moi. Nothing else may ever say yes.
+YES_ALLOWED = frozenset({"B1"})   # B1 confirms a CoS task inside mini-moi. Nothing else may ever say yes,
+YES_BEHIND_SWITCH = {"B7": BUILD_E2E_ENV}   # except B7, and only while UAT_BUILD_E2E=1 (it opens a draft pull request).
+
+
+def may_say_yes(case_id: str) -> bool:
+    return case_id in YES_ALLOWED or (case_id in YES_BEHIND_SWITCH and build_e2e_on())
 
 
 class ApprovalRefused(RuntimeError):
@@ -259,16 +455,16 @@ def approval_text(case_id: str, decision: str, code: str) -> str:
         raise ApprovalRefused(f"unknown decision {decision!r}")
     if not P_CODE.fullmatch(code or ""):
         raise ApprovalRefused(f"not a card code: {code!r}")
-    if decision == "yes" and case_id not in YES_ALLOWED:
+    if decision == "yes" and not may_say_yes(case_id):
         raise ApprovalRefused(f"{case_id} may not answer yes: it could reach outside mini-moi")
     return f"{decision} {code}"
 
 
 def guard_outgoing(case_id: str, text: str) -> None:
-    """Every message the runner posts passes here: a "yes" command from any case outside YES_ALLOWED is refused,
-    however it was built."""
+    """Every message the runner posts passes here (meeting posts and MC chat messages): a "yes" command from any
+    case that may not say yes is refused, however it was built."""
     m = APPROVAL_COMMAND.match(text or "")
-    if m and m.group(1).lower() == "yes" and case_id not in YES_ALLOWED:
+    if m and m.group(1).lower() == "yes" and not may_say_yes(case_id):
         raise ApprovalRefused(f"{case_id} may not send an approving reply")
     if case_id == "B5" and re.search(r"\b(yes|approve|confirm|go ahead)\b", text or "", re.I) and m is None \
             and re.search(r"P-[A-Z0-9]{4}", text or "", re.I):
@@ -335,12 +531,15 @@ def render_md(meta: dict, results: list[Result]) -> str:
             else:
                 lines.append(f"- {k}: {_short(v)}")
         lines.append("")
-    robert = [r for r in results if r.status in ("manual", "skip")]
+    robert = [r for r in results if r.status in ("manual", "skip") or r.evidence.get("follow_up")]
     lines += ["", "## For Robert", ""]
     if not robert:
         lines.append("Nothing.")
     for r in robert:
-        lines.append(f"- {r.id} {r.title} ({r.status}): {r.evidence.get('note') or r.evidence.get('reason') or ''}")
+        if r.status in ("manual", "skip"):
+            lines.append(f"- {r.id} {r.title} ({r.status}): {r.evidence.get('note') or r.evidence.get('reason') or ''}")
+        if r.evidence.get("follow_up"):                # something the run left behind for him (B7's draft pull request)
+            lines.append(f"- {r.id} {r.title} ({r.status}), to do: {r.evidence['follow_up']}")
     return "\n".join(lines) + "\n"
 
 
@@ -517,23 +716,58 @@ def mc_new_chat(s: Session) -> str:
     return body["conversation"]["id"]
 
 
-def mc_agent_notes(s: Session, cid) -> dict:
+NOT_OWNER = ("agent", "platform")                         # MC's own notes and the platform's (cards, result notes)
+
+
+def mc_notes(s: Session, cid, kinds: tuple = NOT_OWNER) -> dict:
+    """The conversation's notes by id, from the notes API the page itself uses, for the given author kinds."""
     r = s.guild("GET", f"/notes?limit=50&conversation={cid}")
     notes = (r.get("body") or {}).get("notes") or []
-    return {n.get("id"): n for n in notes if n.get("author_kind") == "agent"}
+    return {n.get("id"): n for n in notes if n.get("author_kind") in kinds}
+
+
+def mc_agent_notes(s: Session, cid) -> dict:
+    return mc_notes(s, cid, ("agent",))
+
+
+def mc_new_text(s: Session, cid, before: set) -> str:
+    """Everything MC or the platform has written in the conversation since ``before`` (a set of note ids), oldest
+    first, as one text."""
+    new = {k: v for k, v in mc_notes(s, cid).items() if k not in before}
+    return "\n\n".join((new[k].get("text") or "") for k in sorted(new))
+
+
+def mc_wait_text(s: Session, cid, before: set, found: Callable, timeout: float, every: float = POLL_S) -> str | None:
+    """Polls :func:`mc_new_text` until ``found(text)`` holds; that text, or None when the time runs out."""
+    end = time.monotonic() + timeout
+    while True:
+        text = mc_new_text(s, cid, before)
+        if found(text):
+            return text
+        if time.monotonic() >= end:
+            return None
+        time.sleep(every)
 
 
 def mc_ask(s: Session, text: str, label: str) -> dict:
     """A new MC chat, the question typed and sent through the real composer, and MC's reply read from the notes API
     the page itself uses. Returns {conversation_id, reply, note_id, screenshot}."""
-    cid = mc_new_chat(s)
-    page = s.goto(s.page, f"{MC_PAGE}?c={cid}")
-    before = set(mc_agent_notes(s, cid))
+    return mc_send(s, mc_new_chat(s), text, label)
+
+
+def mc_send(s: Session, cid, text: str, label: str, kinds: tuple = ("agent",)) -> dict:
+    """One message in the MC chat ``cid``, typed and sent through the real composer, and the first new note of the
+    given kinds that answers it. A follow-up message goes into the same chat. Returns what :func:`mc_ask` returns."""
+    guard_outgoing(s.current_case, text)
+    page = s.page
+    if not page.url.endswith(f"?c={cid}"):
+        page = s.goto(page, f"{MC_PAGE}?c={cid}")
+    before = set(mc_notes(s, cid, kinds))
     page.fill("#mc-input", text)
     page.click("[data-mc-send]")
     end = time.monotonic() + REPLY_TIMEOUT_S
     while time.monotonic() < end:
-        new = {k: v for k, v in mc_agent_notes(s, cid).items() if k not in before}
+        new = {k: v for k, v in mc_notes(s, cid, kinds).items() if k not in before}
         if new:
             note = list(new.values())[-1]
             return {"conversation_id": cid, "note_id": note.get("id"), "reply": note.get("text") or "",
@@ -1117,6 +1351,143 @@ def case_b5(s: Session) -> dict:
     return ev
 
 
+def _mc_build_card(s: Session, label: str) -> tuple[dict, str, str]:
+    """B6 and B7 start the same way: a new MC chat, the build request, one answer to a clarifying question if MC asks
+    one, and the build card. Returns (evidence, conversation id, card code). Skips when this server has builds off."""
+    marker_file = build_marker_file(s.run_id)
+    request = build_request(s.run_id)
+    first = mc_ask(s, request, label)
+    cid = first["conversation_id"]
+    ev = {"conversation_id": cid, "request": request, "marker_file": marker_file, "ask_reply": first["reply"],
+          "screenshots": [first["screenshot"]]}
+    said = mc_wait_text(s, cid, set(), find_p_code, CARD_GRACE_S) or mc_new_text(s, cid, set())
+    if not find_p_code(said) and not build_unavailable(said):
+        # MC asked something first, or saved the design and stopped. Answered once, never twice.
+        before = set(mc_notes(s, cid))
+        second = mc_send(s, cid, BUILD_CLARIFY_ANSWER, label + "-clarify")
+        ev["clarify_sent"], ev["clarify_reply"] = BUILD_CLARIFY_ANSWER, second["reply"]
+        ev["screenshots"].append(second["screenshot"])
+        more = mc_wait_text(s, cid, before, find_p_code, CARD_GRACE_S) or mc_new_text(s, cid, before)
+        said = said + "\n\n" + more
+    code = find_p_code(said)
+    if not code:
+        if build_unavailable(said):
+            raise CaseSkip("MC says builds are not available on this server (delegation or build jobs switched off), "
+                           "so there is no build card to check", ev)
+        raise CaseFail("no P-xxxx build card from MC", ev)
+    ev["code"] = code
+    ev["card"] = _short(card_text(said, code), 1500)
+    ev["card_check"] = match_build_card(said, code, marker_file)
+    return ev, cid, code
+
+
+def _mc_withdraw(s: Session, cid, code: str, label: str) -> dict:
+    """Answers the card "no P-XXXX" and reports what came back."""
+    r = mc_send(s, cid, approval_text(s.current_case, "no", code), label, kinds=NOT_OWNER)
+    return {"sent": f"no {code}", "reply": r["reply"], "withdrawn": match_withdrawn(r["reply"]),
+            "screenshot": r["screenshot"]}
+
+
+@case("B6", "MC build card: design shown, a plain yes starts nothing")
+def case_b6(s: Session) -> dict:
+    ev, cid, code = _mc_build_card(s, "b6-ask")
+    withdrawn = False
+    try:
+        check = ev["card_check"]
+        if not check["ok"]:
+            raise CaseFail("the card does not show the design (its title or the file), its revision and "
+                           f"'yes {code}'", ev)
+        if not check["says_plain_yes_starts_nothing"]:
+            # Never send the plain yes unless the card itself promises it is harmless.
+            raise CaseFail("the card does not say that a build needs its code (a plain yes starts nothing); "
+                           "the plain yes was not sent", ev)
+        before = set(mc_notes(s, cid))
+        yes = mc_send(s, cid, "yes", "b6-plain-yes", kinds=NOT_OWNER)
+        ev["screenshots"].append(yes["screenshot"])
+        # Then a short wait: a build that started anyway would say so, or leave its result note.
+        mc_wait_text(s, cid, before, lambda t: BUILD_RESULT_MARK in t or says_started(t), PLAIN_YES_WAIT_S)
+        after_yes = mc_new_text(s, cid, before)
+        ev["plain_yes"] = {"sent": "yes", "said_after": after_yes, "waited_seconds": PLAIN_YES_WAIT_S,
+                           **match_plain_yes(after_yes, code)}
+        if not ev["plain_yes"]["ok"]:
+            raise CaseFail("a plain yes was not refused cleanly (no request for the code, or a build started)", ev)
+        withdrawn = True                                    # asked once below; never asked twice
+        ev["no"] = _mc_withdraw(s, cid, code, "b6-no")
+        ev["screenshots"].append(ev["no"].pop("screenshot"))
+        if not ev["no"]["withdrawn"]:
+            raise CaseFail("'no' did not withdraw the proposal", ev)
+    finally:
+        if not withdrawn:                                   # leave no open build card behind, whatever went wrong
+            try:
+                ev["cleanup_no"] = _mc_withdraw(s, cid, code, "b6-cleanup-no")["reply"]
+            except Exception as e:
+                ev["cleanup_no"] = f"not sent: {e.__class__.__name__}"
+    ev["note"] = "no build was started: only a plain yes and a no were ever sent"
+    return ev
+
+
+def _pr_follow_up(url: str) -> str:
+    return f"close the draft pull request {url} (and delete its branch); the UAT cannot, it has no GitHub write access"
+
+
+@case("B7", "MC build end to end: runner tests and a draft pull request")
+def case_b7(s: Session) -> dict:
+    if not build_e2e_on():
+        raise CaseSkip(f"off: it opens a real draft pull request on the public repository. Set {BUILD_E2E_ENV}=1 to "
+                       "run it")
+    ev, cid, code = _mc_build_card(s, "b7-ask")
+    if not ev["card_check"]["ok"]:
+        try:
+            ev["cleanup_no"] = _mc_withdraw(s, cid, code, "b7-cleanup-no")["reply"]
+        except Exception as e:
+            ev["cleanup_no"] = f"not sent: {e.__class__.__name__}"
+        raise CaseFail(f"the card does not show the design, its revision and 'yes {code}'; nothing was approved", ev)
+    before = set(mc_notes(s, cid))
+    started = time.monotonic()
+    yes = mc_send(s, cid, approval_text("B7", "yes", code), "b7-yes", kinds=NOT_OWNER)   # refused unless the switch is on
+    ev["yes"] = {"sent": f"yes {code}", "reply": yes["reply"], "says_started": says_started(yes["reply"])}
+    ev["screenshots"].append(yes["screenshot"])
+    if start_refused(yes["reply"]) and not ev["yes"]["says_started"]:
+        if build_unavailable(yes["reply"]) or build_not_picked_up(yes["reply"]):
+            raise CaseSkip("the build did not start (builds off here, or no runner to take the job)", ev)
+        raise CaseFail(f"'yes {code}' did not start the build", ev)
+    # Any other wording counts as started: a job may be running, so the wait below must happen either way.
+
+    def ended(text: str) -> bool:
+        return BUILD_RESULT_MARK in text or build_not_picked_up(text.replace(yes["reply"], ""))
+    said = mc_wait_text(s, cid, before, ended, BUILD_WAIT_S, every=BUILD_POLL_S)
+    ev["waited_seconds"] = round(time.monotonic() - started)
+    if said is None:
+        # No note at all. One question to MC tells a job no runner took (skip) from a build that hung (fail).
+        ask = mc_send(s, cid, BUILD_QUESTION, "b7-no-note")
+        ev["mc_answer"] = ask["reply"]
+        ev["screenshots"].append(ask["screenshot"])
+        if build_not_picked_up(ask["reply"], wait_over=True):
+            raise CaseSkip(f"no runner picked the job up within {BUILD_WAIT_S // 60} minutes (MC's account of the "
+                           "job)", ev)
+        raise CaseFail(f"no build result note within {BUILD_WAIT_S // 60} minutes", ev)
+    note = said[said.find(BUILD_RESULT_MARK):] if BUILD_RESULT_MARK in said else said.replace(yes["reply"], "").strip()
+    facts = parse_build_result(note)
+    ev["result_note"] = note
+    ev.update({k: facts.get(k) for k in ("branch", "commit", "changed_files", "tests_line", "tests_exit_code",
+                                         "pr_url")})
+    ev["result_check"] = facts
+    if facts.get("pr_url"):
+        ev["follow_up"] = _pr_follow_up(facts["pr_url"])
+    if not facts.get("branch") and build_not_picked_up(note):
+        raise CaseSkip("no runner picked the job up (the note says so)", ev)
+    if not facts["ok"]:
+        raise CaseFail("; ".join(facts["problems"]), ev)
+    ask = mc_send(s, cid, BUILD_QUESTION, "b7-how")
+    ev["mc_answer"] = ask["reply"]
+    ev["screenshots"].append(ask["screenshot"])
+    ev["answer_check"] = match_build_answer(ask["reply"], facts)
+    if not ev["answer_check"]["ok"]:
+        raise CaseFail("MC's answer does not carry the same pull request, or claims more than the runner recorded", ev)
+    ev["note"] = f"draft pull request {facts['pr_url']} on {facts['branch']} at {facts['commit']}"
+    return ev
+
+
 # Each UAT chat used to land in the vault, so asking the same question every run filled CoS's evidence budget with
 # earlier UAT chats and crowded out the target (release session, 26 Nov: an earlier C1 chat outranked gghhx28k). The real
 # fix: a chat created under the UAT session is marked ``uat`` by the server and never reaches Vault search
@@ -1161,7 +1532,8 @@ def case_c2(s: Session) -> dict:
     return ev
 
 
-ORDER = ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "H1", "B1", "B2", "B3", "B4", "B5", "C1", "C2"]
+ORDER = ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "H1", "B1", "B2", "B3", "B4", "B5", "B6", "B7",
+         "C1", "C2"]
 CASES.sort(key=lambda c: ORDER.index(c.id) if c.id in ORDER else 99)
 
 
@@ -1215,7 +1587,8 @@ def parse_args(argv):
     p.add_argument("--token-env", default=DEFAULT_TOKEN_ENV, help="name of the env var holding the UAT token")
     p.add_argument("--token-file", default=None, help="file holding the UAT token (preferred: keeps it out of the env)")
     p.add_argument("--out", default=None, help="output directory (default ./uat-runs/<run id>)")
-    p.add_argument("--only", default=None, help="comma list of case ids, e.g. A1,B2")
+    p.add_argument("--only", default=(os.environ.get(CASES_ENV) or "").strip() or None,
+                   help=f"comma list of case ids, e.g. A1,B2 (default: ${CASES_ENV}, else every case)")
     p.add_argument("--list", action="store_true", help="print the cases and exit")
     p.add_argument("--run-id", default=os.environ.get("UAT_RUN_ID") or None)
     p.add_argument("--headed", action="store_true", help="show the browser (local debugging)")

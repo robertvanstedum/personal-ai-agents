@@ -15,14 +15,21 @@ sys.modules["staging_uat"] = uat
 SPEC.loader.exec_module(uat)
 
 TOKEN = "uat-secret-" + "k" * 40
-AUTO = ["A1", "A2", "A3", "A5", "A6", "A8", "H1", "B1", "B2", "B3", "B4", "B5", "C1", "C2"]
+AUTO = ["A1", "A2", "A3", "A5", "A6", "A8", "H1", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "C1", "C2"]
+
+
+@pytest.fixture(autouse=True)
+def _no_uat_switches(monkeypatch):
+    """The developer's own shell never decides what these tests see."""
+    monkeypatch.delenv("UAT_CASES", raising=False)
+    monkeypatch.delenv("UAT_BUILD_E2E", raising=False)
 
 
 # ── registry, --list, --only ──────────────────────────────────────────────────────────────────────────────────
 
 def test_registry_has_every_case_once_in_checklist_order():
     assert uat.case_ids() == ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "H1", "B1", "B2", "B3", "B4", "B5",
-                              "C1", "C2"]
+                              "B6", "B7", "C1", "C2"]
     kinds = {c.id: c.kind for c in uat.CASES}
     assert [k for k, v in kinds.items() if v == "manual"] == ["A4", "A7"]
     assert all(kinds[i] == "auto" and callable(next(c for c in uat.CASES if c.id == i).fn) for i in AUTO)
@@ -32,7 +39,7 @@ def test_list_prints_the_cases_and_needs_no_token(capsys, monkeypatch):
     monkeypatch.delenv("MINIMOI_UAT_TOKEN", raising=False)
     assert uat.main(["--list"]) == 0
     out = capsys.readouterr().out.splitlines()
-    assert len(out) == 16 and out[0].startswith("A1") and "manual" in out[3] and out[-1].startswith("C2")
+    assert len(out) == 18 and out[0].startswith("A1") and "manual" in out[3] and out[-1].startswith("C2")
 
 
 def test_only_selects_in_registry_order_and_is_case_insensitive(capsys):
@@ -330,3 +337,356 @@ def test_token_file_is_read_and_never_reported(tmp_path, monkeypatch):
     assert rc in (0, 1)
     for name in ("report.json", "report.md"):
         assert ("ab" * 32) not in (tmp_path / "o" / name).read_text(encoding="utf-8")
+
+
+# ── UAT_CASES: a subset of cases from the environment ────────────────────────────────────────────────────────
+
+def test_uat_cases_env_selects_a_subset_and_only_wins(capsys, monkeypatch):
+    assert uat.parse_args([]).only is None
+    monkeypatch.setenv("UAT_CASES", " b7, B6 ")
+    assert uat.parse_args([]).only == "b7, B6"
+    assert uat.main(["--list"]) == 0
+    assert [l.split()[0] for l in capsys.readouterr().out.splitlines()] == ["B6", "B7"]
+    assert uat.main(["--list", "--only", "A1"]) == 0                       # the flag wins over the variable
+    assert [l.split()[0] for l in capsys.readouterr().out.splitlines()] == ["A1"]
+    monkeypatch.setenv("UAT_CASES", "")                                    # passed through empty by the script: all
+    assert uat.main(["--list"]) == 0 and len(capsys.readouterr().out.splitlines()) == 18
+    monkeypatch.setenv("UAT_CASES", "B6,Z9")
+    assert uat.main(["--list"]) == 2 and "Z9" in capsys.readouterr().err
+
+
+def test_a_subset_run_reports_and_exits_on_the_selected_cases_only(monkeypatch, tmp_path):
+    monkeypatch.setenv("UAT_CASES", "B7,A4")                               # one manual, one skip (switch off): green
+    monkeypatch.setenv("MINIMOI_UAT_TOKEN", TOKEN)
+    monkeypatch.setattr(uat, "open_session", lambda args, token, out, run_id: _FakeSession())
+    assert uat.main(["--out", str(tmp_path), "--run-id", "r1"]) == 0
+    data = json.loads((tmp_path / "report.json").read_text())
+    assert data["cases"] == ["A4", "B7"] and [r["id"] for r in data["results"]] == ["A4", "B7"]
+    assert data["summary"] == {"pass": 0, "fail": 0, "skip": 1, "manual": 1, "error": 0} and data["exit_code"] == 0
+    assert "UAT_BUILD_E2E=1" in (tmp_path / "report.md").read_text()
+
+
+def test_run_script_passes_the_two_switches_into_the_container():
+    sh = (ROOT / "scripts" / "uat" / "run_staging_uat.sh").read_text()
+    assert '-e UAT_CASES="${UAT_CASES:-}"' in sh and '-e UAT_BUILD_E2E="${UAT_BUILD_E2E:-}"' in sh
+
+
+# ── B6 / B7: the build hand-off ───────────────────────────────────────────────────────────────────────────────
+
+RUN = "20261128T101500Z"
+FILE = "tests/mc_delegation_runner/test_uat_marker_20261128t101500z.py"
+PR = "https://github.com/robertvanstedum/personal-ai-agents/pull/731"
+CARD = ("I saved the design and proposed the build.\n\nProposal P-7K3M, made while answering your last message, waiting "
+        "for you:\n\nHand this design to Claude Code to build (“UAT marker test”)?\nDesign: “UAT marker test”, revision 1 "
+        "(sha256 " + "ab" * 32 + ")\n\nReply “yes P-7K3M” to start it, or “no” to drop it. A build always needs its code: "
+        "a plain “yes” starts nothing.")
+NEEDS_CODE = "To approve proposal P-7K3M, reply “yes P-7K3M” (it is shown above). Nothing was done."
+STARTED = ("Started: Claude Code is building from your message in a fresh copy of the repository, on a branch of its "
+           "own (no push, no merge, no release). Say stop to cancel.")
+
+
+def _note(tests="- Tests (run by the runner): `pytest tests/mc_delegation_runner -q`, exit code 0. 41 passed.",
+          pr=f"- Draft pull request: {PR}", branch="- Branch: mc/30ff5b4d-g1 at commit 0123456789ab",
+          changed="- Changed files: yes", own="All done. Every test passed and I merged it."):
+    lines = ["Build result, as the runner recorded it:", branch, changed, tests, pr,
+             "Nothing was merged, released or deployed.", "", "Claude Code's own account, not verified by the runner:", own]
+    return "\n".join(l for l in lines if l is not None)
+
+
+def test_build_request_names_a_file_of_its_own_per_run():
+    assert uat.run_marker(RUN) == "20261128t101500z" and uat.run_marker("r-1_X!") == "r1x"
+    assert uat.build_marker_file(RUN) == FILE
+    req = uat.build_request(RUN)
+    assert req.startswith("Write a short design for this change and save it as a working document, then propose a build")
+    assert FILE in req and "job_short('30ff5b4d-b96b-517f-85eb-5b0b3f9b250d', 1) == '30ff5b4d-g1'" in req
+    assert req.endswith("Change nothing else.") and uat.build_request("other") != req
+    uat.guard_outgoing("B6", req)
+    uat.guard_outgoing("B6", uat.BUILD_CLARIFY_ANSWER)                    # "Yes, exactly that…" is not an approval
+
+
+def test_build_card_matcher():
+    m = uat.match_build_card(CARD, "P-7K3M", FILE)
+    assert m["ok"] and m["design_title"] == "UAT marker test" and m["says_plain_yes_starts_nothing"]
+    assert uat.card_text(CARD, "P-7K3M").startswith("Proposal P-7K3M")
+    by_file = CARD.replace("Design: “UAT marker test”, revision", f"For {FILE}, revision")
+    assert uat.match_build_card(by_file, "P-7K3M", FILE)["ok"]
+    assert not uat.match_build_card(CARD.replace("revision 1", "version 1"), "P-7K3M", FILE)["ok"]
+    assert not uat.match_build_card(CARD.replace("Reply “yes P-7K3M”", "Reply yes"), "P-7K3M", FILE)["ok"]
+    assert not uat.match_build_card(CARD, "P-ZZZZ", FILE)["ok"]
+    issue = "Proposal P-7K3M: Create GitHub issue “x”? Reply “yes P-7K3M” to approve it."
+    assert not uat.match_build_card(issue, "P-7K3M", FILE)["ok"]
+    old = CARD.replace(" A build always needs its code: a plain “yes” starts nothing.", "")
+    assert uat.match_build_card(old, "P-7K3M", FILE)["ok"] and not uat.match_build_card(old, "P-7K3M", FILE)[
+        "says_plain_yes_starts_nothing"]
+
+
+def test_plain_yes_check():
+    assert uat.match_plain_yes(NEEDS_CODE, "P-7K3M")["ok"]
+    assert uat.match_plain_yes("A build always needs its code. Nothing was started.", "P-7K3M")["ok"]
+    assert not uat.match_plain_yes(STARTED, "P-7K3M")["ok"]
+    assert not uat.match_plain_yes(NEEDS_CODE + "\n\n" + STARTED, "P-7K3M")["ok"]
+    assert not uat.match_plain_yes(NEEDS_CODE + "\n\n" + _note(), "P-7K3M")["ok"]
+    assert not uat.match_plain_yes("Sure.", "P-7K3M")["ok"]                # says nothing about the code
+    assert not uat.match_plain_yes("", "P-7K3M")["ok"]
+    assert uat.says_started("The build has started.") and not uat.says_started("No build was started.")
+    assert uat.match_withdrawn("Cancelled. Nothing was changed.") and uat.match_withdrawn("Proposal P-7K3M withdrawn.")
+    assert not uat.match_withdrawn("Nothing was waiting, so there is nothing to cancel.")
+
+
+def test_builds_off_and_no_runner_wordings():
+    for t in ("Builds are not available on this server.", "Build hand-offs are switched off here, so I can't propose one.",
+              "Delegation is turned off on staging.", "I don't have a build hand-off tool on this server.",
+              "That is refused: build_jobs_off."):
+        assert uat.build_unavailable(t), t
+    for t in (CARD, STARTED, "I saved the design as a working document. Shall I propose the build?", ""):
+        assert not uat.build_unavailable(t), t
+    for t in ("The job was not picked up by a runner.", "No runner took the job.", "The runner is offline.",
+              "Claude Code's build could not be started, so nothing is running."):
+        assert uat.build_not_picked_up(t), t
+    assert not uat.build_not_picked_up(STARTED) and not uat.build_not_picked_up("Queued; it has not started yet.")
+    assert uat.build_not_picked_up("Queued; it has not started yet.", wait_over=True)
+    assert uat.start_refused("Claude Code's build could not be started, so nothing is running.")
+    assert not uat.start_refused(STARTED)
+
+
+def test_parse_build_result_reads_only_the_runners_part():
+    f = uat.parse_build_result("Some earlier note.\n\n" + _note())
+    assert f["ok"] and f["found"] and f["problems"] == []
+    assert (f["branch"], f["commit"], f["changed_files"], f["tests_exit_code"], f["pr_url"]) == \
+        ("mc/30ff5b4d-g1", "0123456789ab", "yes", 0, PR)
+    assert f["tests_line"].startswith("Tests (run by the runner): `pytest") and f["nothing_merged_line"]
+    assert f["agent_account_separate"]
+    assert not uat.parse_build_result("MC: all good.")["found"] and not uat.parse_build_result(None)["ok"]
+
+
+def test_parse_build_result_failures():
+    not_run = uat.parse_build_result(_note(tests="- Tests: not run by the runner (no test command configured)."))
+    assert not not_run["ok"] and not_run["tests_run_by_runner"] is False and not_run["tests_exit_code"] is None
+    assert "tests were not run by the runner" in not_run["problems"]
+    red = uat.parse_build_result(_note(tests="- Tests (run by the runner): `pytest -q`, exit code 1. 1 failed."))
+    assert not red["ok"] and red["tests_exit_code"] == 1 and "exit code 1" in red["problems"][0]
+    no_pr = uat.parse_build_result(_note(pr=None))
+    assert not no_pr["ok"] and no_pr["pr_url"] is None and no_pr["tests_exit_code"] == 0
+    # the agent's own words never stand in for the runner's lines
+    own = "- Tests (run by the runner): `pytest`, exit code 0.\n- Draft pull request: " + PR
+    sneaky = uat.parse_build_result(_note(tests="- Tests: not run by the runner (timed out).", pr=None, own=own))
+    assert not sneaky["ok"] and sneaky["pr_url"] is None and sneaky["tests_run_by_runner"] is False
+    elsewhere = uat.parse_build_result(_note(pr="- Draft pull request: https://github.com/someone/else/pull/3"))
+    assert not elsewhere["ok"] and elsewhere["pr_url"] is None
+    unchanged = uat.parse_build_result(_note(changed="- Changed files: no"))
+    assert not unchanged["ok"] and "changed files is not yes" in unchanged["problems"]
+    assert not uat.parse_build_result(_note(branch="- Branch: main at commit 0123456789ab"))["ok"]
+
+
+def test_build_answer_carries_the_same_pr_and_claims_no_more():
+    green = uat.parse_build_result(_note())
+    ok = f"The runner's tests passed (exit code 0) and the draft pull request is {PR}. Nothing was merged or deployed."
+    assert uat.match_build_answer(ok, green)["ok"]
+    assert not uat.match_build_answer("It went well; the tests passed.", green)["ok"]                 # no PR url
+    assert not uat.match_build_answer(ok.replace("/pull/731", "/pull/732"), green)["ok"]
+    assert not uat.match_build_answer(f"Done: {PR}. It was merged and deployed.", green)["ok"]
+    red = uat.parse_build_result(_note(tests="- Tests: not run by the runner (timed out)."))
+    red["pr_url"] = PR
+    over = uat.match_build_answer(f"All tests passed. Draft pull request: {PR}", red)
+    assert not over["ok"] and over["overclaims_tests"]
+    honest = uat.match_build_answer(f"The tests were not run by the runner, so I can't say they passed. PR: {PR}", red)
+    assert honest["ok"] and not honest["says_tests_passed"]
+
+
+def test_b7_may_say_yes_only_behind_its_switch(monkeypatch):
+    assert uat.YES_BEHIND_SWITCH == {"B7": "UAT_BUILD_E2E"}
+    for cid in ("B6", "B7"):
+        with pytest.raises(uat.ApprovalRefused):
+            uat.approval_text(cid, "yes", "P-7K3M")
+        with pytest.raises(uat.ApprovalRefused):
+            uat.guard_outgoing(cid, "yes P-7K3M")
+        assert uat.approval_text(cid, "no", "P-7K3M") == "no P-7K3M"
+        uat.guard_outgoing(cid, "yes")                                      # a plain yes names no card
+    for value, on in (("1", True), (" 1 ", True), ("0", False), ("true", False), ("", False)):
+        monkeypatch.setenv("UAT_BUILD_E2E", value)
+        assert uat.build_e2e_on() is on and uat.may_say_yes("B7") is on
+    monkeypatch.setenv("UAT_BUILD_E2E", "1")
+    assert uat.approval_text("B7", "yes", "P-7K3M") == "yes P-7K3M"
+    uat.guard_outgoing("B7", "yes P-7K3M")
+    with pytest.raises(uat.ApprovalRefused):                                # the switch opens B7 and nothing else
+        uat.approval_text("B6", "yes", "P-7K3M")
+    with pytest.raises(uat.ApprovalRefused):
+        uat.guard_outgoing("B5", "yes P-7K3M")
+
+
+def test_mc_send_runs_the_guard_before_touching_the_page():
+    class S:
+        current_case = "B6"
+
+        @property
+        def page(self):
+            raise AssertionError("nothing may be typed")
+    with pytest.raises(uat.ApprovalRefused):
+        uat.mc_send(S(), 7, "yes P-7K3M", "x")
+
+
+class _FakeMC:
+    """MC's chat without a browser: ``script(text)`` gives the notes [(author kind, text), …] each message brings."""
+
+    def __init__(self, monkeypatch, script):
+        self.script, self.notes, self.sent = script, {}, []
+        monkeypatch.setattr(uat, "mc_new_chat", lambda s: 7)
+        monkeypatch.setattr(uat, "mc_send", self.send)
+        monkeypatch.setattr(uat, "mc_notes", self.read)
+        monkeypatch.setattr(uat.time, "sleep", lambda _s: None)
+        for name in ("CARD_GRACE_S", "PLAIN_YES_WAIT_S", "BUILD_WAIT_S", "BUILD_POLL_S"):
+            monkeypatch.setattr(uat, name, 0)
+
+    def read(self, s, cid, kinds=("agent", "platform")):
+        return {k: v for k, v in self.notes.items() if v["author_kind"] in kinds}
+
+    def send(self, s, cid, text, label, kinds=("agent",)):
+        uat.guard_outgoing(s.current_case, text)
+        self.sent.append(text)
+        new = []
+        for kind, body in self.script(text):
+            nid = len(self.notes) + 1
+            self.notes[nid] = {"id": nid, "author_kind": kind, "text": body}
+            new.append(self.notes[nid])
+        reply = next(n for n in new if n["author_kind"] in kinds)
+        return {"conversation_id": cid, "note_id": reply["id"], "reply": reply["text"],
+                "screenshot": f"screenshots/{label}.png"}
+
+
+class _S:
+    run_id = RUN
+    current_case = "-"
+
+
+def _run(cid):
+    return uat.run_case(next(c for c in uat.CASES if c.id == cid), _S())
+
+
+def _b6_script(yes=NEEDS_CODE, no="Cancelled. Nothing was changed.", first=CARD):
+    def script(text):
+        if text == "yes":
+            return [("platform", yes)]
+        if text == "no P-7K3M":
+            return [("platform", no)]
+        if text == uat.BUILD_CLARIFY_ANSWER:
+            return [("agent", CARD)]
+        return [("agent", first)]
+    return script
+
+
+def test_b6_passes_and_only_ever_sends_a_plain_yes_and_a_no(monkeypatch):
+    mc = _FakeMC(monkeypatch, _b6_script())
+    r = _run("B6")
+    assert r.status == "pass", r.evidence
+    assert mc.sent == [uat.build_request(RUN), "yes", "no P-7K3M"]
+    assert r.evidence["code"] == "P-7K3M" and r.evidence["plain_yes"]["asks_for_code"] and r.evidence["no"]["withdrawn"]
+    assert "cleanup_no" not in r.evidence
+
+
+def test_b6_answers_one_clarifying_question_then_finds_the_card(monkeypatch):
+    mc = _FakeMC(monkeypatch, _b6_script(first="Should the test live in its own file?"))
+    r = _run("B6")
+    assert r.status == "pass", r.evidence
+    assert mc.sent == [uat.build_request(RUN), uat.BUILD_CLARIFY_ANSWER, "yes", "no P-7K3M"]
+
+
+def test_b6_fails_without_a_card_after_one_answer_and_skips_when_builds_are_off(monkeypatch):
+    mc = _FakeMC(monkeypatch, lambda text: [("agent", "Which file exactly?")])
+    r = _run("B6")
+    assert r.status == "fail" and "no P-xxxx build card" in r.evidence["reason"]
+    assert mc.sent == [uat.build_request(RUN), uat.BUILD_CLARIFY_ANSWER]    # asked once more, never twice
+    mc = _FakeMC(monkeypatch, lambda text: [("agent", "I saved the design, but builds are not available on this server.")])
+    r = _run("B6")
+    assert r.status == "skip" and "not available" in r.evidence["reason"] and len(mc.sent) == 1
+
+
+def test_b6_fails_and_withdraws_when_a_plain_yes_starts_a_build(monkeypatch):
+    mc = _FakeMC(monkeypatch, _b6_script(yes=STARTED))
+    r = _run("B6")
+    assert r.status == "fail" and r.evidence["plain_yes"]["says_started"]
+    assert mc.sent[-1] == "no P-7K3M" and r.evidence["cleanup_no"] == "Cancelled. Nothing was changed."
+
+
+def test_b6_never_sends_the_plain_yes_to_a_card_that_does_not_promise_it_is_harmless(monkeypatch):
+    old = CARD.replace(" A build always needs its code: a plain “yes” starts nothing.", "")
+    mc = _FakeMC(monkeypatch, _b6_script(first=old))
+    r = _run("B6")
+    assert r.status == "fail" and "yes" not in mc.sent and mc.sent[-1] == "no P-7K3M"
+
+
+def test_b6_fails_when_no_does_not_withdraw(monkeypatch):
+    mc = _FakeMC(monkeypatch, _b6_script(no="Nothing was waiting, so there is nothing to cancel."))
+    r = _run("B6")
+    assert r.status == "fail" and "withdraw" in r.evidence["reason"] and mc.sent.count("no P-7K3M") == 1
+
+
+def test_b7_is_a_skip_and_sends_nothing_unless_switched_on(monkeypatch):
+    mc = _FakeMC(monkeypatch, _b6_script())
+    r = _run("B7")
+    assert r.status == "skip" and "UAT_BUILD_E2E=1" in r.evidence["reason"] and mc.sent == []
+
+
+def _b7_script(note, answer=f"The runner's tests exited 0. Draft pull request: {PR}. Nothing was merged.",
+               yes=STARTED):
+    def script(text):
+        if text == "yes P-7K3M":
+            return [("platform", yes)] + ([("platform", note)] if note else [])
+        if text == uat.BUILD_QUESTION:
+            return [("agent", answer)]
+        return [("agent", CARD)]
+    return script
+
+
+def test_b7_passes_with_runner_tests_and_a_draft_pr_and_leaves_a_follow_up(monkeypatch, tmp_path):
+    monkeypatch.setenv("UAT_BUILD_E2E", "1")
+    mc = _FakeMC(monkeypatch, _b7_script(_note()))
+    r = _run("B7")
+    assert r.status == "pass", r.evidence
+    assert mc.sent == [uat.build_request(RUN), "yes P-7K3M", "How did the build go?"]
+    ev = r.evidence
+    assert (ev["code"], ev["pr_url"], ev["branch"], ev["commit"]) == ("P-7K3M", PR, "mc/30ff5b4d-g1", "0123456789ab")
+    assert ev["tests_line"].startswith("Tests (run by the runner)") and PR in ev["mc_answer"] and PR in ev["follow_up"]
+    _, mpath = uat.write_reports(tmp_path, {"run_id": RUN}, [r], [TOKEN])
+    md = mpath.read_text()
+    assert f"to do: close the draft pull request {PR}" in md[md.index("## For Robert"):]
+
+
+def test_b7_fails_with_the_note_when_tests_were_not_run_or_no_pr(monkeypatch):
+    monkeypatch.setenv("UAT_BUILD_E2E", "1")
+    _FakeMC(monkeypatch, _b7_script(_note(tests="- Tests: not run by the runner (timed out).")))
+    r = _run("B7")
+    assert r.status == "fail" and "not run by the runner" in r.evidence["reason"]
+    assert "Build result, as the runner recorded it:" in r.evidence["result_note"] and PR in r.evidence["follow_up"]
+    _FakeMC(monkeypatch, _b7_script(_note(tests="- Tests (run by the runner): `pytest -q`, exit code 2. error.")))
+    assert "exit code 2" in _run("B7").evidence["reason"]
+    _FakeMC(monkeypatch, _b7_script(_note(pr=None)))
+    r = _run("B7")
+    assert r.status == "fail" and "no draft pull request" in r.evidence["reason"] and "follow_up" not in r.evidence
+
+
+def test_b7_fails_when_mc_claims_more_than_the_note_or_another_pr(monkeypatch):
+    monkeypatch.setenv("UAT_BUILD_E2E", "1")
+    _FakeMC(monkeypatch, _b7_script(_note(), answer="It went fine: pull request #731 was merged."))
+    r = _run("B7")
+    assert r.status == "fail" and not r.evidence["answer_check"]["same_pr_url"] and PR in r.evidence["follow_up"]
+
+
+def test_b7_skips_when_no_runner_took_the_job(monkeypatch):
+    monkeypatch.setenv("UAT_BUILD_E2E", "1")
+    _FakeMC(monkeypatch, _b7_script("The build job was not picked up by a runner, so nothing was built."))
+    assert _run("B7").status == "skip"
+    _FakeMC(monkeypatch, _b7_script(None, answer="It is still queued: no runner has taken it."))
+    r = _run("B7")
+    assert r.status == "skip" and "no runner" in r.evidence["reason"]
+    _FakeMC(monkeypatch, _b7_script(None, answer="Claude Code is still working on it."))
+    r = _run("B7")
+    assert r.status == "fail" and "no build result note" in r.evidence["reason"]
+    mc = _FakeMC(monkeypatch, _b7_script(None, yes="Claude Code's build could not be started, so nothing is running."))
+    r = _run("B7")
+    assert r.status == "skip" and mc.sent[-1] == "yes P-7K3M"
+
+
+def test_for_robert_lists_follow_ups_of_passed_cases(tmp_path):
+    md = uat.render_md({}, [_r("A1", "pass"), _r("B7", "pass", follow_up="close the draft pull request X")])
+    tail = md[md.index("## For Robert"):]
+    assert "B7 case B7 (pass), to do: close the draft pull request X" in tail and "A1" not in tail
