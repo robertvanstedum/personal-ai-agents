@@ -17,7 +17,7 @@ than 24 h; ``core.jobs.health.severity``). Kept in ``health-daily-state.json`` i
 * a condition (the job, its code and since when it is off) is told once per Chicago day while it lasts, so an open
   problem is repeated daily ("still needs action") instead of told once and forgotten;
 * a red item of this host is not told on the day it appears only when this host's hourly watchdog *recorded sending it*
-  (``watchdog-state.json``: same job, same condition); it is repeated on later days. ``alerts: on`` in a report proves
+  (``watchdog-state.json``: same job, same condition, same occurrence key); it is repeated on later days. ``alerts: on`` in a report proves
   no delivery, so another host's red items (the Mac's) are told here too: a duplicate beats silence;
 * a told condition is announced as recovered only on affirmative evidence: its host's report is fresh (not stale, not
   dated in the future) **and** lists the same job green (``ok``). A job observed yellow ``late``/``warn`` is announced as
@@ -151,8 +151,9 @@ def notify(daily: dict, told: dict, sender, now: datetime | None = None, watchdo
             current[item["id"]] = prior                 # already told today
             continue
         repeat = prior_condition == condition
-        sent_by_watchdog = (item["host"] == own_host and item.get("light") == "red"
-                            and (watchdog_told.get(item["id"]) or {}).get("condition") == item["code"])
+        record = watchdog_told.get(item["id"]) or {}
+        sent_by_watchdog = (item["host"] == own_host and item.get("light") == "red" and item.get("key")
+                            and record.get("condition") == item["code"] and record.get("key") == item["key"])
         if not repeat and sent_by_watchdog:
             current[item["id"]] = key                   # this host's watchdog recorded sending it; repeat from tomorrow
             continue

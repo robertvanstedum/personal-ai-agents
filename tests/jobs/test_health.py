@@ -773,3 +773,38 @@ def test_a_failed_recovery_message_is_retried(tmp_path):
     _republish(folder, r, jobs, NOW + 3 * H)
     run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + 3 * H)
     assert len(sent) == 1 and "recovered" in sent[0]
+
+
+def test_hourly_watchdog_does_not_call_a_running_first_run_recovered(tmp_path):
+    """Codex Wave 0a recheck A: a prior failed incident, then a running status with no last success, is not recovery."""
+    path = registry_file(tmp_path, job(id="broken", status_file="broken.json"))
+    r = registry.load(path)
+    jobs = tmp_path / "jobs"
+    put(jobs, r.get("broken"), state="running", finished=NOW - 10 * 60 * timedelta(seconds=1), success=None)
+    state = {"broken": {"condition": "failed", "key": "old-run"}}
+    sent = []
+    wd.check(jobs, [r.get("broken")], state, lambda t: sent.append(t) or "sent", NOW)
+    assert sent == [] and state["broken"] == {"condition": "failed", "key": "old-run"}
+
+
+def test_hourly_watchdog_announces_recovery_on_green_only(tmp_path):
+    path = registry_file(tmp_path, job(id="broken", status_file="broken.json"))
+    r = registry.load(path)
+    jobs = tmp_path / "jobs"
+    put(jobs, r.get("broken"), state="ok", finished=NOW - H)
+    state = {"broken": {"condition": "failed", "key": "old-run"}}
+    sent = []
+    wd.check(jobs, [r.get("broken")], state, lambda t: sent.append(t) or "sent", NOW)
+    assert len(sent) == 1 and "recovered" in sent[0] and "broken" not in state
+
+
+def test_a_watchdog_record_of_an_older_run_does_not_suppress_a_new_failed_run(tmp_path):
+    """Codex Wave 0a recheck B: same condition, different occurrence key, failed hourly send: the daily check tries."""
+    jobs, folder, path = daily_setup(tmp_path)                                  # failed run "r1"
+    r = registry.load(path)
+    _republish(folder, r, jobs, NOW, alerts="on")
+    status.write_json_atomic(jobs, "watchdog-state.json",
+                             {"schema_version": 1, "jobs": {"broken": {"condition": "failed", "key": "old-run"}}})
+    sent = []
+    code, _ = run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    assert code == 0 and len(sent) == 1 and "needs action" in sent[0]

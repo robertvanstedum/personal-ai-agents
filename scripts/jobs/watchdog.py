@@ -122,7 +122,8 @@ def check(jobs_root, jobs, state: dict, sender, now, roots=None, alerts=True) ->
                 state[job.id] = mark
             else:
                 delivered = False
-        elif verdict.state in ("green", "yellow") and prior:
+        elif verdict.code in ("ok", "warn") and prior:   # affirmative recovery only (WS3 C0.2): a completed run.
+            # A running first run, late, unknown or skew is not proof the incident is over; the state is kept.
             if _send(sender, f"minimoi job {job.id} on {job.host}: recovered, now {verdict.code}"):
                 state.pop(job.id, None)
             else:

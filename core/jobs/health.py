@@ -178,6 +178,7 @@ def host_report(reg, host: str, roots: dict, now: datetime, previous: dict | Non
         doc, verdict = observe(job, roots, now)
         since = _off_since(verdict.code, doc, job, prior_items.get(job.id), now)
         items.append({"id": job.id, "name": job.name, "host": host, "light": verdict.state, "code": verdict.code,
+                      "key": verdict.key,
                       "evidence": job.evidence.get("kind", "status_file"),
                       "last_success_at": (doc or {}).get("last_success_at"), "off_since": since,
                       "summary": (doc or {}).get("summary", "")
