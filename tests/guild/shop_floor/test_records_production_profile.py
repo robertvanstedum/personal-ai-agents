@@ -153,9 +153,11 @@ def test_preflight_closes_database_on_success_and_failure(prepared, monkeypatch,
                 raise sqlite3.OperationalError('synthetic query failure')
             return super().execute(sql, *args, **kwargs)
 
+    scratch = []  # in-memory connections the schema-step check uses to read a step's DDL; never the store
+
     def connect(*args, **kwargs):
         connection = real_connect(*args, factory=Connection, **kwargs)
-        opened.append(connection)
+        (scratch if args and args[0] == ':memory:' else opened).append(connection)
         return connection
 
     monkeypatch.setattr(RT.sqlite3, 'connect', connect)
@@ -166,8 +168,9 @@ def test_preflight_closes_database_on_success_and_failure(prepared, monkeypatch,
         else:
             assert RT.preflight(prepared.data, prepared.env)['provisioned_here'] is False
         assert len(opened) == 1
-        with pytest.raises(sqlite3.ProgrammingError, match='closed'):
-            sqlite3.Connection.execute(opened[0], 'SELECT 1')
+        for connection in (opened[0], *scratch):
+            with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+                sqlite3.Connection.execute(connection, 'SELECT 1')
     finally:
-        for connection in opened:
+        for connection in (*opened, *scratch):
             connection.close()
