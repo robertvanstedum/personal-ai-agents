@@ -866,7 +866,8 @@ function renderPeople() {
     : (room?.members || []).filter((m) => m.kind === 'human').map((m) => ({ ...m, rsvp: 'accepted', reach: { state: 'away' } }));
   people.replaceChildren(...list.map((p) => {
     const reach = p.reach || { state: 'away' };
-    const why = reach.state === 'away' && reach.reason ? `away: ${reach.reason}` : REACH[reach.state] || reach.state;
+    const why = reach.state === 'away' && reach.reason ? `away: ${reach.reason}`
+      : reach.state === 'reachable' && reach.held ? `${REACH.reachable} · ${heldText(reach.held)}` : REACH[reach.state] || reach.state;
     const chip = el('span', { class: 'rm-person', 'data-person': p.id, 'data-reach': reach.state, 'data-rsvp': p.rsvp,
       title: `${p.label} · ${why}${p.rsvp && p.rsvp !== 'accepted' ? ` · ${p.rsvp.replace('_', ' ')}` : ''}` });
     const key = faceKey(p.id, p.label);
@@ -884,6 +885,9 @@ const SIGN_IN = {
   'claude-code': 'run "claude auth login" in Terminal',
   codex: 'run "scripts/staging/codex-room.sh login" in Terminal',
 };
+
+// #699: connected and holding for the owner. A paused MC is reachable; it waits for Continue in Craft.
+function heldText(held) { return held === 'mc_paused' ? 'paused, waiting for you' : 'holding'; }
 
 // Why a teammate did not answer, said plainly with what to do next.
 // #690: a paused MC's "Review in Craft" opens the conversation the pause names (the Craft page resolves it when the link
@@ -904,6 +908,10 @@ function failureText(who, reason, principal) {
     case 'agent_usage_hold': return `${who} is holding new work because of its usage limits (see Operate → Usage & limits), so it did not answer. Retry once that clears.`;
     case 'agent_turn_failed': return `${who}'s own turn failed before it could answer. Nothing was received. Retry, or check its status in Operate.`;
     case 'mc_paused': return `${who} is paused after an earlier failed or uncertain action. Review the saved result in Craft and use Continue there before retrying this message. The pause holds MC everywhere (Craft, voice and meetings), not only this meeting. The earlier action is not replayed.`;
+    case 'mc_busy': return `${who} did not take this message: it is still answering an earlier one of yours (in Craft, voice or another meeting). Nothing was sent. Retry when that answer is in.`;
+    case 'mc_queue_pending': return `${who} did not take this message: you have messages waiting to be sent in Craft, and they go first. Nothing was sent. Retry once they have gone.`;
+    case 'admission_refused': return `${who} did not take this message: the meeting or this turn changed just before it was sent, so Records did not admit it. Nothing was sent. Retry if you still want it.`;
+    case 'admission_unavailable': return `${who} did not take this message: its connection to Records could not confirm the turn. Nothing was sent. Retry; if it repeats, check MC's Rooms connection.`;
     case 'relay_busy': return `${who} was busy.`;
     case 'empty_reply': return `${who} answered with nothing.`;
     case 'signed_out_after_start': return `${who}'s sign-in was rejected partway through. It may have started answering; nothing was received. To fix: ${signIn}, then Retry.`;
@@ -926,6 +934,7 @@ function participantState(p) {
   if (p.rsvp !== 'accepted' && p.needs_proof) return `Needs a proof first — ${PROOF_COST}`;
   if (p.rsvp === 'no_response') return 'Invite timed out: no answer, it may not be connected here';
   if (p.rsvp !== 'accepted') return p.rsvp === 'invited' ? 'Invited' : 'Not joined';
+  if (p.reach?.state === 'reachable' && p.reach.held) return `Connected · ${heldText(p.reach.held)}`;
   return ['here','reachable','answering'].includes(p.reach?.state) ? 'Available' : 'Not reachable';
 }
 

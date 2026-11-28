@@ -617,6 +617,44 @@ def test_reachable_needs_proof_fresh_readyz_and_no_failure(env):
     assert mc["reach"] == {"state": "away", "reason": "last reply failed (relay busy) — Retry or Prove again"}
 
 
+@pytest.mark.parametrize("reason", ["mc_paused", "mc_busy", "mc_queue_pending", "admission_refused"])
+def test_a_teammate_holding_for_the_owner_is_not_a_reachability_failure(env, reason):
+    """#699: MC paused for the owner (or busy elsewhere) declined the turn through a working route. The turn fails
+    with its reason; the badge stays, and a paused MC reads as reachable and held until its worker says otherwise."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    reachable = lambda **more: env.call("POST", env.worker, "/hosted-teammates/mc/reachable", {"readyz_at": now_iso, **more})
+    reach = lambda: [p for p in env.status()["participants"] if p["id"] == "mc"][0]["reach"]
+    env.prove(); assert reachable().json["reachable"] is True
+    env.join(); env.say("Q"); t = env.claim(); env.start(t)
+    failed = env.call("POST", env.worker, f"/turns/{t['id']}/fail", {"claim_id": t["claim_id"], "outcome": "failed", "reason": reason})
+    assert failed.json["state"] == "failed"
+    turn = [x for x in env.status()["turns"] if x["id"] == t["id"]][0]
+    assert (turn["state"], turn["disposition"]) == ("failed", reason)       # the room still shows why, with Retry
+    assert reach() == {"state": "reachable", "reason": None, **({"held": "mc_paused"} if reason == "mc_paused" else {})}
+    assert reachable().json == {"reachable": True, "expires_in_s": reachable().json["expires_in_s"]}   # no failure_since_last_commit
+    assert reach() == {"state": "reachable", "reason": None}                 # the worker's word: not held (any more)
+    assert reachable(held="mc_paused").json["held"] == "mc_paused"
+    assert reach() == {"state": "reachable", "reason": None, "held": "mc_paused"}
+    assert reachable(held="Not A Code").status_code == 400
+    # An unready or stale worker is away, never "held": the pause note needs a live connection.
+    assert reachable(unready="signed_out").json["reachable"] is False and "held" not in reach()
+    assert reachable(held="mc_paused").json["reachable"] is True
+    # A real failure afterwards counts exactly as before.
+    env.say("Q2"); t2 = env.claim(); env.start(t2)
+    env.call("POST", env.worker, f"/turns/{t2['id']}/fail", {"claim_id": t2["claim_id"], "outcome": "failed", "reason": "relay_busy"})
+    assert reachable(held="mc_paused").json == {"reachable": False, "reasons": ["failure_since_last_commit"]}
+    assert reach() == {"state": "away", "reason": "last reply failed (relay busy) — Retry or Prove again"}
+
+
+def test_an_uncertain_turn_with_a_holding_reason_still_counts_as_a_failure(env):
+    now_iso = datetime.now(timezone.utc).isoformat()
+    env.prove(); env.join(); env.say("Q"); t = env.claim(); env.start(t)
+    env.call("POST", env.worker, f"/turns/{t['id']}/fail", {"claim_id": t["claim_id"], "outcome": "uncertain", "reason": "mc_paused"})
+    r = env.call("POST", env.worker, "/hosted-teammates/mc/reachable", {"readyz_at": now_iso, "held": "mc_paused"}).json
+    assert r == {"reachable": False, "reasons": ["failure_since_last_commit"]}
+    assert [p for p in env.status()["participants"] if p["id"] == "mc"][0]["reach"]["state"] == "away"
+
+
 def test_auto_accept_when_reachable_and_owner_decline_and_no_response(env):
     env.prove()
     env.call("POST", env.worker, "/hosted-teammates/mc/reachable", {"readyz_at": datetime.now(timezone.utc).isoformat()})

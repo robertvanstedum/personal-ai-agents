@@ -100,6 +100,11 @@ DEFAULT_FACILITATOR = "mc"
 ROUND_AWAY_S = 90          # R3a: a queued teammate that does not start within this after its turn comes is skipped
 ROUND_UNRECONCILED_S = 120  # R3a: an unreconciled uncertain predecessor releases its successor after this
 EVERYONE = ("everyone", "all")
+# #699: a turn its teammate declined while its route was working: MC paused for the owner, MC answering elsewhere,
+# messages waiting ahead of this one, or Records itself not admitting the turn. Shown in the room with its reason and
+# open to Retry, but not a reachability failure: the badge stays as the worker's check-ins say.
+HELD_NOT_FAILED = ("mc_paused", "mc_busy", "mc_queue_pending", "admission_refused")
+_HELD_SQL = ",".join(f"'{d}'" for d in HELD_NOT_FAILED)
 UNREADY_TEXT = {"runner_changed_since_proof": "changed since its proof — Prove again",
                 "not_proven_with_this_runner": "not yet proven on this connector — Prove first",
                 "signed_out": "its CLI is signed out on this Mac",
@@ -980,7 +985,10 @@ class Meetings:
         if fresh(db, room, principal, "answering"):
             return {"state": "answering", "reason": None}
         if fresh(db, "*", principal, "reachable"):
-            return {"state": "reachable", "reason": None}
+            held = db.execute("SELECT source FROM presence WHERE scope='*' AND actor=? AND kind='held' AND expires_at>?",
+                              (principal, now())).fetchone()
+            # Connected and holding for the owner (a paused MC, #699). "held" is present only then.
+            return {"state": "reachable", "reason": None, **({"held": held["source"]} if held else {})}
         status = db.execute("SELECT unready FROM teammate_status WHERE principal=?", (principal,)).fetchone()
         if status and status["unready"]:
             return {"state": "away", "reason": UNREADY_TEXT.get(status["unready"], status["unready"].replace("_", " "))}
@@ -988,7 +996,8 @@ class Meetings:
             return {"state": "away", "reason": "no connector in Rooms yet"}
         if not record["proven_at"]:
             return {"state": "away", "reason": "not yet proven — Prove first"}
-        failed = db.execute("""SELECT disposition FROM turns WHERE addressee=? AND state IN ('failed','uncertain')
+        failed = db.execute(f"""SELECT disposition FROM turns WHERE addressee=? AND state IN ('failed','uncertain')
+            AND NOT (state='failed' AND disposition IN ({_HELD_SQL}))
             ORDER BY updated DESC LIMIT 1""", (principal,)).fetchone()
         last_commit = db.execute("SELECT MAX(updated) FROM turns WHERE addressee=? AND state='committed'",
                                  (principal,)).fetchone()[0]
@@ -1341,12 +1350,18 @@ class Meetings:
                 if not isinstance(unready, str) or not re.fullmatch(r"[a-z_]{1,48}", unready):
                     raise Problem("unready must be a short reason code")
                 clear_presence(db, "*", principal, "reachable")
+                clear_presence(db, "*", principal, "held")
                 db.execute("INSERT INTO teammate_status VALUES(?,?,?) ON CONFLICT(principal) DO UPDATE SET "
                            "unready=excluded.unready,observed_at=excluded.observed_at", (principal, unready, now()))
                 return {"reachable": False, "reasons": [unready]}
             db.execute("DELETE FROM teammate_status WHERE principal=?", (principal,))
             age = (datetime.now(timezone.utc) - checked).total_seconds()
-            failed_after_commit = db.execute("""SELECT 1 FROM turns WHERE addressee=? AND state IN ('failed','uncertain')
+            held = payload.get("held")
+            if held is not None and (not isinstance(held, str) or not re.fullmatch(r"[a-z_]{1,48}", held)):
+                raise Problem("held must be a short reason code")
+            # #699: a turn the teammate declined while holding (HELD_NOT_FAILED) is not a failure of its route.
+            failed_after_commit = db.execute(f"""SELECT 1 FROM turns WHERE addressee=? AND state IN ('failed','uncertain')
+                AND NOT (state='failed' AND disposition IN ({_HELD_SQL}))
                 AND updated > COALESCE((SELECT MAX(updated) FROM turns WHERE addressee=? AND state='committed'),'')""",
                                              (principal, principal)).fetchone()
             reasons = []
@@ -1358,9 +1373,15 @@ class Meetings:
                 reasons.append("failure_since_last_commit")
             if reasons:
                 clear_presence(db, "*", principal, "reachable")
+                clear_presence(db, "*", principal, "held")
                 return {"reachable": False, "reasons": reasons}
             set_presence(db, "*", principal, "reachable", REACHABLE_TTL_S, "worker_readyz")
-            return {"reachable": True, "expires_in_s": REACHABLE_TTL_S}
+            # The worker's own word, every check-in: holding for the owner right now, or not (lifted by Continue).
+            if held:
+                set_presence(db, "*", principal, "held", REACHABLE_TTL_S, held)
+            else:
+                clear_presence(db, "*", principal, "held")
+            return {"reachable": True, "expires_in_s": REACHABLE_TTL_S, **({"held": held} if held else {})}
 
     def claim(self, auth, payload):
         wanted = payload.get("addressees")
@@ -1584,6 +1605,12 @@ class Meetings:
             elif t["state"] == "cancel_requested":
                 set_turn(db, turn_id, state="cancelled", stop_ack="worker",
                          disposition=(t["disposition"] or "cancelled"))
+            elif t["state"] in ("claimed", "running") and outcome == "failed" and reason in HELD_NOT_FAILED:
+                # #699: the teammate answered through its route that it is holding (paused for the owner, busy
+                # elsewhere). The turn failed and says why; the route did not fail, so its badge is left alone.
+                set_turn(db, turn_id, state="failed", disposition=reason)
+                if reason == "mc_paused" and fresh(db, "*", t["addressee"], "reachable"):
+                    set_presence(db, "*", t["addressee"], "held", REACHABLE_TTL_S, reason)
             elif t["state"] in ("claimed", "running"):
                 set_turn(db, turn_id, state=outcome, disposition=reason)
                 db.execute("UPDATE teammates SET last_failure_at=?,updated=? WHERE principal=?",
