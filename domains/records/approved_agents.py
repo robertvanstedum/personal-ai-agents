@@ -69,8 +69,10 @@ class ApprovedAgents:
                 row.pop('member_id', None); row.pop('worker_id', None)
                 busy = db.execute("SELECT 1 FROM turns WHERE addressee=? AND state IN ('claimed','running')", (agent,)).fetchone()
                 connected = db.execute("SELECT observed_at FROM presence WHERE actor=? AND kind='reachable' AND expires_at>? ORDER BY observed_at DESC LIMIT 1", (agent, stamp())).fetchone()
+                # #699: connected and holding for the owner (a paused MC) is still connected, and says so.
+                held = connected and db.execute("SELECT 1 FROM presence WHERE actor=? AND kind='held' AND expires_at>?", (agent, stamp())).fetchone()
                 row.update(label=label, approved=bool(r and r['state']=='active'),
-                           availability='Busy' if busy else 'Connected' if connected else 'Unknown',
+                           availability='Busy' if busy else ('Connected · paused, waiting for you' if held else 'Connected') if connected else 'Unknown',
                            observed_at=connected['observed_at'] if connected else None,
                            repo_write={'state':'unavailable','paths':[]}, host_write={'state':'unavailable','paths':[]},
                            attachment_delivery='metadata_only', image_understanding=False)
