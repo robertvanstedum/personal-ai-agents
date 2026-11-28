@@ -574,8 +574,10 @@ def test_persona_0_1_37_is_a_whole_unpinned_candidate_that_gives_the_order_of_wo
              "minimoi_delegate_build", "yes P-XXXX", "exactly as returned"]
     assert [section.index(step) for step in order] == sorted(section.index(step) for step in order)
     for said in ("You cannot search the code", "title and revision", "Never say tests passed",
-                 "You are not told when a job ends", "5 USD and 60 minutes", "split it into smaller designs",
-                 "never merged, released or deployed", "Private or professional material is never built this way"):
+                 "You are not told when a job ends", "5 USD and a time limit of 60 minutes", "split it into smaller designs",
+                 "Nothing is merged, released or deployed", "Private or professional material is never built this way",
+                 "`design_artifact_id`", "`design_revision`", "it starts on his yes", "a plain yes starts nothing",
+                 "When the runner is set up to publish", "which the runner did not verify"):
         assert said in section, said
     for text in (section, (ROOT / "services/mc_operations/plugins/minimoi-tools/MC_CHAT_AGENTS_SECTION.md").read_text()):
         assert "minimoi_delegate_result" in text and "yes P-XXXX" in text
