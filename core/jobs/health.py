@@ -201,7 +201,7 @@ def severity(item: dict) -> str:
     if code == "report_stale" and (item.get("off_for_s") or 0) > SILENT_ACTION_S:
         return NEEDS_ACTION
     if code in WATCH_CODES or item.get("light") == "yellow":
-        if code not in REPORT_CODES and (item.get("off_for_s") or 0) > YELLOW_ESCALATE_S:
+        if item.get("light") == "yellow" and code not in REPORT_CODES and (item.get("off_for_s") or 0) > YELLOW_ESCALATE_S:
             return NEEDS_ACTION                       # yellow for more than a day: escalated, never left unseen
         return WATCH
     return FINE

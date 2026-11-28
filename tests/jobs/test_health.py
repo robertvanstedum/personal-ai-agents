@@ -660,17 +660,105 @@ def test_a_downgrade_is_improved_not_recovered(tmp_path):
     assert len(sent) == 2 and "improved" in sent[1] and "recovered" not in sent[1]
 
 
-def test_a_job_gone_from_a_fresh_report_is_dropped_without_a_recovery(tmp_path):
+def _told_then_publish(tmp_path, mutate, now_offset=2):
+    """A told red for job 'broken', then a report rewritten by ``mutate(doc)``; returns (sent, told)."""
     jobs, folder, path = daily_setup(tmp_path)
     sent = []
     run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
     doc = json.loads((folder / "health-ec2.json").read_text())
-    doc["items"] = [i for i in doc["items"] if i["id"] != "broken"]                 # the registry no longer lists it
-    doc["checked_at"] = status.iso(NOW + 2 * H)
+    doc["checked_at"] = status.iso(NOW + now_offset * H)
+    mutate(doc)
     (folder / "health-ec2.json").write_text(json.dumps(doc))
-    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + 2 * H)
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + now_offset * H)
+    return sent, json.loads((jobs / "health-daily-state.json").read_text())["told"]
+
+
+def test_a_job_absent_from_a_fresh_report_stays_open(tmp_path):
+    """Codex Wave 0a review P1: absence is lost observation, not recovery."""
+    def drop(doc):
+        doc["items"] = [i for i in doc["items"] if i["id"] != "broken"]
+    sent, told = _told_then_publish(tmp_path, drop)
+    assert len(sent) == 1 and "broken" in told
+
+
+def test_a_job_turned_not_tracked_stays_open(tmp_path):
+    def untrack(doc):
+        for i in doc["items"]:
+            if i["id"] == "broken":
+                i.update(light="unknown", code="not_tracked")
+    sent, told = _told_then_publish(tmp_path, untrack)
+    assert len(sent) == 1 and "broken" in told
+
+
+def test_a_skewed_job_is_neither_improved_nor_recovered(tmp_path):
+    def skew(doc):
+        for i in doc["items"]:
+            if i["id"] == "broken":
+                i.update(light="unknown", code="skew")
+    sent, told = _told_then_publish(tmp_path, skew)
+    assert len(sent) == 1 and "broken" in told
+
+
+def test_a_future_dated_report_is_not_fresh_and_cannot_recover(tmp_path):
+    """Codex Wave 0a review P2: a report dated beyond the skew tolerance is not evidence."""
+    def future_green(doc):
+        doc["checked_at"] = status.iso(NOW + 10 * D)
+        for i in doc["items"]:
+            if i["id"] == "broken":
+                i.update(light="green", code="ok")
+    sent, told = _told_then_publish(tmp_path, future_green)
+    assert len(sent) == 1 and "broken" in told
+
+
+def test_a_report_just_within_the_skew_tolerance_is_fresh(tmp_path):
+    def near_green(doc):
+        doc["checked_at"] = status.iso(NOW + 2 * H + timedelta(seconds=30))
+        for i in doc["items"]:
+            if i["id"] == "broken":
+                i.update(light="green", code="ok")
+    sent, told = _told_then_publish(tmp_path, near_green)
+    assert len(sent) == 2 and "recovered" in sent[1] and "broken" not in told
+
+
+def test_a_job_removed_from_the_registry_is_dropped_without_a_message(tmp_path):
+    jobs, folder, path = daily_setup(tmp_path)
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    other = registry_file(tmp_path, job(id="dev-thing", host="dev", status_file="dev-thing.json"))
+    doc = json.loads((folder / "health-ec2.json").read_text())
+    doc["items"], doc["checked_at"] = [], status.iso(NOW + 2 * H)
+    (folder / "health-ec2.json").write_text(json.dumps(doc))
+    run_daily(jobs, folder, other, lambda t: sent.append(t) or "sent", now=NOW + 2 * H)
+    assert len(sent) == 1 and "broken" not in json.loads((jobs / "health-daily-state.json").read_text())["told"]
+
+
+def test_a_failed_watchdog_send_is_retried_by_the_daily_check(tmp_path):
+    """Codex Wave 0a review P1 #2: the real watchdog fails to send, its report still says alerts: on; the daily check
+    must try, and must not record a delivery it did not make."""
+    jobs, folder, path = tmp_path / "jobs", tmp_path / "health", registry_file(
+        tmp_path, job(id="broken", status_file="broken.json"))
+    r = registry.load(path)
+    put(jobs, r.get("broken"), state="failed", success=NOW - 2 * D)
+    code = wd.run(jobs_root=jobs, host="ec2", registry_path=path, sender=lambda t: "not_sent", now=lambda: NOW,
+                  out=io.StringIO(), err=io.StringIO(), alerts=True, health_dir=folder)
+    assert code == 1 and json.loads((folder / "health-ec2.json").read_text())["alerts"] == "on"
+    attempts = []
+    code, _ = run_daily(jobs, folder, path, lambda t: attempts.append(t) or "not_sent")
+    assert code == 1 and len(attempts) == 1                                     # tried; failure stays retryable
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + H)
+    assert len(sent) == 1 and "needs action" in sent[0]
+
+
+def test_a_watchdog_send_for_another_condition_does_not_suppress(tmp_path):
+    jobs, folder, path = daily_setup(tmp_path)
+    r = registry.load(path)
+    _republish(folder, r, jobs, NOW, alerts="on")
+    status.write_json_atomic(jobs, "watchdog-state.json",
+                             {"schema_version": 1, "jobs": {"broken": {"condition": "missed", "key": "x"}}})
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
     assert len(sent) == 1
-    assert "broken" not in json.loads((jobs / "health-daily-state.json").read_text())["told"]
 
 
 def test_a_failed_recovery_message_is_retried(tmp_path):

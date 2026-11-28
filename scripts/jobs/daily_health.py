@@ -19,10 +19,11 @@ than 24 h; ``core.jobs.health.severity``). Kept in ``health-daily-state.json`` i
 * a red item of this host is not told on the day it appears only when this host's hourly watchdog *recorded sending it*
   (``watchdog-state.json``: same job, same condition); it is repeated on later days. ``alerts: on`` in a report proves
   no delivery, so another host's red items (the Mac's) are told here too: a duplicate beats silence;
-* a told condition is announced as recovered only on affirmative evidence: its host's report is fresh **and** lists the
-  same job green (``ok``). A missing or stale report proves nothing (the condition is carried until the host is seen
-  again); a job that drops to ``watch`` is announced as improved; a job absent from a fresh report (registry changed) is
-  dropped without a message. A recovery whose message fails is retried on the next run. (This host's watchdog may also
+* a told condition is announced as recovered only on affirmative evidence: its host's report is fresh (not stale, not
+  dated in the future) **and** lists the same job green (``ok``). A job observed yellow ``late``/``warn`` is announced as
+  improved. Anything else (a missing or stale report, the job absent from the report, ``not_tracked``, unknown,
+  ``skew``, ``not_due``) is lost observation: the condition is carried, unresolved. A job retired or removed from the
+  registry is dropped without a message. A recovery whose message fails is retried on the next run. (This host's watchdog may also
   announce a recovery it sent itself; a second "recovered" line beats a silent one.)
 
 **Why not a helper agent (yet).** Robert asked for a helper (Apprentice or EA) to file this for MC. In 1.2 helpers take
@@ -47,7 +48,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from core.jobs import alert, health, registry, schedule, status  # noqa: E402
+from core.jobs import alert, health, judge, registry, schedule, status  # noqa: E402
 
 JOB_ID = "jobs-daily-health"
 DAILY_NAME = "health-daily.json"
@@ -76,6 +77,13 @@ def _watchdog_told(jobs_root) -> dict:
     return {k: v for k, v in jobs.items() if isinstance(v, dict)} if isinstance(jobs, dict) else {}
 
 
+def _fresh(host: str, report: dict, now: datetime) -> bool:
+    """A report is fresh when it is neither older than its host's limit nor dated in the future beyond the clock-skew
+    tolerance. A future-dated report is skewed evidence: it authorizes neither a recovery nor a suppression."""
+    age = (now - status.parse_time(report["checked_at"])).total_seconds()
+    return -judge.SKEW_S <= age <= health.STALE_AFTER_S.get(host, health.REPORT_STALE_S)
+
+
 def build(reg, health_dir, now: datetime) -> dict:
     hosts = [h for h in reg.hosts() if h not in NOT_A_HOST]
     reports = {h: health.read_report(health_dir, h) for h in hosts}
@@ -86,15 +94,17 @@ def build(reg, health_dir, now: datetime) -> dict:
     text = health.words(items, hosts=sorted(reporting), not_tracked=len(not_tracked))
     if not_reporting:
         text += f"\nNot reporting here: {', '.join(not_reporting)} (their health is not visible to this host)."
-    fresh = sorted(h for h, r in reporting.items()
-                   if (now - status.parse_time(r["checked_at"])).total_seconds()
-                   <= health.STALE_AFTER_S.get(h, health.REPORT_STALE_S))
-    green = {h: sorted(i["id"] for i in reporting[h]["items"] if isinstance(i, dict) and i.get("code") == "ok")
-             for h in fresh}
+    fresh = sorted(h for h, r in reporting.items() if _fresh(h, r, now))
+    # What each fresh host's report says about every job, unfiltered (daily_items drops ok and not_tracked): recovery
+    # and improvement are announced only from a present, positive observation of the same job.
+    observed = {h: {i["id"]: {"light": i.get("light"), "code": i.get("code")}
+                    for i in reporting[h]["items"] if isinstance(i, dict) and isinstance(i.get("id"), str)}
+                for h in fresh}
     for item in items:
         item["alerts_on_host"] = item["host"] in fresh and (reporting.get(item["host"]) or {}).get("alerts") == "on"
     return {"schema_version": 1, "checked_at": status.iso(now), "hosts_reporting": sorted(reporting),
-            "hosts_fresh": fresh, "green": green, "alerts_on_hosts": sorted(h for h in fresh if reporting[h].get("alerts") == "on"),
+            "hosts_fresh": fresh, "observed": observed, "registered": sorted(j.id for j in reg.jobs if not j.retired),
+            "alerts_on_hosts": sorted(h for h in fresh if reporting[h].get("alerts") == "on"),
             "not_reporting": not_reporting, "items": items,
             "not_tracked": [{"id": i["id"], "name": i["name"], "host": i["host"]} for i in not_tracked],
             "text": text}
@@ -119,7 +129,8 @@ def notify(daily: dict, told: dict, sender, now: datetime | None = None, watchdo
     now = now or datetime.now(timezone.utc)
     day = now.astimezone(DAY_TZ).date().isoformat()
     fresh = set(daily.get("hosts_fresh", ()))
-    green = {h: set(ids) for h, ids in (daily.get("green") or {}).items()}
+    observed = daily.get("observed") or {}
+    registered = set(daily.get("registered") or ())
     watchdog_told = watchdog_told or {}
     delivered, current = True, {}
 
@@ -158,16 +169,19 @@ def notify(daily: dict, told: dict, sender, now: datetime | None = None, watchdo
         _, _, host = _split(prior)
         if not host:
             continue                                    # a key from before C0.1: forgotten quietly, once
+        if job_id not in registered:
+            continue                                    # retired or removed from the registry: not a recovery, dropped quietly
         if host not in fresh:
             current[job_id] = prior                     # cannot see that host now: carried, never called recovered
             continue
-        now_item = by_id.get(job_id)
-        if now_item is not None:
-            text = f"minimoi health, improved: {health.line(now_item)}"     # still off, but no longer needs action
-        elif job_id in green.get(host, ()):
+        seen = observed.get(host, {}).get(job_id) or {}
+        if seen.get("light") == "green" and seen.get("code") == "ok":
             text = f"minimoi health, recovered: {job_id} ({host}) is green again"
+        elif seen.get("light") == "yellow" and seen.get("code") in ("late", "warn") and job_id in by_id:
+            text = f"minimoi health, improved: {health.line(by_id[job_id])}"   # an observed operational downgrade
         else:
-            continue                                    # not in a fresh report at all (registry changed): dropped, never "recovered"
+            current[job_id] = prior                     # absent, not tracked, unknown, skewed, not due: observation lost,
+            continue                                    # the incident stays open
         if not send(text):
             delivered = False
             current[job_id] = prior                     # announced on the next run instead
