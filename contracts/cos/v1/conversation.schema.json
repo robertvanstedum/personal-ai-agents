@@ -27,7 +27,11 @@
           "type": "boolean"
         },
         "data_scope": { "$ref": "urn:minimoi:contract:cos:common#/$defs/data_scope" },
-        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" }
+        "environment": { "$ref": "urn:minimoi:contract:cos:common#/$defs/environment" },
+        "uat": {
+          "description": "Present (true) only on a conversation created by the staging automatic-UAT session; set by the CoS backend from the portal's signed claim, never from the request body. Such a conversation is not shelf-ingested. Absent on every other conversation.",
+          "const": true
+        }
       },
       "allOf": [
         { "if": { "properties": { "conversation_id": { "const": "cos-before-1-2" } } }, "then": { "properties": { "read_only": { "const": true } } } }

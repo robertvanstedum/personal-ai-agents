@@ -574,7 +574,8 @@ def cos_ask(s: Session, text: str, title: str) -> dict:
         raise CaseFail(f"CoS send refused: HTTP {r['status']}", {"conversation_id": cid, "response": body or r["text"]})
     s.goto(page, COS_PAGE, ready="meta[name=minimoi-csrf-token]")
     return {"conversation_id": cid, "turn_id": body.get("turn_id"), "reply": body.get("reply") or "",
-            "model_label": body.get("model_label"), "completion": body.get("completion")}
+            "model_label": body.get("model_label"), "completion": body.get("completion"),
+            "uat_marked": conv.get("uat") is True}       # evidence only: CoS marked this chat, so the Vault never takes it
 
 
 # ── Guildhall drivers ────────────────────────────────────────────────────────────────────────────────────────────
@@ -1116,9 +1117,11 @@ def case_b5(s: Session) -> dict:
     return ev
 
 
-# Each UAT chat lands in the vault, so asking the same question every run fills CoS's evidence budget with earlier UAT
-# chats and crowds out the target (release session, 26 Nov: an earlier C1 chat outranked gghhx28k). The wording
-# rotates by run id as a stopgap; the real fix is keeping UAT chats out of the vault index (follow-up).
+# Each UAT chat used to land in the vault, so asking the same question every run filled CoS's evidence budget with
+# earlier UAT chats and crowded out the target (release session, 26 Nov: an earlier C1 chat outranked gghhx28k). The real
+# fix: a chat created under the UAT session is marked ``uat`` by the server and never reaches Vault search
+# (minimoi_portal/uat_signin.py ``is_uat``; earlier chats: core/uat_chats.py). The rotation stays as a second guard: it
+# costs nothing, and it covers a staging that has not yet deployed the marker or marked its earlier chats.
 C1_QUESTIONS = [
     "Did we ever talk about why I'm hearing back from employers less often lately?",
     "Have we discussed the reasons companies seem to reply to me less these days?",

@@ -138,10 +138,13 @@ class History:
         with self._locked():
             return self._ensure_conversation(DEFAULT_CONVERSATION_ID, DEFAULT_TITLE, private=False)
 
-    def create(self, title: str, *, private: bool = False) -> dict:
+    def create(self, title: str, *, private: bool = False, uat: bool = False) -> dict:
+        """``uat``: created by the staging UAT session (history_api decides, from the portal's signed claim). The
+        conversation works like any other and is never taken into the Vault (core/memory_shelf/cos.py check_meta)."""
         title = " ".join(str(title or "").split())[:120] or "New conversation"
         with self._locked():
-            return self._ensure_conversation("cosc-" + secrets.token_hex(12), title, private=bool(private))
+            return self._ensure_conversation("cosc-" + secrets.token_hex(12), title, private=bool(private),
+                                             uat=uat is True)
 
     def name_voice_call(self, conversation_id: str, title: str) -> dict | None:
         """A voice call that began on a new chat names that chat (#620).
@@ -482,7 +485,7 @@ class History:
                 os.close(fd)
 
     def _ensure_conversation(self, cid: str, title: str, *, private: bool, read_only: bool = False,
-                             created_at: str | None = None) -> dict:
+                             created_at: str | None = None, uat: bool = False) -> dict:
         path = self._conversation_path(cid)
         existing = fsio.read_doc(path)
         if existing is not None:
@@ -490,6 +493,8 @@ class History:
         doc = {"schema": "minimoi.cos.conversation/1", "conversation_id": cid, "title": title, "private": private,
                "created_at": created_at or self._clock(), "read_only": read_only, "data_scope": "personal",
                "environment": self.environment}
+        if uat:
+            doc["uat"] = True                       # absent on every ordinary conversation
         if contracts.errors("conversation", "conversation", doc):
             raise HistoryRefused("payload_invalid")
         fsio.write_doc(path, doc)
