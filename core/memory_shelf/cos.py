@@ -68,13 +68,15 @@ def snapshot(path: Path, limit: int = MAX_BYTES) -> bytes:
 
 
 def check_meta(meta_raw: bytes, cid: str, environment: str) -> dict:
-    """The conversation's metadata, or ``Refused``: not the schema, another id, private (anything but an explicit ``false``), another
-    environment or another data scope."""
+    """The conversation's metadata, or ``Refused``: not the schema, another id, private (anything but an explicit ``false``), marked
+    ``uat`` (anything but absent or ``false``), another environment or another data scope."""
     meta = json.loads(meta_raw)
     if not isinstance(meta, dict) or meta.get("schema") != "minimoi.cos.conversation/1" or meta.get("conversation_id") != cid:
         raise Refused("bad_metadata")
     if meta.get("private") is not False:
         raise Refused("private")
+    if meta.get("uat") not in (None, False):          # the staging automatic UAT's own chats (domains/cos/history.py)
+        raise Refused("uat")
     if meta.get("environment") != environment or meta.get("data_scope") != "personal":
         raise Refused("scope")
     return meta

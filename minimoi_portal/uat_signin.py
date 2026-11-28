@@ -11,8 +11,9 @@ to mint one. This route is the one door. It opens only where all of these hold:
 Anywhere else, production included, every method answers 404, as if the route did not exist. A deploy test keeps the
 hash out of every production compose file. The session it creates carries ``uat: True`` and ``uat_issued_at``;
 :func:`expired` lets the portal drop a UAT session after :data:`MAX_AGE_S`, so a copied cookie cannot be replayed for
-the portal's usual 30 days. The marker is also written to the portal log on every sign-in. Carrying it into receipts
-and audit records is a follow-up (not done here).
+the portal's usual 30 days. The marker is also written to the portal log on every sign-in. Chats created under such a
+session are marked server-side (:func:`is_uat`) and kept out of Vault search. Carrying the marker into receipts and
+audit records is a follow-up (not done here).
 """
 from __future__ import annotations
 
@@ -72,6 +73,14 @@ def expired(user, now: float | None = None) -> bool:
     if not isinstance(issued, int):
         return True
     return (time.time() if now is None else now) - issued > MAX_AGE_S
+
+
+def is_uat(user, environ=None, now: float | None = None) -> bool:
+    """True only for a live session this door issued, on a host where the door is open. Chats created under it are
+    marked ``uat`` (MC: the conversation record; CoS: a signed ``uat`` claim, then its conversation metadata) and never
+    reach Vault search. Always False outside staging, whatever the session says."""
+    return (isinstance(user, dict) and user.get("uat") is True and expected_hash(environ) is not None
+            and not expired(user, now))
 
 
 def scrub_sentry_event(event):

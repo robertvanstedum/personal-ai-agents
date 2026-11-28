@@ -523,8 +523,10 @@ def _cos_owner_assertion(user, backend_path, body):
         logging.getLogger(__name__).warning("CoS owner write sent unsigned: PORTAL_COS_OWNER_KEY_FILE/ENV not usable; "
                                             "CoS will refuse it")
         return None
+    from minimoi_portal import uat_signin
     return PA.sign(key, audience="cos-owner", subject=f"owner:{owner}", method=request.method,
-                   target=PA.canonical_target(backend_path, request.query_string), body=body, env=env)
+                   target=PA.canonical_target(backend_path, request.query_string), body=body, env=env,
+                   uat=uat_signin.is_uat(user))       # the staging UAT session: CoS marks the chats it creates
 
 
 def _route_timeout(portal_prefix: str, path: str, method: str):

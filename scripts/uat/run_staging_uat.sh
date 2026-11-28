@@ -3,6 +3,11 @@
 #
 #   scripts/uat/run_staging_uat.sh [extra staging_uat.py args, e.g. --only A1,B2]
 #
+# * A subset of cases: UAT_CASES=B6,B7 (comma list of case ids; unset = every case), or --only as above. The report,
+#   the totals and the exit code then cover only those cases.
+# * UAT_BUILD_E2E=1 switches on case B7, which starts a real build and opens a DRAFT pull request on the public
+#   repository (Robert closes it afterwards). Without it B7 is a skip. Example, B7 alone:
+#     UAT_CASES=B7 UAT_BUILD_E2E=1 scripts/uat/run_staging_uat.sh
 # * The runner runs in docker/Dockerfile.uat (the official Playwright image, pinned by digest, plus the matching
 #   Python package), built on the host the first time. The repo is mounted read-only; only the output folder is writable.
 # * The sign-in token comes from SSM (/minimoi/staging/uat_signin_token, SecureString). It is passed to the container
@@ -64,6 +69,7 @@ docker run --rm --init --ipc=host \
   --name "minimoi-uat-$RUN_ID" \
   --user "$(id -u):$(id -g)" \
   -e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1 -e UAT_RUN_ID="$RUN_ID" \
+  -e UAT_CASES="${UAT_CASES:-}" -e UAT_BUILD_E2E="${UAT_BUILD_E2E:-}" \
   -v "$TOKDIR/token:/run/uat_token:ro" \
   -v "$REPO_DIR:/repo:ro" \
   -v "$OUT:/out" \
