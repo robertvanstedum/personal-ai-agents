@@ -141,3 +141,47 @@ def test_a_private_meeting_proposal_gets_a_room_card_with_the_confirm_digest(rig
     interp = tasks.get("interpretation", iid, "tok-principal")
     src = tasks.get("source_event", interp["source_event_ids"][0], "tok-principal")
     assert src["source"]["store"] == "cos-meeting-owner" and src["content"] == "CoS, track a review checklist."
+
+
+# ---- #692: CoS starts and keeps an initiative itself --------------------------------------------------------------
+def test_692_cos_finds_files_briefs_updates_and_reads_it_back_in_a_later_turn(rig):
+    tasks, history, bindings, files, client, _ = rig
+    owner_turn(history, bindings, "I want to start the model enterprise initiative and build a sketch of the idea.")
+    none = call(client, {"operation": "initiative_find", "query": "model enterprise"})
+    assert none["status"] == "done" and none["data"]["initiatives"] == []
+    assert "does not search Planning Studio" in none["message"]
+    filed = call(client, {"operation": "initiative_file", "title": "Model enterprise",
+                          "summary": "A small company run on AI and judgment."}, call_id="c2")
+    pid = filed["data"]["initiative_id"]
+    brief = "# Brief\n\n> \"I want to start the model enterprise initiative and build a sketch of the idea.\"\n"
+    saved = call(client, {"operation": "initiative_doc_save", "initiative_id": pid, "kind": "brief", "text": brief},
+                 call_id="c3")
+    assert saved["status"] == "done", saved
+    assert saved["message"].startswith(f"Saved as version 1 of the brief of {pid}.")
+    pasted = call(client, {"operation": "initiative_attach_text", "initiative_id": pid, "name": "posting",
+                           "text": "Pasted posting text."}, call_id="c4")
+    assert pasted["status"] == "done" and pasted["data"]["added"][0]["name"] == "posting.md"
+    moved = call(client, {"operation": "initiative_update", "initiative_id": pid, "state": "under_review"},
+                 call_id="c5")
+    assert moved["status"] == "done" and moved["message"].startswith(f"Updated state on {pid} (state under_review")
+
+    owner_turn(history, bindings, "Where is the model enterprise initiative? Add a second version of the brief.", n=2)
+    found = call(client, {"operation": "initiative_find", "query": "enterprise"}, n=2, call_id="d1")
+    assert [i["id"] for i in found["data"]["initiatives"]] == [pid]
+    assert found["data"]["initiatives"][0]["documents"] == {"brief": 1}
+    again = call(client, {"operation": "initiative_file", "title": "model enterprise", "summary": "again"},
+                 n=2, call_id="d2")
+    assert again["status"] == "refused" and "already exists" in again["message"]
+    two = call(client, {"operation": "initiative_doc_save", "initiative_id": pid, "kind": "brief",
+                        "text": brief + "\nSecond version.\n"}, n=2, call_id="d3")
+    assert two["data"]["version"] == 2
+    first = call(client, {"operation": "initiative_doc_read", "initiative_id": pid, "kind": "brief", "version": 1},
+                 n=2, call_id="d4")
+    assert first["data"]["text"] == brief
+
+
+def test_692_a_refused_update_says_nothing_changed(rig):
+    tasks, history, bindings, files, client, _ = rig
+    owner_turn(history, bindings, "Mark PI-2026-0042 as started.")
+    out = call(client, {"operation": "initiative_update", "initiative_id": "PI-2026-0042", "state": "started"})
+    assert out["status"] == "refused" and out["message"].startswith("Nothing was filed or changed: no initiative")

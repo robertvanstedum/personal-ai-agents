@@ -25,7 +25,7 @@ read-only**: root runs these on every release), the repo clone `/minimoi/repo` (
 `work`, `workshops`, `artifacts` (ro), its inbox and conversations (ro).
 `/minimoi/planning-studio` is the same live read-only planning mirror MC reads (`/opt/minimoi/planning/tree`).
 `/minimoi/prototype-lab` is the Prototype Lab from the deployed code repo, also read-only.
-Write: `/minimoi/cos/outbox` and the folders above marked rw. CoS does not write Planning Studio.
+Write: `/minimoi/cos/outbox` and the folders above marked rw. CoS does not write Planning Studio. Professional initiatives go through `cos_tasks` to the private store under the task service (PI- numbers, documents, packet; #680, #692), not to a folder.
 
 Never mounted: `/opt/minimoi` itself, `.env*`, `mc.env`, `mc/portal`, `gateway-keys.env`, `vault-reader.env`, `auth/`,
 `private/`, `backups/`, `operators/`, `~/.ssh`, the Docker socket. `tests/cos/test_cos_access_mounts.py` holds this.
