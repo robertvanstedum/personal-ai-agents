@@ -14,8 +14,12 @@ snapshot carries ``minimoi_exporter_snapshot_timestamp_seconds``; a rule on its 
 so a stale file can never pass for a healthy one.
 
 **Privacy (plan v0.2 §6.4, Codex finding 4):** every label value must appear in ``config/metrics_public_aliases.json``
-(hosts, job ids, codes, phases, refusal reasons, threshold kinds). Anything else is dropped and counted in
-``minimoi_exporter_dropped_total``. No summaries, paths, run ids, record ids or free text are ever published; values
+(hosts, job ids, codes, phases, refusal reasons, threshold kinds). Anything else is dropped and counted in the
+``minimoi_exporter_dropped`` gauge (this snapshot's count, not a persisted counter).
+
+**Invalid data (Codex exporter review):** a report entry that is not an object, has no string id, or repeats an
+identity (host, job) already published is skipped and counted in ``minimoi_exporter_invalid``; one bad entry never
+stops the snapshot, and no metric identity is ever emitted twice. No summaries, paths, run ids, record ids or free text are ever published; values
 are numbers only. Standard library only; the hosts run python3 -I.
 """
 from __future__ import annotations
@@ -39,7 +43,8 @@ LIGHT = {"green": 0, "yellow": 1, "red": 2, "unknown": 3}
 
 HELP = {
     "minimoi_exporter_snapshot_timestamp_seconds": "When this snapshot was written (alert on its age).",
-    "minimoi_exporter_dropped_total": "Label values dropped because they are not in the public alias table.",
+    "minimoi_exporter_dropped": "Samples left out of this snapshot: a label value not in the public alias table.",
+    "minimoi_exporter_invalid": "Report entries left out of this snapshot: malformed, or a duplicate identity.",
     "minimoi_health_report_timestamp_seconds": "checked_at of each host's watchdog report.",
     "minimoi_job_light": "The judge's light: 0 green, 1 yellow, 2 red, 3 unknown.",
     "minimoi_job_condition": "1 for the job's current code.",
@@ -68,7 +73,7 @@ class Aliases:
 
 class Snapshot:
     def __init__(self, aliases: Aliases):
-        self.aliases, self.rows, self.dropped = aliases, [], 0
+        self.aliases, self.rows, self.dropped, self.invalid, self.seen = aliases, [], 0, 0, set()
 
     def add(self, name: str, value, **labels) -> None:
         kinds = {"host": "hosts", "job_id": "job_ids", "code": "codes", "phase": "phases", "reason": "refusal_reasons",
@@ -79,10 +84,15 @@ class Snapshot:
                 return
         if value is None:
             return                                          # nothing observed: no sample (absence is itself alertable)
+        identity = (name, tuple(sorted(labels.items())))
+        if identity in self.seen:
+            self.invalid += 1                               # a duplicate identity is never emitted twice
+            return
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             self.dropped += 1
             return
-        self.rows.append((name, tuple(sorted(labels.items())), float(value)))
+        self.seen.add(identity)
+        self.rows.append((name, identity[1], float(value)))
 
     def text(self) -> str:
         out, seen = [], set()
@@ -90,7 +100,7 @@ class Snapshot:
             if name not in seen:
                 seen.add(name)
                 out.append(f"# HELP {name} {HELP[name]}")
-                out.append(f"# TYPE {name} {'counter' if name.endswith('_total') else 'gauge'}")
+                out.append(f"# TYPE {name} gauge")
             lab = ",".join(f'{k}="{v}"' for k, v in labels)
             out.append(f"{name}{{{lab}}} {_num(value)}" if lab else f"{name} {_num(value)}")
         return "\n".join(out) + "\n"
@@ -112,8 +122,16 @@ def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: dateti
         if report is None:
             continue
         snap.add("minimoi_health_report_timestamp_seconds", _ts(report["checked_at"]), host=h)
+        published = set()
         for item in report["items"]:
-            jid = item.get("id")
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                snap.invalid += 1
+                continue
+            jid = item["id"]
+            if jid in published:
+                snap.invalid += 1                           # the first entry for a job wins; later ones are skipped
+                continue
+            published.add(jid)
             snap.add("minimoi_job_light", LIGHT.get(item.get("light"), 3), job_id=jid, host=h)
             snap.add("minimoi_job_condition", 1, job_id=jid, host=h, code=item.get("code"))
             for metric, key in (("minimoi_job_last_success_timestamp_seconds", "last_success_at"),
@@ -139,13 +157,14 @@ def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: dateti
             if ts is not None:
                 snap.add("minimoi_job_last_progress_timestamp_seconds", ts, job_id=job.id, host=host)
             snap.add("minimoi_job_phase", 1, job_id=job.id, host=host, phase=progress.get("phase"))
-        ts = _ts(doc.get("last_refusal_at"))
+        refusal = status.read_refusal(root, job) or doc     # the sidecar (WS3 C1.2), else fields in the status file
+        ts = _ts(refusal.get("last_refusal_at"))
         if ts is not None:
             snap.add("minimoi_job_last_refusal_timestamp_seconds", ts, job_id=job.id, host=host,
-                     reason=doc.get("last_refusal_reason"))
+                     reason=refusal.get("last_refusal_reason"))
     snap.add("minimoi_exporter_snapshot_timestamp_seconds", now.timestamp())
-    dropped = snap.dropped
-    snap.rows.append(("minimoi_exporter_dropped_total", (), float(dropped)))
+    snap.rows.append(("minimoi_exporter_dropped", (), float(snap.dropped)))
+    snap.rows.append(("minimoi_exporter_invalid", (), float(snap.invalid)))
     return snap.text()
 
 

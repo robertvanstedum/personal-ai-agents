@@ -42,8 +42,8 @@ def setup(tmp_path, *, extra_item=None, summary="budget_spent"):
     status.write_status(jobs, seed.status_file, status.build(
         job_id=seed.id, host="ec2", run_id="r1", state="ok", started_at=NOW - 2 * H, finished_at=NOW - H, exit_code=0,
         summary=summary, last_success_at=NOW - H,
-        progress={"work_due": 1, "last_progress_at": status.iso(NOW - 2 * H), "phase": "active"},
-        last_refusal_at=NOW - 30 * timedelta(minutes=1), last_refusal_reason="apply_busy"))
+        progress={"work_due": 1, "last_progress_at": status.iso(NOW - 2 * H), "phase": "active"}))
+    status.record_refusal(jobs, seed, "apply_busy", NOW - 30 * timedelta(minutes=1))
     report = health.host_report(reg, "ec2", {"jobs": str(jobs)}, NOW)
     if extra_item:
         report["items"].append(extra_item)
@@ -73,7 +73,7 @@ def test_the_snapshot_has_the_expected_samples_and_valid_syntax(tmp_path):
                for l in samples)
     assert 'minimoi_job_threshold_seconds{job_id="vault-meaning-seed",kind="idle_allowed_s"} 3600' in samples
     assert any(l.startswith('minimoi_job_light{host="ec2",job_id="vault-apply"} ') for l in samples)
-    assert "minimoi_exporter_dropped_total 0" in samples
+    assert "minimoi_exporter_dropped 0" in samples and "minimoi_exporter_invalid 0" in samples
 
 
 def test_private_looking_safe_values_are_dropped_and_counted(tmp_path):
@@ -81,7 +81,7 @@ def test_private_looking_safe_values_are_dropped_and_counted(tmp_path):
     text = build(tmp_path, extra_item={"id": "acme-merger-call", "name": "Acme merger call", "host": "ec2",
                                        "light": "red", "code": "client_acme", "off_since": status.iso(NOW - H)})
     assert "acme" not in text.lower() and "merger" not in text.lower()
-    dropped = int(re.search(r"^minimoi_exporter_dropped_total (\d+)$", text, re.M).group(1))
+    dropped = int(re.search(r"^minimoi_exporter_dropped (\d+)$", text, re.M).group(1))
     assert dropped >= 2
 
 
@@ -112,3 +112,26 @@ def test_an_unreadable_alias_table_refuses_to_publish(tmp_path):
     code = ex.run(environ={"MINIMOI_METRICS_ALIASES": str(tmp_path / "missing.json"),
                            "MINIMOI_METRICS_FILE": str(tmp_path / "x.prom")}, now=lambda: NOW)
     assert code == 2 and not (tmp_path / "x.prom").exists()
+
+
+def test_a_malformed_report_entry_is_skipped_not_fatal(tmp_path):
+    """Codex exporter review: a null item raised AttributeError and stopped the whole snapshot."""
+    reg, jobs, hdir = setup(tmp_path)
+    doc = json.loads((hdir / "health-ec2.json").read_text())
+    doc["items"] += [None, "x", {"name": "no id"}]
+    (hdir / "health-ec2.json").write_text(json.dumps(doc))
+    text = ex.build(reg, hdir, {"jobs": str(jobs)}, "ec2", ex.Aliases.load(), NOW)
+    assert "minimoi_exporter_invalid 3" in text and "minimoi_exporter_snapshot_timestamp_seconds" in text
+
+
+def test_a_duplicate_job_is_published_once(tmp_path):
+    reg, jobs, hdir = setup(tmp_path)
+    doc = json.loads((hdir / "health-ec2.json").read_text())
+    dup = dict(next(i for i in doc["items"] if i["id"] == "vault-apply"), light="green", code="ok")
+    doc["items"].append(dup)
+    (hdir / "health-ec2.json").write_text(json.dumps(doc))
+    text = ex.build(reg, hdir, {"jobs": str(jobs)}, "ec2", ex.Aliases.load(), NOW)
+    samples = [l for l in text.splitlines() if not l.startswith("#")]
+    identities = [l.rsplit(" ", 1)[0] for l in samples]
+    assert len(identities) == len(set(identities))
+    assert "minimoi_exporter_invalid 1" in text
