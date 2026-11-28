@@ -118,7 +118,8 @@ def classify(containers: list[Container] | None, refresh_lock: str, owner_runnin
     whole, not per container. An over-budget container is an **orphan** only when the lock is ``free`` or ``absent``
     **and** ``owner_running`` is ``False`` (both owner statuses readable, neither running). When the lock state is
     ``unknown`` or the owner status cannot be read (``owner_running is None``) it is **undetermined**, never an orphan
-    and never fine. A held lock or a running owner means no orphan claim."""
+    and never fine, even when the other input looks live. With both inputs known, a held lock or a running owner means
+    no orphan claim."""
     if containers is None:
         return None
     out = {k: {"count": 0, "orphans": 0, "undetermined": 0, "oldest_s": 0} for k in ("seed", "index_step", "unknown_holder")}
@@ -140,10 +141,11 @@ def classify(containers: list[Container] | None, refresh_lock: str, owner_runnin
             slot["oldest_s"] = max(slot["oldest_s"], age)
         if budget is None or age is None or age <= budget + ORPHAN_MARGIN_S:
             continue
+        if lock_unknown or owner_running is None:
+            slot["undetermined"] += 1                    # any unknown input keeps the uncertainty, even beside a live sign
+            continue
         if refresh_lock == "held" or owner_running is True:
-            continue                                     # a live owner: a long step, not an orphan
+            continue                                     # a live owner, fully known: a long step, not an orphan
         if lock_known_free and owner_running is False:
             slot["orphans"] += 1
-        elif lock_unknown or owner_running is None:
-            slot["undetermined"] += 1
     return out

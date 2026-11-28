@@ -91,7 +91,8 @@ def test_the_orphan_predicate_needs_lock_not_held_and_owner_not_running():
     cases = {("free", False): (1, 0), ("absent", False): (1, 0),            # orphan
              ("held", False): (0, 0), ("free", True): (0, 0), ("held", True): (0, 0),   # a live owner: no claim
              ("unknown", False): (0, 1), ("free", None): (0, 1), ("absent", None): (0, 1),  # cannot tell
-             ("unknown", True): (0, 0), ("held", None): (0, 0)}
+             ("unknown", True): (0, 1), ("held", None): (0, 1),             # recheck v0.2: unknown is kept
+             ("absent", True): (0, 0)}
     for (lock_state, running), (orphans, undetermined) in cases.items():
         out = locks.classify([c("minimoi-vault-seed", 30)], lock_state, running, NOW)
         assert (out["seed"]["orphans"], out["seed"]["undetermined"]) == (orphans, undetermined), (lock_state, running)
