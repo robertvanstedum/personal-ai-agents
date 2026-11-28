@@ -268,3 +268,28 @@ def test_a_corrupt_state_file_is_refused_not_reset(tmp_path):
         pass
     else:
         raise AssertionError("an invalid state document must be refused")
+
+
+# ---- Codex lifecycle recheck (OPS_LIFECYCLE_CODE_REVIEW_v0.2, on 3bb792f1) --------------------------------------------
+
+def test_an_absent_evaluation_without_a_healthy_signal_resets_the_count(tmp_path):
+    tracker, now, notes = _open_one(tmp_path)
+    now["t"] = T0 + 5 * M
+    tracker.observe(problems.Evaluation("b", now["t"], "v1", True, {}, {FP: now["t"] - M}))   # clear sample 1
+    now["t"] = T0 + 10 * M
+    tracker.observe(problems.Evaluation("c", now["t"], "v1", True, {}, {}))                    # absent, no signal
+    now["t"] = T0 + 15 * M
+    tracker.observe(problems.Evaluation("d", now["t"], "v1", True, {}, {FP: now["t"] - M}))   # one clear after it
+    assert tracker.problems()[FP]["status"] == "open"
+
+
+def test_clear_samples_far_apart_restart_the_count(tmp_path):
+    tracker, now, notes = _open_one(tmp_path)
+    now["t"] = T0 + 5 * M
+    tracker.observe(problems.Evaluation("b", now["t"], "v1", True, {}, {FP: now["t"] - M}))
+    now["t"] = T0 + 64 * M                                                                      # a 59-minute gap
+    tracker.observe(problems.Evaluation("c", now["t"], "v1", True, {}, {FP: now["t"] - M}))
+    assert tracker.problems()[FP]["status"] == "open"
+    now["t"] = T0 + 69 * M
+    tracker.observe(problems.Evaluation("d", now["t"], "v1", True, {}, {FP: now["t"] - M}))
+    assert tracker.problems()[FP]["status"] == "recovered"

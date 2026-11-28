@@ -21,7 +21,9 @@ times at which each alert's underlying signal was last observed healthy.
   within ``FRESH_S`` of now. Only this closes a problem.
 * ``observation_unknown``: an evaluation that is incomplete, older than ``FRESH_S``, dated in the future, under a
   changed rule-set version, or the same evaluation seen again. It never closes anything, never counts toward
-  recovery, and resets any clear samples already counted (recovery needs consecutive valid evaluations); open
+  recovery, and resets any clear samples already counted (recovery needs consecutive valid evaluations, each absent
+  with a healthy signal, no more than ``RECOVERY_GAP_S`` apart by evaluation time; an absent evaluation without a
+  healthy signal also resets the count); open
   problems record since when they cannot be seen. A healthy signal dated in the future is not evidence either.
 
 Notice writes are idempotent (each carries a stable key), queued in the state file and delivered strictly in order
@@ -45,6 +47,7 @@ SKEW_S = 60              # an evaluation dated beyond this in the future is not 
 REOPEN_S = 3600          # re-firing within this of a recovery re-opens the same problem
 UNKNOWN_NOTICE_S = 1800  # a problem that cannot be seen for this long gets a "cannot see" notice (once per episode)
 RECOVERY_SAMPLES = 2     # distinct valid evaluations without the alert, needed to close
+RECOVERY_GAP_S = 900     # the clear samples must be this close together by evaluation time, or the count restarts
 STATE_VERSION = 1
 
 
@@ -121,6 +124,7 @@ class ProblemTracker:
                 if p["status"] != "open":
                     continue
                 p["clear_samples"] = 0                  # recovery needs consecutive valid evaluations: blindness resets it
+                p.pop("clear_since", None)
                 if not p.get("unknown_since"):
                     p["unknown_since"] = status.iso(now)
                 p["unknown_reason"] = verdict
@@ -145,8 +149,13 @@ class ProblemTracker:
             seen = status.parse_time(p["last_seen_at"])
             if (healthy is None or healthy <= seen or (now - healthy).total_seconds() > FRESH_S
                     or (healthy - now).total_seconds() > SKEW_S):            # a future-dated signal is not evidence
-                p["absent_unverified"] = p.get("absent_unverified", 0) + 1     # absent, but no healthy evidence: open
+                p["absent_unverified"] = p.get("absent_unverified", 0) + 1     # absent, but no healthy evidence: open,
+                p["clear_samples"] = 0                                         # and any earlier clear sample is void
+                p.pop("clear_since", None)
                 continue
+            first = status.parse_time(p.get("clear_since"))
+            if not p.get("clear_samples") or first is None or (ev.evaluated_at - first).total_seconds() > RECOVERY_GAP_S:
+                p["clear_samples"], p["clear_since"] = 0, status.iso(ev.evaluated_at)   # a fresh first candidate
             p["clear_samples"] = p.get("clear_samples", 0) + 1
             if p["clear_samples"] >= RECOVERY_SAMPLES:
                 p["status"] = "recovered"
