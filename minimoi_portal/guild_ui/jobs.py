@@ -56,6 +56,8 @@ AGENT = "mc-agent"
 TITLE_MAX = 80
 RESULT_CUT_NOTE = "\n\n[The result was cut at 64 KB; the rest was not kept.]"
 NOTE_SHOWN_MAX = 3600           # a conversation note holds at most 4000 characters (the floor database's limit)
+BUILD_DEADLINE_S = 60 * 60       # a delegated build (#693; Robert, 27 Nov 2026). Everything else keeps Limits.deadline_s.
+BRIEF_MAX_CHARS = 16_000        # the delegation envelope's bound on a brief (core/mc_delegation_runner/envelope.py)
 NOTE_SHOWN_CUT = "\n\n[Showing the first part. The full result ({n:,} characters) is kept with this job: use \"Open full result\".]"
 
 
@@ -97,7 +99,8 @@ MESSAGES = {
     "empty_result": "The job finished but returned no text, so there is no answer to keep.",
 }
 ERROR_WORDS = {"relay_unreachable": "the relay could not be reached", "relay_lost_job": "the relay no longer knows this job",
-               "stop_unconfirmed": "a requested stop was never confirmed", "deadline": "the 30 minute limit was reached",
+               "stop_unconfirmed": "a requested stop was never confirmed", "deadline": "the job's time limit was reached",
+               "brief_missing": "the approved design kept for this job could not be read back unchanged",
                "refused": "the relay refused to start it", "relay_busy": "the relay stayed busy", "note_missing": "the kept note could not be read",
                "empty_result": "no result text came back", "not_connected": "Master Craftsman is not connected"}
 
@@ -147,18 +150,62 @@ def parse_proposal(text: str | None, *, ended_cleanly: bool) -> dict | None:
     return {"title": m.group(1).strip(), "rest": rest.lstrip("\n")}
 
 
-def shown_in_note(text: str) -> str:
+def shown_in_note(text: str, limit: int = NOTE_SHOWN_MAX) -> str:
     """The part of a result that goes in the conversation note: all of it when it fits, else the first part cut at a
     paragraph or word, with a line that says the rest is kept with the job."""
-    if len(text) <= NOTE_SHOWN_MAX:
+    if len(text) <= limit:
         return text
-    cut = text[:NOTE_SHOWN_MAX]
+    cut = text[:limit]
     for sep in ("\n\n", "\n", " "):
         at = cut.rfind(sep)
-        if at > NOTE_SHOWN_MAX // 2:
+        if at > limit // 2:
             cut = cut[:at]
             break
     return cut.rstrip() + NOTE_SHOWN_CUT.format(n=len(text))
+
+
+BUILD_FOOTER = "--- Delegated build ---"
+_FOOTER_LINES = ("Branch: ", "Commit: ", "Changed: ", "Tests: ", "Pull request: ")
+
+
+def build_footer(text: str):
+    """(the runner's footer lines, the text before it) when a build's result ends with the runner's own six-line footer
+    (core/mc_delegation_runner appends it after the agent has exited), else (None, text). Only the very end counts, and
+    only in exactly that shape: the same words earlier in the text are the agent's, and are left where they are."""
+    lines = (text or "").rstrip().split("\n")
+    tail = lines[-6:]
+    if (len(tail) != 6 or tail[0].strip() != BUILD_FOOTER
+            or any(not line.startswith(start) for line, start in zip(tail[1:], _FOOTER_LINES))):
+        return None, text
+    return [line.rstrip()[:400] for line in tail[1:]], "\n".join(lines[:-6]).rstrip()
+
+
+def build_summary(detail) -> str:
+    """The lead of a build's result note (#693) from the runner's structured record: what the RUNNER recorded, never the
+    agent's own account. "" when the runner supplied nothing usable. A fact that was not recorded is said as missing."""
+    if not isinstance(detail, dict) or not (detail.get("branch") or detail.get("tests") or detail.get("publish")):
+        return ""
+    lines = ["Build result, as the runner recorded it:"]
+    commit = detail.get("commit")
+    lines.append("- Branch: " + (detail.get("branch") or "not recorded") + (f" at commit {commit[:12]}" if commit else ", no commit"))
+    if isinstance(detail.get("changed"), bool):
+        lines.append("- Changed files: " + ("yes" if detail["changed"] else "none"))
+    tests = detail.get("tests")
+    if isinstance(tests, dict) and tests.get("command"):
+        code = tests.get("exit_code")
+        how = "timed out" if tests.get("timed_out") else f"exit code {code}" if code is not None else "no exit code recorded"
+        lines.append(f"- Tests (run by the runner): `{tests['command']}`, {how}" + (f". {tests['summary']}" if tests.get("summary") else ""))
+    else:
+        why = (tests or {}).get("note") if isinstance(tests, dict) else None
+        lines.append("- Tests: not run by the runner" + (f" ({why.replace('_', ' ')})" if why else "") + ".")
+    publish = detail.get("publish") if isinstance(detail.get("publish"), dict) else {}
+    if detail.get("pr_url"):
+        lines.append(f"- Draft pull request: {detail['pr_url']}")
+    else:
+        why = publish.get("code") or publish.get("state")
+        lines.append("- Pull request: not published" + (f" ({why.replace('_', ' ')})" if why else "") + ".")
+    lines.append("Nothing was merged, released or deployed.")
+    return "\n".join(lines)
 
 
 def job_id_for(note_id: str) -> str:
@@ -290,6 +337,30 @@ class JobStore:
             os.fsync(f.fileno())
         os.replace(tmp, path)
 
+    def _brief_path(self, cid, jid):
+        if not JOB_RE.fullmatch(str(jid)):
+            raise JobGone(jid)
+        return os.path.join(self._dir(cid), f"{jid}.brief.txt")
+
+    def write_brief(self, cid, jid, text: str) -> None:
+        """The whole brief of a build (#693), kept beside the job before the job exists, exactly as it was approved."""
+        path = self._brief_path(cid, jid)
+        os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+        tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+
+    def read_brief(self, cid, jid) -> str | None:
+        try:
+            with open(self._brief_path(cid, jid), encoding="utf-8", newline="") as f:
+                return f.read(BRIEF_MAX_CHARS * 4 + 1)
+        except (FileNotFoundError, JobGone):
+            return None
+
     def read_result(self, cid, jid) -> str | None:
         try:
             with open(self._result_path(cid, jid), encoding="utf-8") as f:
@@ -348,11 +419,20 @@ class JobManager:
 
     # ── starting ──
     def start(self, conv: dict, principal: str, note: dict, note_id: str, doc_ids=None, title: str | None = None,
-              agent: str = AGENT, scope: str = "research"):
+              agent: str = AGENT, scope: str = "research", brief: str | None = None, design: dict | None = None):
         """(job, refusal). A refusal is (code, plain message) and means nothing was created and nothing was sent.
-        ``scope``: research (read-only) by default; build only from Robert's confirmed build proposal."""
+        ``scope``: research (read-only) by default; build only from Robert's confirmed build proposal. A build's
+        ``brief`` is the whole task text (the approved design with his own note, #693) and ``design`` names what it was
+        made from ({artifact_id, revision, sha256, title}); both are kept with the job, and the job sends that brief."""
         if scope not in ("research", "build"):
             return None, ("scope_invalid", "That kind of delegated work is not available. Nothing was started.")
+        if brief is not None or design is not None:
+            if (scope != "build" or not isinstance(brief, str) or not brief.strip() or not isinstance(design, dict)
+                    or not all(isinstance(design.get(k), str) and design[k] for k in ("artifact_id", "sha256", "title"))
+                    or type(design.get("revision")) is not int):
+                return None, ("brief_invalid", "That build could not be prepared. Nothing was started.")
+            if len(brief) > BRIEF_MAX_CHARS or len(self.scrub(brief)) > BRIEF_MAX_CHARS:
+                return None, ("brief_too_large", "The design and your message are too long for one build brief. Nothing was started.")
         cid = conv.get("id", "")
         if not CONV_RE.fullmatch(str(cid)):
             return None, ("not_a_conversation", "Open a conversation to run a job; the old Shop floor thread does not run jobs.")
@@ -375,11 +455,16 @@ class JobManager:
             files = [{"doc_id": f["doc_id"], "name": f["name"], "bytes": f["bytes"], "sha256": f["sha256"], "path": f["path"]}
                      for f in manifest["files"]]
         now = self.clock()
+        task_text = brief if brief is not None else (note.get("text") or "")      # what the job sends: its digest covers all of it
         job = {"id": jid, "conversation_id": cid, "principal": principal, "note_id": note_id, "state": "queued", "agent": agent, "scope": scope,
-               "title": (title or default_title(note.get("text", ""))), "task_sha256": hashlib.sha256((note.get("text") or "").encode()).hexdigest(),
+               "title": (title or default_title(note.get("text", ""))), "task_sha256": hashlib.sha256(task_text.encode()).hexdigest(),
                "created_at": now, "t_queued": now, "updated_at": now, "files": files, "inbox": bool(files), "attempts": 0,
-               "deadline_s": self.limits.deadline_s, "stop_requested_at": None, "stop_outcome": None, "tools": [], "tools_truncated": False,
+               "deadline_s": BUILD_DEADLINE_S if scope == "build" else self.limits.deadline_s, "stop_requested_at": None, "stop_outcome": None, "tools": [], "tools_truncated": False,
                "writes": [], "error_class": None, "result_note_id": None, "result_truncated": False, "result_chars": 0}
+        if brief is not None:
+            job.update(design_artifact_id=design["artifact_id"], design_revision=design["revision"],
+                       design_sha256=design["sha256"], design_title=design["title"][:160], brief_kept=True)
+            self.store.write_brief(cid, jid, brief)          # on disk before the job exists, so a job never lacks it
         job, created = self.store.create(job)
         if not created and files:
             job_inbox.remove_inbox(self.folder, jid)       # a racing duplicate staged nothing of its own
@@ -447,8 +532,16 @@ class JobManager:
         if note is None:                                    # the note really is gone, or is not the owner's: this job cannot run
             self.store.mutate(cid, jid, lambda j: self._end(j, "not_started", "note_missing"))
             return None
+        task = note["text"]
+        if claimed.get("brief_kept"):
+            # A build sends the brief kept at Robert's yes, only if it is still byte for byte what was approved.
+            task = self.store.read_brief(cid, jid)
+            if task is None or hashlib.sha256(task.encode()).hexdigest() != claimed["task_sha256"]:
+                self.store.mutate(cid, jid, lambda j: self._end(j, "not_started", "brief_missing"))
+                return None
         spec = {"job_id": jid, "agent": claimed.get("agent", AGENT), "scope": claimed.get("scope", "research"),
-                "task": self.scrub(note["text"]), "deadline_s": claimed["deadline_s"],
+                "task": self.scrub(task), "deadline_s": claimed["deadline_s"],
+                **{k: claimed[k] for k in ("design_artifact_id", "design_revision", "design_sha256") if claimed.get(k)},
                 "inbox": ({"job_id": jid, "files": [{"name": f["path"], "sha256": f["sha256"]} for f in claimed["files"]]} if claimed["files"] else None)}
         outcome, detail = self.relay.start(spec)
         t = self.clock()
@@ -534,6 +627,8 @@ class JobManager:
             j["audit_available"] = st.get("audit_available", True)
             j["last_status_at"], j["elapsed_s"], j["heartbeat_age_s"] = now, st["elapsed_s"], st["heartbeat_age_s"]
             j["unreachable_since"] = None
+            if st.get("detail"):
+                j["result_detail"] = st["detail"]             # what a delegated build's runner recorded (#693)
         state = st["state"]
         if state == "running":
             def running(j):
@@ -576,8 +671,19 @@ class JobManager:
             snapshot(j)
             if "result_pending" not in j:
                 self.store.write_result(cid, jid, frozen)           # the whole result, kept with the job
-                j["result_pending"] = shown_in_note(frozen)         # what the conversation note will say
-                j["result_truncated"], j["result_chars"], j["result_in_note_cut"] = truncated, len(frozen), len(frozen) > len(j["result_pending"])
+                lead, body = "", frozen
+                if j.get("scope") == "build":
+                    # A build's note says the runner's own facts first: from its structured record when the relay
+                    # hands that over, else from the footer the runner itself puts at the end of the text.
+                    footer, rest = build_footer(frozen)
+                    lead = build_summary(j.get("result_detail"))
+                    if footer:
+                        j["result_summary_lines"] = footer
+                        body = rest or frozen
+                        lead = lead or "\n".join(["Build result, as the runner recorded it:", *("- " + line for line in footer),
+                                                  "Nothing was merged, released or deployed."])
+                j["result_pending"] = (lead + "\n\n" + shown_in_note(body, NOTE_SHOWN_MAX - len(lead) - 2)) if lead else shown_in_note(frozen)
+                j["result_truncated"], j["result_chars"], j["result_in_note_cut"] = truncated, len(frozen), not j["result_pending"].endswith(body)
         job = self.store.mutate(cid, jid, freeze)
         if job["state"] in TERMINAL:
             return job
@@ -665,6 +771,30 @@ class JobManager:
             self.store.mutate(cid, jid, lambda j: self._end(j, "not_started") if j["state"] == "dispatching" else None)
             return self.store.get(cid, jid), "already_finished"
         return self.store.get(cid, jid), "requested"                  # requested, unreachable, or not_found while running: never claimed as confirmed
+
+    # ── what Master Craftsman may read back (minimoi_delegate_result, #693) ──
+    def report(self, cid, principal, jid=None) -> dict | None:
+        """One DELEGATED job of this conversation and this owner, as recorded: the named one, or the latest. None when
+        there is none (another conversation's job, another owner's, or one of MC's own jobs is never returned)."""
+        if not CONV_RE.fullmatch(str(cid)) or (jid is not None and not JOB_RE.fullmatch(str(jid))):
+            return None
+        rows = [j for j in self.store.list(cid) if j.get("principal") == principal and j.get("conversation_id") == cid
+                and j.get("agent") in ("claude-code", "codex")]
+        job = next((j for j in rows if jid is None or j["id"] == jid), None)
+        if job is None:
+            return None
+        state = job["state"]
+        design = ({"artifact_id": job["design_artifact_id"], "revision": job.get("design_revision"),
+                   "sha256": job.get("design_sha256"), "title": job.get("design_title")}
+                  if job.get("design_artifact_id") else None)
+        return {"job_id": job["id"], "state": state, "active": state in ACTIVE, "scope": job.get("scope", "research"),
+                "agent": job.get("agent"), "title": job.get("title") or "Job", "created_at": job.get("created_at"),
+                "started_at": job.get("t_running"), "finished_at": job.get("finished_at"),
+                "deadline_s": job.get("deadline_s"), "stop_requested": bool(job.get("stop_requested_at")),
+                "error_class": job.get("error_class"), "status_words": self.view(job)["message"],
+                "design": design, "detail": job.get("result_detail") if job.get("scope") == "build" else None,
+                "summary_lines": job.get("result_summary_lines") if job.get("scope") == "build" else None,
+                "text": self.store.read_result(cid, job["id"]) if state == "completed" else None}
 
     # ── what the browser sees ──
     def view(self, job: dict) -> dict:

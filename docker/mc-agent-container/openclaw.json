@@ -107,7 +107,8 @@
             "minimoi_helper_review",
             "minimoi_work_read",
             "minimoi_work_save",
-            "minimoi_initiative_read"
+            "minimoi_initiative_read",
+            "minimoi_delegate_result"
           ],
           "diskPaths": [
             "/",
@@ -353,7 +354,8 @@
             "minimoi_helper_review",
             "minimoi_work_read",
             "minimoi_work_save",
-            "minimoi_initiative_read"
+            "minimoi_initiative_read",
+            "minimoi_delegate_result"
           ],
           "deny": [
             "group:runtime",

@@ -76,18 +76,32 @@ class StoreDispatcherV2:
         return self.store.effect(runner_id, request_id, generation, effect, protocol=2)
 
 
+FOOTER_MAX = 4096
+
+
 def output_of(artifact_root: Path, artifacts):
-    """(text the owner reads, cost the delegate reports) from the job's output artifact, or (None, None)."""
-    text, cost = None, None
+    """(text the owner reads, cost the delegate reports) from the job's output artifact, or (None, None). A build the
+    runner finished (#693) also has a ``summary`` artifact, the runner's own fixed lines (branch, commit, tests, pull
+    request): they are appended under the answer, and the answer is cut so that both fit OUTPUT_MAX."""
+    text, cost, footer = None, None, None
     for a in artifacts or []:
-        if isinstance(a, dict) and a.get("kind") == "output" and "/" not in str(a.get("ref", "")):
-            path = Path(artifact_root) / a["ref"]
-            try:
-                if path.is_file() and not path.is_symlink():
-                    raw = path.read_bytes()
+        if not isinstance(a, dict) or a.get("kind") not in ("output", "summary") or "/" in str(a.get("ref", "")):
+            continue
+        path = Path(artifact_root) / str(a.get("ref", ""))
+        try:
+            if path.is_file() and not path.is_symlink():
+                raw = path.read_bytes()
+                if a["kind"] == "output":
                     text, cost = readable(raw), cost_usd(raw)
-            except OSError:
+                else:
+                    footer = raw[:FOOTER_MAX].decode("utf-8", errors="ignore").strip()
+        except OSError:
+            if a["kind"] == "output":
                 text = None
+    if footer:
+        room = OUTPUT_MAX - len(footer.encode("utf-8")) - 2
+        body = (text or "").encode("utf-8")[:room].decode("utf-8", errors="ignore").rstrip()
+        text = f"{body}\n\n{footer}" if body else footer
     return text, cost
 
 

@@ -56,6 +56,8 @@ def snapshot(service, policy_tools, offered_tools):
         "minimoi_publish_update": [(getattr(service, "activity_update", None) is not None, "activity_unavailable")],
         "minimoi_delegate_research": [(service.delegation, "delegation_off")],
         "minimoi_delegate_build": [(service.delegation, "delegation_off"), (getattr(service, "build_jobs", True), "build_jobs_off")],
+        "minimoi_delegate_result": [(service.delegation, "delegation_off"),
+                                    (getattr(service, "delegation_jobs", None) is not None, "job_reader_unavailable")],
         "minimoi_build_log_search": [(getattr(service, "build_log", None) is not None, "build_log_unavailable")],
         "minimoi_build_log_add_to": [(getattr(service, "build_log", None) is not None, "build_log_unavailable"),
                                      (service.read_owner_note is not None, "owner_note_reader_unavailable")],

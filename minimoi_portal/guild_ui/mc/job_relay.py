@@ -44,6 +44,53 @@ def _num(value, default=None):
     return value if value >= 0 else default
 
 
+_BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}")
+_COMMIT = re.compile(r"[0-9a-f]{7,40}")
+_PR_URL = re.compile(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]{1,9}")
+_CODE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,79}")
+
+
+TEST_NOTES = ("no_tests_selected", "no_changes", "cancelled", "deadline_reached", "test_command_unavailable", "commit_failed")
+
+
+def clean_detail(detail) -> dict | None:
+    """What a delegated build's runner recorded beside its text (#693; core/mc_delegation_runner writes it as the
+    delegation's result_detail), reduced to the fields the portal shows: branch, commit, whether anything changed, the
+    runner's own test run, and whether a draft pull request was published. Each field is kept only when it has the
+    shape it should have; anything else is dropped, never repaired. None when nothing usable came (research, or a build
+    whose agent run did not complete, records only an exit code and the base commit)."""
+    if not isinstance(detail, dict):
+        return None
+    out = {}
+    if isinstance(detail.get("branch"), str) and _BRANCH.fullmatch(detail["branch"]):
+        out["branch"] = detail["branch"]
+    if isinstance(detail.get("commit"), str) and _COMMIT.fullmatch(detail["commit"]):
+        out["commit"] = detail["commit"]
+    if isinstance(detail.get("changed"), bool):
+        out["changed"] = detail["changed"]
+    tests = detail.get("tests")
+    if isinstance(tests, dict):
+        command, code = tests.get("command"), tests.get("exit_code")
+        if isinstance(command, list):
+            command = " ".join(str(part) for part in command[:40] if isinstance(part, str))
+        out["tests"] = {"command": _text(command, 300).replace("\n", " ").strip() if isinstance(command, str) else None,
+                        "exit_code": code if isinstance(code, int) and not isinstance(code, bool) else None,
+                        "summary": _text(tests.get("summary"), 300).replace("\n", " ").strip(),
+                        "duration_s": _num(tests.get("duration_s")), "timed_out": tests.get("timed_out") is True}
+        if tests.get("note") in TEST_NOTES:
+            out["tests"]["note"] = tests["note"]
+    publish = detail.get("publish")
+    if isinstance(publish, dict) and isinstance(publish.get("state"), str) and _CODE.fullmatch(publish["state"]):
+        out["publish"] = {"state": publish["state"]}
+        if isinstance(publish.get("code"), str) and _CODE.fullmatch(publish["code"]):
+            out["publish"]["code"] = publish["code"]
+        # A link counts only for a build the runner says it published.
+        url = detail.get("pr_url") if isinstance(detail.get("pr_url"), str) else publish.get("pr_url")
+        if publish["state"] == "published" and isinstance(url, str) and _PR_URL.fullmatch(url):
+            out["pr_url"] = url
+    return out or None
+
+
 def clean_status(data) -> dict | None:
     """The relay's status answer reduced to what the portal may keep, or None when it is not a status at all."""
     if not isinstance(data, dict) or data.get("state") not in STATES:
@@ -68,7 +115,8 @@ def clean_status(data) -> dict | None:
             "result_text": _text(text, RESULT_MAX_CHARS + 1) if isinstance(text, str) else None,
             "tools": tools, "tools_truncated": bool(audit.get("truncated")) or (isinstance(audit.get("tools"), list) and len(audit["tools"]) > AUDIT_TOOLS_MAX),
             "audit_available": audit.get("available") is not False,
-            "writes": writes, "error_class": _text(data.get("error_class"), 40) or None}
+            "writes": writes, "error_class": _text(data.get("error_class"), 40) or None,
+            "detail": clean_detail(data.get("detail"))}
 
 
 class JobRelay:

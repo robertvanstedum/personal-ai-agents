@@ -18,6 +18,8 @@ _log = logging.getLogger("mc_delegation")
 DELEGATE_AGENTS = ("claude-code", "codex")
 # Codex runs on Robert's plan: research only, 30 minutes per job (Robert, 26 Oct; raise it here when he says so).
 CODEX_SCOPES, CODEX_DEADLINE_S = ("research",), 30 * 60
+# A build (#693; Robert, 27 Nov 2026): 5 USD and 60 minutes. Research stays at 2 USD and what the job asks (30 min).
+BUILD_COST_CAP_USD, BUILD_DEADLINE_S = 5.0, 60 * 60
 _MAP = {"queued": "running", "claimed": "running", "running": "running", "completed": "completed",
         "cancelled": "stopped", "failed": "failed", "refused": "failed", "timed_out": "failed",
         "output_limit": "failed", "interrupted": "failed",
@@ -27,9 +29,10 @@ _MAP = {"queued": "running", "claimed": "running", "running": "running", "comple
 
 class DelegationRelay:
     def __init__(self, store: DispatcherStore, *, ref_for, repository="personal-ai-agents", scope="research",
-                 cost_cap_usd=2.0):
+                 cost_cap_usd=2.0, build_cost_cap_usd=BUILD_COST_CAP_USD):
         """``ref_for(repository)`` returns the exact commit the delegate works from (e.g. main's head)."""
         self.store, self.ref_for, self.repository, self.scope, self.cost_cap = store, ref_for, repository, scope, cost_cap_usd
+        self.build_cost_cap = build_cost_cap_usd
 
     connected = True
 
@@ -49,8 +52,13 @@ class DelegationRelay:
             deadline_s = spec.get("deadline_s") or 1800
             if agent == "codex":
                 deadline_s = min(deadline_s, CODEX_DEADLINE_S)
+            elif scope == "build":
+                # The queue's own deadline for a build is never under 60 minutes. The portal's job clock is separate
+                # (minimoi_portal/guild_ui/jobs.py asks for a stop at the job's own deadline_s): it must allow 60 too.
+                deadline_s = max(deadline_s, BUILD_DEADLINE_S)
             outcome = self.store.enqueue(job_id=spec["job_id"], actor=agent, scope=scope, repository=self.repository,
-                                         ref=ref, brief=spec["task"], cost_cap_usd=self.cost_cap,
+                                         ref=ref, brief=spec["task"],
+                                         cost_cap_usd=self.build_cost_cap if scope == "build" else self.cost_cap,
                                          deadline_s=deadline_s)
         except Exception:
             return "ambiguous", {"reason": "dispatcher_unavailable"}
@@ -88,7 +96,8 @@ class DelegationRelay:
         from minimoi_portal.guild_ui.mc.job_relay import clean_status
         return "ok", clean_status({"state": state, "elapsed_s": max(0, elapsed), "heartbeat_age_s": hb,
                                    "result": {"text": text} if text is not None else None,
-                                   "audit": {"available": False}, "writes": [], "error_class": error})
+                                   "audit": {"available": False}, "writes": [], "error_class": error,
+                                   "detail": row["result_detail"]})     # a build's branch, tests, pull request (#693)
 
     def stop(self, job_id: str) -> str:
         try:

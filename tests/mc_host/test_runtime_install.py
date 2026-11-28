@@ -113,7 +113,7 @@ def _run_prod(tmp, repo, bin_, script_text, out):
     return out
 
 
-def test_productions_invocation_is_todays_byte_for_byte(tmp_path):
+def test_productions_invocation_differs_from_before_only_by_the_build_arguments(tmp_path):
     try:
         before = _git("show", f"{BEFORE}:scripts/mc_host/install_delegation_runner.sh").stdout.decode()
     except subprocess.CalledProcessError:
@@ -128,14 +128,25 @@ def test_productions_invocation_is_todays_byte_for_byte(tmp_path):
         runs[name] = _run_prod(tmp_path, repo, bin_, text, out)
     label = "ai.minimoi.delegation-runner.prod"
     plists = {k: (v / "home" / "Library" / "LaunchAgents" / f"{label}.plist").read_bytes() for k, v in runs.items()}
-    assert plists["before"] == plists["now"]
+    # #693 (27 Nov 2026): production's runner now also takes builds. The plist differs in exactly these argument
+    # lines and nothing else; the bundle, the Keychain calls and the output stay byte for byte.
+    old, new = (set(plists[k].decode().splitlines()) for k in ("before", "now"))
+    assert {line.strip() for line in old - new} == {
+        "<string>--max-cost-usd</string><string>2</string><string>--scopes</string><string>research</string>"}
+    assert {line.strip() for line in new - old} - {""} == {
+        "<string>--max-cost-usd</string><string>5</string><string>--scopes</string><string>research,build</string>",
+        "<string>--publish-repo</string><string>robertvanstedum/personal-ai-agents</string>",
+        "<string>--publish-credential</string><string>gh</string>"}
     bundles = {k: _tree(v / "home" / "minimoi-runtime" / "runner-prod" / "bundle") for k, v in runs.items()}
     assert bundles["before"] == bundles["now"] and "run_runner.py" in bundles["now"]
     assert not any(p.startswith("core/minimoi_actions") for p in bundles["now"])     # production's bundle unchanged
     calls = {k: (v / "calls.log").read_text() for k, v in runs.items()}
     assert calls["before"] == calls["now"]
     assert "launchctl bootstrap gui/" in calls["now"] and "<value>" in calls["now"]   # values never recorded
-    assert (runs["before"] / "stdout").read_text() == (runs["now"] / "stdout").read_text()
+    out_before, out_now = ((runs[k] / "stdout").read_text().splitlines() for k in ("before", "now"))
+    added = [line for line in out_now if line not in out_before]
+    assert [line for line in out_now if line in out_before] == out_before
+    assert len(added) == 1 and added[0].startswith("publish credential: gh ")          # names the source, no secret
     digests = {k: host_mod.tree_digest(v / "home" / "minimoi-runtime" / "runner-prod" / "bundle")[0]
                for k, v in runs.items()}
     assert digests["before"] == digests["now"]
