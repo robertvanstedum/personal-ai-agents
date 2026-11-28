@@ -25,9 +25,15 @@ There is one JSON file per job, under the host's jobs root (`MINIMOI_JOBS_ROOT`,
 | `last_success_at` | ISO or null | finish of the last completed run; carried across failed runs |
 | `alert` | `sent` \| `not_sent` \| `not_needed` \| null | what the job's own wrapper did |
 | `progress` *(optional)* | `{work_due, last_progress_at, phase}` | see below |
-| `last_refusal_at`, `last_refusal_reason` *(optional, together)* | ISO, code | the last run refused at its lock |
+| `last_refusal_at`, `last_refusal_reason` *(optional, together)* | ISO, code | accepted for writers that know them; refusals are normally recorded in the sidecar below |
 
 **Never any content.** The character sets can't hold a path, a title or conversation text. A writer that tries gets `StatusError`, and nothing is written. A reader treats a missing, unreadable or contract-breaking file as **unknown, never healthy**.
+
+## Refusals (sidecar)
+
+A run that is refused because its lock is held writes `<status file stem>.refusal.json` next to the status file: `{schema_version, job_id, last_refusal_at, last_refusal_reason}`. It's written by `status.record_refusal` and read by `status.read_refusal`.
+
+The status file itself is never rewritten for a refusal. So a refusal can never roll back the holder's run, completion, last success or progress, and a finishing holder can never drop a refusal.
 
 ## Progress (for jobs with `progress_required`)
 
@@ -51,7 +57,8 @@ The rules are applied in order, and the first match decides.
 4. **Last success older than `missed_after_s`:** red `missed`.
 5. **Progress** (only for `progress_required`, on a completed run). Failure precedence is kept, because rules 1–4 decide first.
    - A missing block, unknown phase, bad `work_due`, or a missing or future `last_progress_at` while work is due gives **unknown `progress_unknown`**.
-   - `complete`, `idle_no_work`, `outside_window`, the clock outside `progress_window`, or `work_due == 0` all mean no progress is expected.
+   - `complete`, `idle_no_work`, the clock outside `progress_window`, or `work_due == 0` all mean no progress is expected.
+   - A stored `outside_window` phase exempts only when no window is declared. Inside a declared window it's judged as active, because it describes an earlier observation.
    - Otherwise idle time is counted from the later of `last_progress_at` and the current window's start. Beyond `idle_allowed_s` it's **yellow `no_progress`**; beyond twice that, **red `no_progress`**.
 6. **Last success older than `expected_every_s + grace_s`:** yellow `late`.
 7. **`warn`:** yellow `warn`.

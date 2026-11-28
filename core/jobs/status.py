@@ -6,8 +6,12 @@
 
 * Optional (WS3 C1.2, 28 Nov 2026): ``progress`` = {work_due: int >= 0 (1 means "some, count unknown"),
   last_progress_at: ISO time or null, phase: active | idle_no_work | complete | outside_window}, carried across runs
-  so a failed or refused run does not erase when the job last moved; ``last_refusal_at`` / ``last_refusal_reason``
-  record a run refused at its lock (``record_refusal``) without touching ``last_success_at``.
+  so a failed or refused run does not erase when the job last moved.
+* Refusals (a run refused at its lock) are a separate observation, ``<status file stem>.refusal.json`` beside the
+  status file, written by ``record_refusal`` and read by ``read_refusal``. The status file itself is never rewritten
+  for a refusal, so a refusal can never roll back a holder's run, completion, last success or progress, and a holder
+  finishing can never drop a refusal (Codex Wave 1 review finding 2). ``last_refusal_at`` / ``last_refusal_reason``
+  remain valid optional fields of the status document for writers that already know them.
 
 * Written at the start of a run (state "running") and again at its end ("ok" | "warn" | "failed").
   Both writes are atomic (temp file + rename); files are 0600 and the folder 0700.
@@ -211,27 +215,38 @@ def start_run(jobs_root, job, run_id: str, now: datetime) -> dict:
 
 
 def _carried(previous: dict | None) -> dict:
-    """The optional blocks a new document carries from the previous one: progress and the last refusal."""
-    out = {}
+    """The optional block a new document carries from the previous one: progress."""
     if previous and isinstance(previous.get("progress"), dict):
-        out["progress"] = previous["progress"]
-    if previous and previous.get("last_refusal_at"):
-        out["last_refusal_at"] = parse_time(previous["last_refusal_at"])
-        out["last_refusal_reason"] = previous.get("last_refusal_reason")
-    return out
+        return {"progress": previous["progress"]}
+    return {}
 
 
-def record_refusal(jobs_root, job, reason: str, now: datetime) -> dict | None:
-    """Record that a run was refused (its lock was held) on the job's current document, without changing its state or
-    ``last_success_at``. With no readable document there is nothing to annotate: returns None and writes nothing."""
-    doc = read_status(jobs_root, job.status_file, job.id)
-    if doc is None:
-        return None
+def refusal_name(status_file: str) -> str:
+    stem = status_file[:-5] if status_file.endswith(".json") else status_file
+    return f"{stem}.refusal.json"
+
+
+def record_refusal(jobs_root, job, reason: str, now: datetime) -> dict:
+    """Record that a run of ``job`` was refused (its lock was held), as its own small atomic file. One writer kind, no
+    read-modify-write of the status file, so it cannot race the holder that owns the status file."""
     if not isinstance(reason, str) or not _CODE.match(reason):
         raise StatusError("refusal")
-    doc = dict(doc, last_refusal_at=iso(now), last_refusal_reason=reason)
-    write_status(jobs_root, job.status_file, doc)
+    doc = {"schema_version": SCHEMA_VERSION, "job_id": job.id, "last_refusal_at": iso(now), "last_refusal_reason": reason}
+    write_json_atomic(jobs_root, refusal_name(job.status_file), doc)
     return doc
+
+
+def read_refusal(jobs_root, job) -> dict | None:
+    """The job's last refusal ({last_refusal_at, last_refusal_reason}), or None when there is none or it is unreadable."""
+    try:
+        doc = json.loads((Path(jobs_root) / refusal_name(job.status_file)).read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if (not isinstance(doc, dict) or doc.get("schema_version") != SCHEMA_VERSION or doc.get("job_id") != job.id
+            or parse_time(doc.get("last_refusal_at")) is None or not isinstance(doc.get("last_refusal_reason"), str)
+            or not _CODE.match(doc["last_refusal_reason"])):
+        return None
+    return {"last_refusal_at": doc["last_refusal_at"], "last_refusal_reason": doc["last_refusal_reason"]}
 
 
 def finish_run(jobs_root, job, running: dict, *, state: str, now: datetime, exit_code: int, summary: str,

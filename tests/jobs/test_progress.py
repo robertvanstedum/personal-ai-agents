@@ -17,6 +17,7 @@ from core.jobs import judge, registry, status
 
 REPO = Path(__file__).resolve().parents[2]
 H = timedelta(hours=1)
+M = timedelta(minutes=1)
 CHI = "America/Chicago"
 
 ROW = {
@@ -91,10 +92,9 @@ def test_progress_and_refusal_round_trip(tmp_path):
     status.write_status(tmp_path, j.status_file, d)
     back = status.read_status(tmp_path, j.status_file, j.id)
     assert back["progress"] == {"work_due": 1, "last_progress_at": status.iso(now), "phase": "active"}
-    noted = status.record_refusal(tmp_path, j, "apply_busy", now + H)
-    again = status.read_status(tmp_path, j.status_file, j.id)
-    assert noted and again["last_refusal_reason"] == "apply_busy" and again["last_refusal_at"] == status.iso(now + H)
-    assert again["last_success_at"] == back["last_success_at"] and again["state"] == "ok"
+    status.record_refusal(tmp_path, j, "apply_busy", now + H)
+    assert status.read_refusal(tmp_path, j) == {"last_refusal_at": status.iso(now + H), "last_refusal_reason": "apply_busy"}
+    assert status.read_status(tmp_path, j.status_file, j.id) == back           # the status file is untouched
 
 
 @pytest.mark.parametrize("bad", [
@@ -118,23 +118,49 @@ def test_a_document_with_bad_progress_reads_as_unknown(tmp_path):
     assert status.read_status(tmp_path, j.status_file, j.id) is None
 
 
-def test_runs_carry_progress_and_the_last_refusal(tmp_path):
+def test_runs_carry_progress(tmp_path):
     j = job()
     t0 = chicago(2026, 11, 28, 1)
     running = status.start_run(tmp_path, j, "r1", t0)
     status.finish_run(tmp_path, j, running, state="ok", now=t0 + H, exit_code=0, summary="x", results={},
                       next_due_by=None, progress=active(1, t0 + H))
-    status.record_refusal(tmp_path, j, "apply_busy", t0 + 2 * H)
     running = status.start_run(tmp_path, j, "r2", t0 + 3 * H)
-    assert running["progress"]["last_progress_at"] == status.iso(t0 + H) and running["last_refusal_reason"] == "apply_busy"
+    assert running["progress"]["last_progress_at"] == status.iso(t0 + H)
     failed = status.finish_run(tmp_path, j, running, state="failed", now=t0 + 4 * H, exit_code=1, summary="x", results={},
                                next_due_by=None)
     assert failed["progress"]["last_progress_at"] == status.iso(t0 + H)          # a failed run does not erase it
 
 
-def test_a_refusal_with_no_document_writes_nothing(tmp_path):
-    assert status.record_refusal(tmp_path, job(), "apply_busy", chicago(2026, 11, 28, 1)) is None
-    assert not (tmp_path / "seed.json").exists()
+def test_a_refusal_during_a_run_survives_the_holder_finishing(tmp_path):
+    """Codex Wave 1 review finding 2, interleaving 1: start -> refusal -> finish keeps the refusal."""
+    j = job()
+    t0 = chicago(2026, 11, 28, 1)
+    running = status.start_run(tmp_path, j, "holder", t0)
+    status.record_refusal(tmp_path, j, "apply_busy", t0 + M)
+    status.finish_run(tmp_path, j, running, state="ok", now=t0 + 2 * M, exit_code=0, summary="x", results={},
+                      next_due_by=None, progress=active(1, t0 + 2 * M))
+    assert status.read_refusal(tmp_path, j)["last_refusal_reason"] == "apply_busy"
+    assert status.read_status(tmp_path, j.status_file, j.id)["run_id"] == "holder"
+
+
+def test_a_refusal_never_rolls_back_a_finished_holder(tmp_path):
+    """Interleaving 2: the holder finishes, then a refusal from a run that read the status earlier is recorded; the
+    holder's completed run, last success and progress are untouched."""
+    j = job()
+    t0 = chicago(2026, 11, 28, 1)
+    running = status.start_run(tmp_path, j, "holder", t0)
+    done = status.finish_run(tmp_path, j, running, state="ok", now=t0 + 2 * M, exit_code=0, summary="x", results={},
+                             next_due_by=None, progress=active(1, t0 + 2 * M))
+    status.record_refusal(tmp_path, j, "apply_busy", t0 + M)                   # late writer, older observation
+    assert status.read_status(tmp_path, j.status_file, j.id) == done
+    assert status.read_refusal(tmp_path, j)["last_refusal_at"] == status.iso(t0 + M)
+
+
+def test_a_bad_refusal_file_reads_as_none(tmp_path):
+    j = job()
+    (tmp_path / status.refusal_name(j.status_file)).write_text('{"schema_version": 1, "job_id": "other"}')
+    assert status.read_refusal(tmp_path, j) is None
+    assert status.read_refusal(tmp_path / "missing", j) is None
 
 
 # ---- judge ---------------------------------------------------------------------------------------------------------
@@ -161,13 +187,39 @@ def test_idle_is_counted_from_the_window_start_not_last_night():
     assert verdict(j, d, chicago(2026, 11, 28, 1, 30)).code == "no_progress"
 
 
+def test_a_stored_outside_window_phase_does_not_hide_tonights_stall():
+    """Codex Wave 1 review finding 1: yesterday's outside_window phase with work due, judged at 03:00 Chicago tonight."""
+    j = registry.load().get("vault-meaning-seed")
+    last = datetime(2026, 11, 27, 20, 0, tzinfo=timezone.utc)
+    d = status.build(job_id=j.id, host=j.host, run_id="prior", state="ok", started_at=last - 5 * M, finished_at=last,
+                     exit_code=0, last_success_at=last,
+                     progress={"work_due": 1, "last_progress_at": "2026-11-27T08:00:00Z", "phase": "outside_window"})
+    v = judge.judge(j, d, datetime(2026, 11, 28, 9, 0, tzinfo=timezone.utc))
+    assert (v.state, v.code) == ("red", "no_progress")
+
+
+def test_a_stored_outside_window_phase_is_honoured_while_the_clock_is_outside():
+    j = registry.load().get("vault-meaning-seed")
+    last = datetime(2026, 11, 28, 12, 0, tzinfo=timezone.utc)
+    d = status.build(job_id=j.id, host=j.host, run_id="day", state="ok", started_at=last - 5 * M, finished_at=last,
+                     exit_code=0, last_success_at=last,
+                     progress={"work_due": 1, "last_progress_at": "2026-11-28T08:00:00Z", "phase": "outside_window"})
+    assert judge.judge(j, d, datetime(2026, 11, 28, 18, 0, tzinfo=timezone.utc)).code == "ok"   # noon Chicago
+
+
+def test_without_a_window_the_jobs_own_outside_window_phase_is_taken():
+    j = job(progress_window=None)
+    d = doc(j, finished=chicago(2026, 11, 28, 2), progress={"work_due": 1, "last_progress_at": None, "phase": "outside_window"})
+    assert verdict(j, d, chicago(2026, 11, 28, 4)).code == "ok"
+
+
 def test_outside_the_window_no_progress_is_expected():
     j = job()
     d = doc(j, finished=chicago(2026, 11, 28, 5, 50), progress=active(1, chicago(2026, 11, 28, 1, 0)))
     assert verdict(j, d, chicago(2026, 11, 28, 14, 0)).code == "ok"
 
 
-@pytest.mark.parametrize("phase", ["idle_no_work", "complete", "outside_window"])
+@pytest.mark.parametrize("phase", ["idle_no_work", "complete"])
 def test_phases_that_need_no_progress(phase):
     j = job()
     d = doc(j, finished=chicago(2026, 11, 28, 2), progress={"work_due": 0, "last_progress_at": None, "phase": phase})

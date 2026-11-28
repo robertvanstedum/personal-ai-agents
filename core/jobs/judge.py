@@ -13,7 +13,8 @@ Progress (WS3 C1.2): for a job with ``progress_required``, a *completed* run (ok
 checked for progress. Failure precedence is kept: failed, stuck, no_success and missed are decided first and never
 turned green by a phase. Then: no ``progress`` block, an unknown phase, a bad ``work_due``, or a missing or future
 ``last_progress_at`` while work is due is ``unknown/progress_unknown``. ``complete``, ``idle_no_work`` and
-``outside_window`` (or the clock outside the job's ``progress_window``) need no progress. ``active`` with work due:
+the clock outside the job's ``progress_window`` need no progress; a stored ``outside_window`` phase exempts only when
+no window is declared (inside a declared window it is judged as active, since it describes an earlier observation). ``active`` with work due:
 idle time is counted from the later of ``last_progress_at`` and the current window's start; beyond ``idle_allowed_s``
 it is ``yellow/no_progress``, beyond twice that ``red/no_progress``. ``key`` identifies the occurrence (a run id, a
 last-success time) so an alert can be sent once per condition rather than on every check.
@@ -98,13 +99,17 @@ def _progress(job, doc: dict, now: datetime, horizon: datetime) -> Verdict | Non
     block = doc.get("progress")
     if not isinstance(block, dict) or block.get("phase") not in ("active", "idle_no_work", "complete", "outside_window"):
         return Verdict("unknown", "progress_unknown", run_id)
-    if block["phase"] != "active":
-        return None
+    if block["phase"] in ("complete", "idle_no_work"):
+        return None                                    # deliberate end states, whatever the clock
     since = None
     if job.progress_window:
         since = window_start(job.progress_window, now)
         if since is None:
-            return None                                # outside the window: no progress expected
+            return None                                # the clock is outside the window now: no progress expected
+        # Inside the window the stored phase describes an earlier observation: a carried "outside_window" with work
+        # due is judged as active (Codex Wave 1 review finding 1).
+    elif block["phase"] == "outside_window":
+        return None                                    # no window declared: the job's own word is all there is
     due = block.get("work_due")
     if isinstance(due, bool) or not isinstance(due, int) or due < 0:
         return Verdict("unknown", "progress_unknown", run_id)
