@@ -141,19 +141,26 @@ def vault_traps(snap: "Snapshot", vault_root, containers, owner_running) -> None
 
 
 def vault_correctness(snap: "Snapshot", desired_path, now: datetime) -> None:
-    """Per Vault ask service: metadata state, served mode, mode match against the approved state, the objective and
-    MC's privacy filter (WS3 C1.4). Read-only; no query is made here (the canary is its own job)."""
+    """Per Vault ask service: policy, metadata, structure, declared mode, mode match against the approved state,
+    privacy and the objective (WS3 C1.4). Read-only; no query here. Each service is evaluated inside its own boundary:
+    a malformed policy or an unexpected error gives that service fixed unknown/invalid codes and never stops the
+    snapshot or echoes the input."""
     doc = vault_checks.load_desired(desired_path)
-    services = (doc or {}).get("services") or {s: None for s in ("vault-ask", "vault-ask-mc")}
-    for service, desired in services.items():
-        if isinstance(desired, dict) and isinstance(desired.get("index_path"), str):
-            state, meta = vault_checks.read_meta(desired["index_path"])
-        else:
-            state, meta = "missing", {}
-        spec = vault_checks.canary_spec(doc, service)
-        canary = "not_configured" if spec is None else None   # a configured canary reports through its own job's status
-        result = vault_checks.check_service(desired if isinstance(desired, dict) else None, state, meta, now, canary)
-        result["canary"] = canary or "unknown"
+    services = (doc or {}).get("services") or {}
+    for service in ("vault-ask", "vault-ask-mc"):
+        result = {"policy": "invalid" if doc is not None else "unknown", "meta": "unknown", "structure": "unknown",
+                  "mode": "unknown", "mode_match": "unknown", "privacy": "unknown", "objective": "unknown",
+                  "canary": "unknown"}
+        try:
+            policy = vault_checks.validate_service(services.get(service)) if doc is not None else None
+            spec = vault_checks.validate_canary(doc, service)
+            canary = "invalid" if spec == "invalid" else "not_configured" if spec is None else "unknown"
+            if isinstance(policy, dict):
+                meta_state, meta, structure = vault_checks.inspect_index(policy["index_path"])
+                result = vault_checks.check_service(policy, meta_state, meta, structure, now, None)
+            result["canary"] = canary                         # a configured canary reports through its own job
+        except Exception:                                     # noqa: BLE001
+            result = {k: "unknown" for k in result}
         for check, value in result.items():
             snap.add("minimoi_vault_check", 1, service=service, check=check, result=value)
 

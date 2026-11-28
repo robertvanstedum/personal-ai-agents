@@ -1,26 +1,34 @@
 """Vault correctness checks and the canary contract (WS3 C1.4). Read-only; standard library only; never logs content.
 
-Two notions are kept apart on purpose (Codex acceptance of C1.3, instructions for C1.4):
+Two notions are kept apart on purpose:
 
-* **mode match**: is each ask service serving the mode that is *approved now* (``config/desired_state.json``,
-  ``desired_mode``)? Keyword-only while promotion is pending is a match, not a fault.
-* **objective**: the business goal, ``usable_meaning_search``. It is ``met`` only when the served index is in meaning
-  mode **and** the service's canary has passed. A mode match alone never certifies it; keyword serving is ``pending``;
-  meaning serving without a passing canary is ``unverified``.
+* **mode match**: is each ask service's index in the mode that is *approved now* (``config/desired_state.json``,
+  ``desired_mode``)? Keyword-only while promotion is pending is a match, not a fault. It is computed only when the
+  index file is structurally a served index (below); a metadata stamp alone is a *declared* mode, nothing more.
+* **objective** ``usable_meaning_search``: keyword serving is ``pending``. Meaning serving is ``met`` only when every
+  prerequisite holds (policy valid, metadata ``ok`` and fresh, structure ``ok``, privacy acceptable) **and** the
+  service's canary passed; a passing canary with any prerequisite failing is ``blocked``; meaning serving with the
+  prerequisites but no passing canary is ``unverified``. Freshness is a prerequisite: a stale index is not "usable".
 
-Every input that cannot be read stays ``unknown``; nothing unreadable reads as fine.
+Every check reports its own fixed code; anything that cannot be read or is malformed is ``unknown`` or ``invalid``,
+never fine (Codex C1.4 review, 28 Nov 2026).
 
-    read_meta(index_path)                  -> (state, meta)   state: ok | missing | corrupt
-    check_service(desired, state, meta, now, canary=None) -> {meta, mode, mode_match, objective, privacy}
-    canary_spec(desired_doc, service)      -> CanarySpec | None   (None: not configured, the owner has not chosen)
-    run_canary(spec, ask)                  -> result code     (not_configured | pass | miss | fallback | error)
+    load_desired(path)                     -> document or None
+    validate_service(raw) / validate_canary(doc, service) -> policy / spec, or the code "invalid"
+    inspect_index(path)                    -> (meta_state, meta, structure)
+    check_service(policy, meta_state, meta, structure, now, canary=None) -> {policy, meta, structure, mode,
+                                              mode_match, privacy, objective}
+    run_canary(spec, ask)                  -> not_configured | pass | miss | fallback | error
 
-The metadata keys are the index's own ``meta`` table (``core/memory_index``): ``keyword_only``, ``embedder_digest``,
-``built_at``, ``updated_at``, ``profile``, ``career_filter_digest``, ``career_filter_version``.
+**Privacy (MC):** ``required`` means the exact MC profile (``mc``) and the supported filter version (``1``) with a
+digest present: ``stamp_ok``. Only when the policy pins an expected digest and it matches is it ``verified``. A stamp
+is conformance of the index's metadata, not proof that every career record was excluded; that narrower behaviour is
+the indexer's own (``core/memory_index/career_filter``) and its tests.
 """
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,11 +38,17 @@ from typing import Callable
 from core.jobs import status
 
 MODES = ("keyword", "meaning")
-CAREER_KEYS = ("profile", "career_filter_digest", "career_filter_version")
+OBJECTIVES = ("usable_meaning_search",)
+CAREER_RULES = ("required", "none")
+MC_PROFILE, MC_FILTER_VERSION = "mc", "1"        # core/memory_index/career_filter.PROFILE, FILTER_VERSION (test-pinned)
+INDEX_SCHEMA_VERSION = "2"                        # core/memory_index/store.SCHEMA_VERSION (test-pinned)
+BASE_TABLES = ("meta", "records", "chunks", "fts")
+MAX_AGE_LIMIT_S = 30 * 86400
+_REF = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
+_DIGEST = re.compile(r"^[A-Za-z0-9:_-]{4,128}$")
 
 
 def load_desired(path) -> dict | None:
-    """The desired-state document, or None when it is missing or not this schema (callers report ``unknown``)."""
     try:
         doc = json.loads(Path(path).read_text("utf-8"))
     except (OSError, ValueError):
@@ -44,23 +58,53 @@ def load_desired(path) -> dict | None:
     return doc
 
 
-def read_meta(index_path) -> tuple[str, dict]:
+def validate_service(raw) -> dict | str:
+    """A service's policy with every field checked, or ``"invalid"``. No raw value ever reaches a message."""
+    if not isinstance(raw, dict):
+        return "invalid"
+    mode, objective, rule = raw.get("desired_mode"), raw.get("objective"), raw.get("career_filter")
+    path, age, digest = raw.get("index_path"), raw.get("max_age_s"), raw.get("career_filter_digest")
+    if mode not in MODES or objective not in OBJECTIVES or rule not in CAREER_RULES:
+        return "invalid"
+    if not isinstance(path, str) or not path.startswith("/"):
+        return "invalid"
+    if isinstance(age, bool) or not isinstance(age, int) or not 60 <= age <= MAX_AGE_LIMIT_S:
+        return "invalid"
+    if digest is not None and not (isinstance(digest, str) and _DIGEST.match(digest)):
+        return "invalid"
+    return {"desired_mode": mode, "objective": objective, "career_filter": rule, "index_path": path,
+            "max_age_s": age, "career_filter_digest": digest}
+
+
+def inspect_index(index_path) -> tuple[str, dict, str]:
+    """(meta_state, meta, structure). meta_state: ok | missing | corrupt. structure: ok | missing_tables |
+    incompatible | empty | unknown. Read-only (``mode=ro``); only ``sqlite_master``, ``meta`` and two counts."""
     path = Path(index_path)
     if not path.is_file():
-        return "missing", {}
+        return "missing", {}, "unknown"
     try:
         con = sqlite3.connect(f"{path.absolute().as_uri()}?mode=ro", uri=True, timeout=5)
         try:
-            rows = con.execute("SELECT key, value FROM meta").fetchall()
+            names = {str(r[0]) for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "meta" not in names:
+                return "corrupt", {}, "missing_tables"
+            meta = {str(k): (None if v is None else str(v)) for k, v in con.execute("SELECT key, value FROM meta")}
+            if not set(BASE_TABLES) <= names:
+                return "ok", meta, "missing_tables"
+            if meta.get("embedder_digest") and "vec" not in names:
+                return "ok", meta, "missing_tables"
+            if meta.get("schema_version") != INDEX_SCHEMA_VERSION:
+                return "ok", meta, "incompatible"
+            records = con.execute("SELECT count(*) FROM records").fetchone()[0]
+            chunks = con.execute("SELECT count(*) FROM chunks").fetchone()[0]
         finally:
             con.close()
     except sqlite3.DatabaseError:
-        return "corrupt", {}
-    return "ok", {str(k): (None if v is None else str(v)) for k, v in rows}
+        return "corrupt", {}, "unknown"
+    return "ok", meta, ("ok" if records and chunks else "empty")
 
 
 def _mode(meta: dict) -> tuple[str, bool]:
-    """(mode, consistent). keyword_only=1 with an embedder digest, or neither marker, is inconsistent."""
     keyword, digest = meta.get("keyword_only") == "1", bool(meta.get("embedder_digest"))
     if keyword and not digest:
         return "keyword", True
@@ -69,64 +113,82 @@ def _mode(meta: dict) -> tuple[str, bool]:
     return "unknown", False
 
 
-def check_service(desired: dict | None, meta_state: str, meta: dict, now: datetime, canary: str | None = None) -> dict:
-    out = {"meta": meta_state, "mode": "unknown", "mode_match": "unknown", "objective": "unknown", "privacy": "unknown"}
-    if desired is None or desired.get("desired_mode") not in MODES:
-        return out                                           # no approved state to compare with: unknown
+def check_service(policy, meta_state: str, meta: dict, structure: str, now: datetime, canary: str | None = None) -> dict:
+    out = {"policy": "ok", "meta": meta_state, "structure": structure, "mode": "unknown", "mode_match": "unknown",
+           "privacy": "unknown", "objective": "unknown"}
+    if not isinstance(policy, dict):
+        out["policy"] = "invalid"
+        return out
     if meta_state != "ok":
         return out
     mode, consistent = _mode(meta)
     if not consistent:
         out["meta"] = "inconsistent"
-        return out
-    out["mode"] = mode
-    stamp = status.parse_time(meta.get("updated_at") or meta.get("built_at"))
-    if stamp is None or stamp > now:
-        out["meta"] = "inconsistent"                         # no usable build stamp, or one in the future
-    elif desired.get("max_age_s") and (now - stamp).total_seconds() > int(desired["max_age_s"]):
-        out["meta"] = "stale"                                # still judged below; staleness is its own signal
-    out["mode_match"] = "match" if mode == desired["desired_mode"] else "mismatch"
-    if desired.get("objective") == "usable_meaning_search":
-        out["objective"] = ("pending" if mode == "keyword"
-                            else "met" if canary == "pass" else "unverified")
-    out["privacy"] = _privacy(desired, meta)
+    else:
+        out["mode"] = mode                                   # the declared mode
+        stamp = status.parse_time(meta.get("updated_at") or meta.get("built_at"))
+        if stamp is None or stamp > now:
+            out["meta"] = "inconsistent"
+        elif (now - stamp).total_seconds() > policy["max_age_s"]:
+            out["meta"] = "stale"
+    out["privacy"] = _privacy(policy, meta)
+    if out["meta"] in ("ok", "stale") and structure == "ok":
+        out["mode_match"] = "match" if mode == policy["desired_mode"] else "mismatch"
+    if out["mode"] == "keyword":
+        out["objective"] = "pending"
+    elif out["mode"] == "meaning":
+        ready = (out["meta"] == "ok" and structure == "ok" and out["privacy"] in ("stamp_ok", "verified", "not_required"))
+        out["objective"] = ("blocked" if not ready else "met" if canary == "pass" else "unverified")
     return out
 
 
-def _privacy(desired: dict, meta: dict) -> str:
-    rule = desired.get("career_filter")
-    have = {k: meta.get(k) for k in CAREER_KEYS}
-    if rule == "required":
-        if not all(have.values()):
-            return "violated"                                # MC's index without its filter stamp: treat as exposed
-        want = desired.get("career_filter_digest")
-        return "violated" if (want and have["career_filter_digest"] != want) else "ok"
-    if rule == "none":
+def _privacy(policy: dict, meta: dict) -> str:
+    if policy["career_filter"] == "none":
         return "not_required"
-    return "unknown"
+    if meta.get("profile") != MC_PROFILE or meta.get("career_filter_version") != MC_FILTER_VERSION:
+        return "violated"
+    digest = meta.get("career_filter_digest")
+    if not digest:
+        return "violated"
+    want = policy.get("career_filter_digest")
+    if want:
+        return "verified" if digest == want else "violated"
+    return "stamp_ok"
 
 
 @dataclass(frozen=True)
 class CanarySpec:
     service: str
-    record_ref: str          # an opaque reference to the expected record, never its text
-    question_ref: str        # an opaque reference the caller resolves privately to the question; never logged
+    record_ref: str
+    question_ref: str
 
 
-def canary_spec(desired_doc: dict | None, service: str) -> CanarySpec | None:
-    raw = ((desired_doc or {}).get("canary") or {}).get(service)
+def validate_canary(doc: dict | None, service: str):
+    """The service's canary spec, None when not configured (the owner has not chosen), or ``"invalid"``."""
+    section = (doc or {}).get("canary", {})
+    if section is None:
+        return None
+    if not isinstance(section, dict):
+        return "invalid"
+    raw = section.get(service)
+    if raw is None:
+        return None
     if not isinstance(raw, dict):
-        return None
+        return "invalid"
     record, question = raw.get("record_ref"), raw.get("question_ref")
-    if not (isinstance(record, str) and record and isinstance(question, str) and question):
-        return None
+    if not (isinstance(record, str) and _REF.match(record) and isinstance(question, str) and _REF.match(question)):
+        return "invalid"
     return CanarySpec(service, record, question)
 
 
+def canary_spec(doc: dict | None, service: str) -> CanarySpec | None:
+    spec = validate_canary(doc, service)
+    return spec if isinstance(spec, CanarySpec) else None
+
+
 def run_canary(spec: CanarySpec | None, ask: Callable[[CanarySpec], dict]) -> str:
-    """One canary: ``ask(spec)`` resolves the question privately and returns ``{"mode": keyword|meaning,
-    "record_refs": [...]}``. The result is a code only: the question, the answer and the records are never returned or
-    logged. A hit served by keyword fallback is ``fallback``, never ``pass``: it proves no meaning search."""
+    """One canary through an injected ``ask``; a code only, never the question, answer or records. A hit served by
+    keyword fallback is ``fallback``, never ``pass``."""
     if spec is None:
         return "not_configured"
     try:
