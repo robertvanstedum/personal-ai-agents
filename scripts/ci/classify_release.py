@@ -420,7 +420,9 @@ MC_RUNNER_LOCAL_FILES = frozenset({"core/mc_delegation_runner/cli.py", "core/mc_
                                    "core/mc_delegation_runner/journal.py", "core/mc_delegation_runner/fakework.py",
                                    # The census's OTLP/JSON writer and the Claude Code hook (built, never installed):
                                    # the runtime's bundle only.
-                                   "core/mc_delegation_runner/otel.py", "core/mc_delegation_runner/claude_hook.py"})
+                                   "core/mc_delegation_runner/otel.py", "core/mc_delegation_runner/claude_hook.py",
+                                   # The runner-side push and draft pull request (#693): runs on the Mac only.
+                                   "core/mc_delegation_runner/publish.py"})
 
 
 # The Guildhall stack (#550): minimoi-records runs the portal image (so every portal release moves it onto the new digest),
