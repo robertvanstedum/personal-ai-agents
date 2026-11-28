@@ -280,6 +280,10 @@
   .founders-cos #attach-tray,.founders-cos .input-row,.founders-cos #voice-live,.founders-cos #save-state,.founders-cos #voice-transcript,.founders-cos #voice-sessions{width:calc(100% - 20px)}
   .founders-cos #tab-confer.active{padding:0 0 max(4px,env(safe-area-inset-bottom))}
   .founders-cos .input-row{padding:8px 8px 6px 12px}
+  /* The ⋯ menu hangs from the composer's left edge on a phone, not from the ⋯ itself (which sits about 60px in, past ＋):
+     from there its 320px ran past the right edge of a 375px screen (staging test A1, 28 Nov). */
+  .founders-cos .cos-options{position:static}
+  .founders-cos .cos-options-body{max-width:100%}
   .founders-cos #send-input{font-size:16px}
   .founders-cos .msg-user .msg-text{max-width:86%}
   /* A new chat: a 160 px band of the table, then the greeting. */
