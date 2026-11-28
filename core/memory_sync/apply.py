@@ -1137,8 +1137,10 @@ def seed_complete(seed_dir: Path) -> bool:
 
 def run_seed(*, vault_root: str, index_runner, owner_uid: int = 0, reader_uid: int = 0, reader_gid: int = 0, slice_s: float = SEED_SLICE_S,
              require_root: bool = True, now=None, admission: "P.Admission | None" = None, usage=shutil.disk_usage,
-             meaning_embedder: str | None = None, embed_network: str | None = None, run=subprocess.run) -> dict:
-    """One seed slice. Returns ``{"code": ok | budget_spent | outside_window | seed_not_needed, ...counts}``; raises ``BackupError`` with a
+             meaning_embedder: str | None = None, embed_network: str | None = None, run=subprocess.run,
+             allow_outside_window: bool = False) -> dict:
+    """One seed slice. ``allow_outside_window`` (the owner, by hand; cron never passes it): run in daytime too, with no 06:00 guard
+    (the slice's own budget still bounds it). Inside the window it changes nothing. Returns ``{"code": ok | budget_spent | outside_window | seed_not_needed, ...counts}``; raises ``BackupError`` with a
     fixed code when it could not run (``apply_busy``, ``nothing_installed``, ``seed_failed:<code>``). Never touches a release or ``current``."""
     if require_root and os.geteuid() != 0:
         raise BackupError("root_required")
@@ -1150,8 +1152,10 @@ def run_seed(*, vault_root: str, index_runner, owner_uid: int = 0, reader_uid: i
     if not getattr(runner, "meaning", False):
         raise BackupError("meaning_embedder_required")
     started = clock()
-    if not in_window(started):
+    night = in_window(started)
+    if not night and not allow_outside_window:
         return {"code": "outside_window"}
+    deadline = window_deadline(started) if night else None          # by day, 06:00 today is behind us: the budget alone bounds the slice
     old_umask = os.umask(0o077)
     try:
         lay = P.Layout(vault_root, owner_uid=owner_uid, reader_uid=reader_uid, reader_gid=reader_gid)
@@ -1186,9 +1190,9 @@ def run_seed(*, vault_root: str, index_runner, owner_uid: int = 0, reader_uid: i
             donor = (seed_dir / DONOR_NAME).is_file() and (seed_dir / DONOR_DOC).is_file()
             before = time.monotonic()
             if donor:
-                out = runner.seed(base / "shelf", seed_index, slice_s, window_deadline(started), donor=True)
+                out = runner.seed(base / "shelf", seed_index, slice_s, deadline, donor=True)
             else:
-                out = runner.seed(base / "shelf", seed_index, slice_s, window_deadline(started))
+                out = runner.seed(base / "shelf", seed_index, slice_s, deadline)
             code = str(out.get("code"))
             counts = {k: v for k, v in out.items() if isinstance(v, int) and not isinstance(v, bool) and V.CODE.match(k)}
             if code in DONOR_FAILURES:
@@ -1211,7 +1215,7 @@ def run_seed(*, vault_root: str, index_runner, owner_uid: int = 0, reader_uid: i
             V.write_json_atomic(seed_dir / SEED_DOC, doc)
             if code not in SEED_ENDINGS:
                 raise BackupError(f"seed_failed:{doc['code']}")
-            return {"code": code, "complete": code == "ok", "release": current, "donor": donor, **counts}
+            return {"code": code, "complete": code == "ok", "release": current, "donor": donor, "by_day": not night, **counts}
         finally:
             lock.__exit__(None, None, None)
     finally:

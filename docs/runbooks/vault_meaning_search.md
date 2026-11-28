@@ -68,6 +68,14 @@ What the code does now:
 - **Server batches.** Server-side embedders (the index step, MC's index build) send 8 texts per request; one request may take
   `max(120 s, 20 s x batch)` (160 s at 8; the workstation keeps 16 per request, now 320 s).
 
+## Seeding by day (the owner, by hand)
+
+`seed --execute --allow-outside-window` runs a slice outside 00:00-06:00 Chicago. Cron never passes it. By day the slice has no 06:00
+guard; its budget (`--slice-s`) still bounds it. Nothing else in the chain waits for the window: once a slice ends `complete: true`,
+the next 15-minute apply promotes the seed, and MC's index turns meaning on its next scheduled run (or run its cron line by hand).
+Slices and apply share the vault lock: while a slice runs, apply refuses quietly (`apply_busy`, a warn) and the Mac's batches wait
+for the next free run. Nothing is lost.
+
 ## Dev and staging (the AWS staging host)
 
 - Build the image on the host: `docker build -t minimoi-staging/vault-embedder:pinned docker/vault-embedder`, then `docker builder prune -f` (the fetch stage downloads the 1.5 GB release tarball, checks its sha256 and unpacks only the CPU libraries).

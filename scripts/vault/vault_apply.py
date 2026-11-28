@@ -7,10 +7,12 @@
   vault_apply.py run --execute                  COMPLETE batches not yet applied, oldest first: chain -> ciphertext -> decrypt -> plaintext ->
                                                 strict extract -> per-version checks; build a new release (hard links + applied records + keyword
                                                 index), verify, fsync, switch current; then the acks, applied.json and the inventory
-  vault_apply.py seed --execute --meaning-embedder URL --embed-network NAME [--slice-s 420]
+  vault_apply.py seed --execute --meaning-embedder URL --embed-network NAME [--slice-s 420] [--allow-outside-window]
                                                 meaning search (#660): one time-boxed slice of the meaning seed (the backfill) over the
                                                 serving shelf, only between 00:00 and 06:00 Chicago, under the same lock as run; apply
-                                                promotes the seed once complete. Job id vault-meaning-seed.
+                                                promotes the seed once complete. Job id vault-meaning-seed. --allow-outside-window: the
+                                                owner, by hand, runs a slice by day too (no 06:00 guard; the slice budget still holds);
+                                                cron never passes it.
   vault_apply.py seed-donor --execute [--allow-outside-window]
                                                 the one-time copy (#660): fetch only the index of the latest COMPLETE published
                                                 production snapshot (the Mac's meaning index), check chain, hashes, the pinned embedder
@@ -238,7 +240,7 @@ def cmd_seed(a) -> int:
                                          embedder_url=s["meaning_embedder"], network=s["embed_network"])
     except backup.BackupError as exc:
         return refuse(exc.code)
-    if not apply.in_window(datetime.now(timezone.utc)):
+    if not a.allow_outside_window and not apply.in_window(datetime.now(timezone.utc)):
         print("outside_window: the seed runs only between 00:00 and 06:00 Chicago")
         return EXIT_OK
     try:
@@ -258,7 +260,8 @@ def cmd_seed(a) -> int:
         try:
             out = apply.run_seed(vault_root=s["vault_root"], index_runner=runner, owner_uid=os.geteuid() if a._allow_non_root else 0,
                                  reader_uid=s["reader_uid"], reader_gid=s["reader_gid"], slice_s=a.slice_s,
-                                 require_root=not a._allow_non_root, admission=admission)
+                                 require_root=not a._allow_non_root, admission=admission,
+                                 allow_outside_window=a.allow_outside_window)
             results = {"seed": out["code"], "complete": "yes" if out.get("complete") else "no",
                        "embedded_chunks": str(out.get("embedded_chunks", 0)), "release": str(out.get("release", "none")).lower()}
             state, code = "ok", EXIT_OK
@@ -377,6 +380,7 @@ def main(argv=None) -> int:
     sd = sub.add_parser("seed")
     sd.add_argument("--execute", action="store_true")
     sd.add_argument("--slice-s", type=int, default=apply.SEED_SLICE_S)
+    sd.add_argument("--allow-outside-window", action="store_true")      # the owner, by hand only; cron never passes it
     sdd = sub.add_parser("seed-donor")
     sdd.add_argument("--execute", action="store_true")
     sdd.add_argument("--allow-outside-window", action="store_true")
