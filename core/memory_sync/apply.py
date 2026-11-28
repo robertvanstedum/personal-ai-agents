@@ -76,6 +76,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import shutil
 import sqlite3
 import subprocess
@@ -103,6 +104,12 @@ REBUILD_NEEDED = "index_failed:rebuild_needed"     # indexer.INCOMPATIBLE throug
 SEED_DIR, SEED_DOC = "meaning-seed", "SEED.json"
 SEED_SLICE_S = 420                              # one seed slice; the seed cron runs every 15 min in the window, offset from apply
 SEED_TIMEOUT_GRACE_S = 300                      # the seed step's docker timeout is its slice plus this
+# Every index-step container is named (#660, the production seed of 26-28 Nov): a timeout kills only the ``docker run`` client, never the
+# container, which kept embedding and kept the seed index locked (next slice ``index_busy``, two clients on one CPU embedder). So a timed-out
+# step's container is removed by name before the step fails, and a seed slice first removes any leftover seed or index container (it runs
+# under the vault lock, which every index step holds: anything left with these names is an orphan).
+SEED_CONTAINER, INDEX_CONTAINER_PREFIX = "minimoi-vault-seed", "minimoi-vault-index-"
+CONTAINER_REMOVE_TIMEOUT_S = 60
 WINDOW_TZ, WINDOW_END_HOUR = ZoneInfo("America/Chicago"), 6        # the standing batch window: midnight to 06:00 Chicago
 EMBED_NETWORK = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$")
 EMBEDDER_URL = re.compile(r"^http://[a-z0-9][a-z0-9.-]{0,62}:[0-9]{2,5}$")       # an internal container name or loopback, no path
@@ -271,30 +278,72 @@ class DockerRunner:
     def meaning(self) -> bool:
         return self.embedder_url is not None
 
-    def _base(self, network: str, env: dict) -> list:
+    def _base(self, network: str, env: dict, name: str) -> list:
         envs = [x for k, v in sorted(env.items()) for x in ("-e", f"{k}={v}")]
-        return [self.docker, "run", "--rm", "--network", network, "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,nodev", "--cap-drop", "ALL",
+        return [self.docker, "run", "--rm", "--name", name, "--network", network, "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,nodev", "--cap-drop", "ALL",
                 "--security-opt", "no-new-privileges", "--user", "0:0", *envs]
 
-    def argv(self, build: Path, only_file: Path, rebuild: bool, *, meaning: bool = False, update_all: bool = False) -> list:
+    def argv(self, build: Path, only_file: Path, rebuild: bool, *, meaning: bool = False, update_all: bool = False,
+             name: str | None = None) -> list:
         """Keyword steps: ``--network none``, exactly as before #660. Meaning steps: the embed network only (internal: no route out)."""
         tail = ["--rebuild"] if rebuild and not update_all else ["--update-all"] if update_all else ["--only-file", "/only.json"]
-        return [*self._base(self.network if meaning else "none", {}), "-v", f"{build / 'shelf'}:/shelf:ro", "-v", f"{build / 'index'}:/index",
+        return [*self._base(self.network if meaning else "none", {}, name or self.step_name()), "-v", f"{build / 'shelf'}:/shelf:ro", "-v", f"{build / 'index'}:/index",
                 "-v", f"{only_file}:/only.json:ro", "--entrypoint", "python3", self.image, "-I", "-B", "/app/scripts/vault/vault_apply.py",
                 "index-step", "--shelf", "/shelf", "--index", f"/index/{P.INDEX_NAME}", *tail,
                 *(["--embedder-url", self.embedder_url] if meaning else [])]
 
     def seed_argv(self, shelf: Path, seed_dir: Path, budget_s: float, deadline: float | None, donor: bool = False) -> list:
         env = {} if deadline is None else {"MOI_BATCH_DEADLINE_EPOCH": repr(deadline)}
-        return [*self._base(self.network, env), "-v", f"{shelf}:/shelf:ro", "-v", f"{seed_dir}:/index",
+        return [*self._base(self.network, env, SEED_CONTAINER), "-v", f"{shelf}:/shelf:ro", "-v", f"{seed_dir}:/index",
                 "--entrypoint", "python3", self.image, "-I", "-B", "/app/scripts/vault/vault_apply.py", "index-step", "--shelf", "/shelf",
                 "--index", f"/index/{P.INDEX_NAME}", "--update-all", "--budget-s", str(int(budget_s)), "--embedder-url", self.embedder_url,
                 *(["--donor", f"/index/{DONOR_NAME}"] if donor else [])]
 
+    @staticmethod
+    def step_name() -> str:
+        return INDEX_CONTAINER_PREFIX + secrets.token_hex(6)
+
+    def _names(self, prefixes: tuple[str, ...]) -> list[str] | None:
+        """Containers (running or not) whose names start with one of ``prefixes``; ``None`` when docker could not say."""
+        try:
+            done = self.run([self.docker, "ps", "-a", "--format", "{{.Names}}"], capture_output=True, text=True,
+                            timeout=CONTAINER_REMOVE_TIMEOUT_S)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if done.returncode != 0:
+            return None
+        return [n for n in (done.stdout or "").split() if CONTAINER_NAME.match(n) and n.startswith(prefixes)]
+
+    def remove(self, name: str) -> bool:
+        """Stop and remove the container ``name`` (gone already is fine). True when docker no longer lists it."""
+        try:
+            self.run([self.docker, "rm", "-f", name], capture_output=True, text=True, timeout=CONTAINER_REMOVE_TIMEOUT_S)
+        except (OSError, subprocess.SubprocessError):
+            return False
+        left = self._names((name,))
+        return left is not None and name not in left
+
+    def clear_leftovers(self) -> list[str]:
+        """Remove every leftover seed or index-step container (caller holds the vault lock). Returns the names removed; raises
+        ``index_runner_orphaned`` when one cannot be removed (a slice never runs beside an orphan)."""
+        names = self._names((SEED_CONTAINER, INDEX_CONTAINER_PREFIX))
+        if names is None:
+            raise BackupError("index_runner_failed")
+        names = [n for n in names if n == SEED_CONTAINER or n.startswith(INDEX_CONTAINER_PREFIX)]
+        for name in names:
+            if not self.remove(name):
+                raise BackupError("index_runner_orphaned")
+        return names
+
     def _one_line(self, argv: list, timeout: float) -> dict:
+        name = argv[argv.index("--name") + 1]
         try:
             done = self.run(argv, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # Killing the client leaves the container running: remove it now, or it keeps the index locked and the embedder busy.
+            raise BackupError("index_runner_timeout" if self.remove(name) else "index_runner_orphaned") from None
         except (OSError, subprocess.SubprocessError):
+            self.remove(name)
             raise BackupError("index_runner_failed") from None
         try:
             out = json.loads([line for line in (done.stdout or "").splitlines() if line.strip()][-1])
@@ -318,10 +367,11 @@ class DockerRunner:
     def seed(self, shelf: Path, seed_index: Path, budget_s: float, deadline: float | None, donor: bool = False) -> dict:
         if not self.meaning:
             raise BackupError("bad_arguments")
+        cleared = self.clear_leftovers()
         out = self._one_line(self.seed_argv(shelf, seed_index.parent, budget_s, deadline, donor), budget_s + SEED_TIMEOUT_GRACE_S)
         if out.get("protocol") != INDEX_PROTOCOL:
             raise BackupError("index_runner_incompatible")
-        return out
+        return {**out, "leftover_containers_removed": len(cleared)} if cleared else out
 
     def probe(self, build: Path) -> dict:
         return P.docker_fts_probe(self.image, build, self.reader_uid, self.reader_gid, run=self.run, docker_bin=self.docker)
@@ -372,8 +422,8 @@ def make_index_runner(spec: str | None, *, reader_uid: int = 0, reader_gid: int 
             raise BackupError("bad_arguments")
         if embedder_url is None:
             return HostRunner()
-        from core.memory_index.embedder import OllamaEmbedder
-        return HostRunner(OllamaEmbedder(embedder_url))
+        from core.memory_index.embedder import SERVER_BATCH, OllamaEmbedder
+        return HostRunner(OllamaEmbedder(embedder_url, batch=SERVER_BATCH))
     if spec.startswith("docker:"):
         image = spec[len("docker:"):]
         if not APPLY_IMAGE.match(image):
@@ -1087,8 +1137,10 @@ def seed_complete(seed_dir: Path) -> bool:
 
 def run_seed(*, vault_root: str, index_runner, owner_uid: int = 0, reader_uid: int = 0, reader_gid: int = 0, slice_s: float = SEED_SLICE_S,
              require_root: bool = True, now=None, admission: "P.Admission | None" = None, usage=shutil.disk_usage,
-             meaning_embedder: str | None = None, embed_network: str | None = None, run=subprocess.run) -> dict:
-    """One seed slice. Returns ``{"code": ok | budget_spent | outside_window | seed_not_needed, ...counts}``; raises ``BackupError`` with a
+             meaning_embedder: str | None = None, embed_network: str | None = None, run=subprocess.run,
+             allow_outside_window: bool = False) -> dict:
+    """One seed slice. ``allow_outside_window`` (the owner, by hand; cron never passes it): run in daytime too, with no 06:00 guard
+    (the slice's own budget still bounds it). Inside the window it changes nothing. Returns ``{"code": ok | budget_spent | outside_window | seed_not_needed, ...counts}``; raises ``BackupError`` with a
     fixed code when it could not run (``apply_busy``, ``nothing_installed``, ``seed_failed:<code>``). Never touches a release or ``current``."""
     if require_root and os.geteuid() != 0:
         raise BackupError("root_required")
@@ -1100,8 +1152,10 @@ def run_seed(*, vault_root: str, index_runner, owner_uid: int = 0, reader_uid: i
     if not getattr(runner, "meaning", False):
         raise BackupError("meaning_embedder_required")
     started = clock()
-    if not in_window(started):
+    night = in_window(started)
+    if not night and not allow_outside_window:
         return {"code": "outside_window"}
+    deadline = window_deadline(started) if night else None          # by day, 06:00 today is behind us: the budget alone bounds the slice
     old_umask = os.umask(0o077)
     try:
         lay = P.Layout(vault_root, owner_uid=owner_uid, reader_uid=reader_uid, reader_gid=reader_gid)
@@ -1136,9 +1190,9 @@ def run_seed(*, vault_root: str, index_runner, owner_uid: int = 0, reader_uid: i
             donor = (seed_dir / DONOR_NAME).is_file() and (seed_dir / DONOR_DOC).is_file()
             before = time.monotonic()
             if donor:
-                out = runner.seed(base / "shelf", seed_index, slice_s, window_deadline(started), donor=True)
+                out = runner.seed(base / "shelf", seed_index, slice_s, deadline, donor=True)
             else:
-                out = runner.seed(base / "shelf", seed_index, slice_s, window_deadline(started))
+                out = runner.seed(base / "shelf", seed_index, slice_s, deadline)
             code = str(out.get("code"))
             counts = {k: v for k, v in out.items() if isinstance(v, int) and not isinstance(v, bool) and V.CODE.match(k)}
             if code in DONOR_FAILURES:
@@ -1161,7 +1215,7 @@ def run_seed(*, vault_root: str, index_runner, owner_uid: int = 0, reader_uid: i
             V.write_json_atomic(seed_dir / SEED_DOC, doc)
             if code not in SEED_ENDINGS:
                 raise BackupError(f"seed_failed:{doc['code']}")
-            return {"code": code, "complete": code == "ok", "release": current, "donor": donor, **counts}
+            return {"code": code, "complete": code == "ok", "release": current, "donor": donor, "by_day": not night, **counts}
         finally:
             lock.__exit__(None, None, None)
     finally:
