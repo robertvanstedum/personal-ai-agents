@@ -343,8 +343,8 @@ def cmd_index_step(a) -> int:
         if a.embedder_url:
             if not apply.EMBEDDER_URL.match(a.embedder_url):
                 raise ValueError("embedder_url")
-            from core.memory_index.embedder import OllamaEmbedder
-            embedder = OllamaEmbedder(a.embedder_url)
+            from core.memory_index.embedder import SERVER_BATCH, OllamaEmbedder
+            embedder = OllamaEmbedder(a.embedder_url, batch=SERVER_BATCH)      # the server's CPU embedder (#660)
         elif a.update_all or a.budget_s is not None or a.donor:
             raise ValueError("update_all_needs_embedder")
         if a.donor and not a.update_all:

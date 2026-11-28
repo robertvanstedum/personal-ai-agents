@@ -13,6 +13,10 @@ Tables:
 * ``fts``: FTS5, **contentless** (``content=''``): the keyword index keeps no column text, so nothing can be read
   back from it as an answer. Ranked with ``bm25()``.
 * ``vec``: sqlite-vec ``vec0``, cosine distance on normalized vectors, with ``tier`` and ``canary`` as filter columns.
+* ``pending_vectors`` (vector indexes, #660): vectors embedded for a record that is not written yet, one row per (record, chunk
+  text), saved batch by batch. A run stopped inside a big record (its time budget, the batch window, the embedder) resumes from
+  them instead of embedding the record again; the record's write clears its rows. Created on first write, so an index made
+  before it needs no rebuild; readers never look at it.
 
 **Keyword-only variant** (production, 17 Oct 2026): the same tables without ``vec``, and ``meta.keyword_only = 1``. Built and
 updated by ``indexer.update/rebuild(..., keyword_only=True)`` with the same chunker and no embedder, so it needs no sqlite-vec.
@@ -58,7 +62,11 @@ VEC_SCHEMA = f"""
 CREATE VIRTUAL TABLE vec USING vec0(id INTEGER PRIMARY KEY, embedding float[{DIMS}] distance_metric=cosine,
   tier TEXT, canary INTEGER);
 """
-SCHEMA = KEYWORD_SCHEMA + VEC_SCHEMA
+PENDING_SCHEMA = """
+CREATE TABLE IF NOT EXISTS pending_vectors(record_id TEXT NOT NULL, text_hash TEXT NOT NULL, embedding BLOB NOT NULL,
+  PRIMARY KEY(record_id, text_hash));
+"""
+SCHEMA = KEYWORD_SCHEMA + VEC_SCHEMA + PENDING_SCHEMA
 
 
 class IndexMissing(RuntimeError):
@@ -96,6 +104,8 @@ def connect(path: str | Path, *, create: bool = False, readonly: bool = False, k
             os.chmod(path, 0o600)
         if not readonly and is_keyword_only(con) != keyword_only:
             raise IndexIncompatible("keyword-only and vector indexes are never written as each other")
+        if not readonly and not keyword_only:
+            con.executescript(PENDING_SCHEMA)               # an index made before #660's resume gains the table on its next write
     except BaseException:
         con.close()
         raise
@@ -137,5 +147,24 @@ def old_vectors(con: sqlite3.Connection, record_id: str, hashes=None) -> dict[st
     return {h: e for h, e in rows if hashes is None or h in hashes}
 
 
-__all__ = ["connect", "is_keyword_only", "get_meta", "set_meta", "delete_record_chunks", "old_vectors", "IndexMissing",
+def pending_vectors(con: sqlite3.Connection, record_id: str) -> dict[str, bytes]:
+    """text_hash -> vector already embedded for this record by an earlier, interrupted run (empty when none)."""
+    return dict(con.execute("SELECT text_hash, embedding FROM pending_vectors WHERE record_id=?", (record_id,)).fetchall())
+
+
+def save_pending(con: sqlite3.Connection, record_id: str, vectors: dict[str, bytes]) -> None:
+    """Keep one embedded batch of a record that is not written yet (the caller commits)."""
+    con.executemany("INSERT OR REPLACE INTO pending_vectors(record_id, text_hash, embedding) VALUES(?, ?, ?)",
+                    [(record_id, h, v) for h, v in vectors.items()])
+
+
+def clear_pending(con: sqlite3.Connection, record_id: str | None = None) -> None:
+    """Drop a record's pending vectors (it was written or held), or all of them (``None``: a run that covered the whole shelf)."""
+    if record_id is None:
+        con.execute("DELETE FROM pending_vectors")
+    else:
+        con.execute("DELETE FROM pending_vectors WHERE record_id=?", (record_id,))
+
+
+__all__ = ["connect", "pending_vectors", "save_pending", "clear_pending", "is_keyword_only", "get_meta", "set_meta", "delete_record_chunks", "old_vectors", "IndexMissing",
            "IndexIncompatible", "SCHEMA_VERSION"]
