@@ -886,6 +886,10 @@ const SIGN_IN = {
 };
 
 // Why a teammate did not answer, said plainly with what to do next.
+// #690: a paused MC's "Review in Craft" opens the conversation the pause names (the Craft page resolves it when the link
+// is followed, so it is always the pause that holds MC now), not whichever chat was used last.
+function pausedReviewUrl(floor) { return `${floor}${String(floor).includes('?') ? '&' : '?'}paused=1`; }
+
 function failureText(who, reason, principal) {
   if (reason === 'stop_unconfirmed') return `${who}: stop requested; tool activity could not be confirmed stopped. Check the outcome before retrying.`;
   const signIn = SIGN_IN[principal] || 'sign it in again';
@@ -899,7 +903,7 @@ function failureText(who, reason, principal) {
     case 'agent_budget_limit': return `${who} hit its cost cap for this session, so it did not answer. Nothing is running. The limit is in Operate → Usage & limits; Retry after it is raised or the session restarts.`;
     case 'agent_usage_hold': return `${who} is holding new work because of its usage limits (see Operate → Usage & limits), so it did not answer. Retry once that clears.`;
     case 'agent_turn_failed': return `${who}'s own turn failed before it could answer. Nothing was received. Retry, or check its status in Operate.`;
-    case 'mc_paused': return `${who} is paused after an earlier failed or uncertain action. Review the saved result in Craft and use Continue there before retrying this message. The earlier action is not replayed.`;
+    case 'mc_paused': return `${who} is paused after an earlier failed or uncertain action. Review the saved result in Craft and use Continue there before retrying this message. The pause holds MC everywhere (Craft, voice and meetings), not only this meeting. The earlier action is not replayed.`;
     case 'relay_busy': return `${who} was busy.`;
     case 'empty_reply': return `${who} answered with nothing.`;
     case 'signed_out_after_start': return `${who}'s sign-in was rejected partway through. It may have started answering; nothing was received. To fix: ${signIn}, then Retry.`;
@@ -1048,7 +1052,7 @@ function renderTurns() {
       });
       p.append(wait, sendTo);
     }
-    if (row.turn?.disposition === 'mc_paused') p.append(el('a', {href: page.urls.floor, class: 'rm-btn'}, 'Review in Craft'));
+    if (row.turn?.disposition === 'mc_paused') p.append(el('a', {href: pausedReviewUrl(page.urls.floor), class: 'rm-btn'}, 'Review in Craft'));
     for (const a of row.actions || []) {
       const label = { stop: 'Stop reply', retry: 'Retry', attempt: 'Start a new attempt', continue: `Continue without ${labelOf(row.turn.addressee)}`, end: 'End',
         renew: 'Renew meeting — reset its hour and shared turn budget' }[a];

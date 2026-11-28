@@ -220,7 +220,11 @@ vm.runInContext(String.raw`
   meeting.turns = [{id:'paused',addressee:'mc',state:'failed',disposition:'mc_paused'}];
   renderTurns();
   assert.ok(failureText('MC','mc_paused','mc').includes('earlier action is not replayed'));
-  assert.ok($('[data-rm-turns]').find('[href]').some(n=>n.attrs.href===page.urls.floor));
+  assert.ok(failureText('MC','mc_paused','mc').includes('holds MC everywhere (Craft, voice and meetings)'));
+  // #690: the button asks Craft for the paused conversation, never the general page (which opens the last-used chat).
+  const review=$('[data-rm-turns]').find('[href]');
+  assert.equal(review.map(n=>n.attrs.href).join(' '),'/guild-next/guild/build?paused=1');
+  assert.equal(review[0].textContent,'Review in Craft');
   meeting.turns = [
     {id:'retry',addressee:'mc',state:'committed',trigger_seq:20,attempt:1},
     {id:'original',addressee:'mc',state:'failed',trigger_seq:20,attempt:0,round:{round_id:'round',position:0}}];
