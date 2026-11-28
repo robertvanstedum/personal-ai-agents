@@ -174,7 +174,8 @@ def test_principals_are_partitioned(tmp_path):
 
 def _file_many(root, n, out):
     store = PI.Store(root, "robert", "dev")
-    ids = [store.file(title="t", summary="s", files=[], source={}, filed_by="cos",
+    pid = multiprocessing.current_process().pid                # one title, one initiative (#692): distinct titles
+    ids = [store.file(title=f"t {pid} {i}", summary="s", files=[], source={}, filed_by="cos",
                       operation_id=f"op-{multiprocessing.current_process().pid}-{i}", validate=lambda: None)
            ["initiative_id"] for i in range(n)]
     out.put(ids)
@@ -204,3 +205,113 @@ def test_contract_schema_accepts_the_field_and_rejects_mc_filing():
         Bindings([{**base, "seat": "mc", "binding_id": "bind-mc-pi"}])
     with pytest.raises(ValueError):
         Bindings([{**base, "professional_initiatives": ["write"]}])
+
+
+# ---- #692: CoS keeps the initiative: find, update, documents, pasted words ----------------------------------------
+def _filed(call, title="Model enterprise", summary="A small company run on AI and judgment."):
+    r = call("tok-cos", "file", {"title": title, "summary": summary, "source_event_id": "SE-pi-0001"})
+    assert r.status_code == 200, r.json
+    return r.json["initiative_id"]
+
+
+def test_692_find_before_filing_and_a_second_filing_of_the_title_is_refused(api):
+    svc, call, _, _ = api
+    pid = _filed(call)
+    found = call("tok-cos", "find", {"query": "enterprise MODEL"}).json["initiatives"]
+    assert [i["id"] for i in found] == [pid] and found[0]["summary"].startswith("A small company")
+    assert call("tok-mc", "find", {"query": "nothing-like-it"}).json["initiatives"] == []
+    assert _source(svc, "SE-pi-0002")["outcome"] == "accepted"
+    dup = call("tok-cos", "file", {"title": "  model  ENTERPRISE ", "summary": "again",
+                                   "source_event_id": "SE-pi-0002"})
+    assert dup.status_code == 422 and dup.json["error"] == "initiative_title_exists"
+    assert len(call("tok-cos", "list", {}).json["initiatives"]) == 1
+
+
+def test_692_update_changes_title_summary_and_state_and_keeps_the_earlier_values(api):
+    svc, call, _, tmp = api
+    pid = _filed(call)
+    up = call("tok-cos", "update", {"initiative_id": pid, "state": "started", "summary": "Brief under review.",
+                                    "source_event_id": "SE-pi-0001"})
+    assert up.status_code == 200, up.json
+    assert up.json["status"] == "updated" and up.json["changed"] == ["state", "summary"] and up.json["revision"] == 2
+    again = call("tok-cos", "update", {"initiative_id": pid, "state": "started", "summary": "Brief under review.",
+                                       "source_event_id": "SE-pi-0001"}).json
+    assert again["replayed"] is True and again["revision"] == 2
+    assert _source(svc, "SE-pi-0002")["outcome"] == "accepted"
+    same = call("tok-cos", "update", {"initiative_id": pid, "state": "started", "source_event_id": "SE-pi-0002"}).json
+    assert same["status"] == "unchanged" and same["revision"] == 2
+    record = call("tok-mc", "read", {"initiative_id": pid}).json["initiative"]
+    assert record["state"] == "started" and record["summary"] == "Brief under review."
+    history = [json.loads(line) for line in next((tmp / "pi").rglob("history.jsonl")).read_text().splitlines()]
+    assert history[-1]["event"] == "updated" and history[-1]["before"]["state"] == "parked"
+    assert history[-1]["before"]["summary"].startswith("A small company")
+    # No state starts work.
+    assert not list((tmp / "tasks").rglob("TK-*")) and not list((tmp / "tasks").rglob("RQ-*"))
+    for bad, code in (({"state": "building"}, "state_invalid"), ({}, "nothing_to_update"), ({"title": " "}, "title_invalid")):
+        r = call("tok-cos", "update", {"initiative_id": pid, **bad, "source_event_id": "SE-pi-0002"})
+        assert r.status_code == 422 and r.json["error"] == code
+    assert call("tok-mc", "update", {"initiative_id": pid, "state": "closed",
+                                     "source_event_id": "SE-pi-0001"}).status_code == 403
+
+
+def test_692_documents_are_versioned_and_an_earlier_version_is_never_replaced(api):
+    svc, call, _, tmp = api
+    pid = _filed(call)
+    first_text = "# Brief\n\n> \"I want to build it as and AI fully enabled enterprise\"\n"
+    one = call("tok-cos", "document_save", {"initiative_id": pid, "kind": "brief", "text": first_text,
+                                            "source_event_id": "SE-pi-0001"})
+    assert one.status_code == 200, one.json
+    assert one.json["status"] == "saved" and one.json["version"] == 1 and one.json["revision"] == 2
+    assert _source(svc, "SE-pi-0002")["outcome"] == "accepted"
+    same = call("tok-cos", "document_save", {"initiative_id": pid, "kind": "brief", "text": first_text,
+                                             "source_event_id": "SE-pi-0002"}).json
+    assert same["status"] == "unchanged" and same["version"] == 1 and same["revision"] == 2
+    two = call("tok-cos", "document_save", {"initiative_id": pid, "kind": "brief", "text": first_text + "\nv2\n",
+                                            "source_event_id": "SE-pi-0002"}).json
+    assert two["status"] == "saved" and two["version"] == 2
+    call("tok-cos", "document_save", {"initiative_id": pid, "kind": "status", "text": "Owner: the owner.",
+                                      "source_event_id": "SE-pi-0002"})
+    latest = call("tok-mc", "read_document", {"initiative_id": pid, "kind": "brief"}).json
+    assert latest["document"]["version"] == 2 and latest["document"]["latest"] == 2 and latest["text"].endswith("v2\n")
+    earlier = call("tok-mc", "read_document", {"initiative_id": pid, "kind": "brief", "version": 1}).json
+    assert earlier["text"] == first_text                                  # his words, unchanged
+    row = call("tok-cos", "list", {}).json["initiatives"][0]
+    assert row["documents"] == {"brief": 2, "status": 1}
+    files = sorted(p.name for p in (tmp / "pi").rglob("documents/brief/*"))
+    assert files == ["v0001.md", "v0002.md"]
+    for args, code in (({"kind": "Brief", "text": "x"}, "document_kind_invalid"), ({"kind": "brief", "text": " "}, "document_empty"),
+                       ({"kind": "brief", "text": "x" * (PI.MAX_DOCUMENT + 1)}, "document_too_large")):
+        r = call("tok-cos", "document_save", {"initiative_id": pid, **args, "source_event_id": "SE-pi-0002"})
+        assert r.status_code == 422 and r.json["error"] == code, r.json
+    assert call("tok-cos", "read_document", {"initiative_id": pid, "kind": "prd"}).json["error"] == "document_not_found"
+    assert call("tok-cos", "read_document", {"initiative_id": pid, "kind": "brief", "version": 3}).json["error"] \
+        == "document_version_not_found"
+    assert call("tok-mc", "document_save", {"initiative_id": pid, "kind": "brief", "text": "mc",
+                                            "source_event_id": "SE-pi-0001"}).status_code == 403
+
+
+def test_692_pasted_words_become_a_packet_file_unchanged(api):
+    _, call, _, _ = api
+    pid = _filed(call)
+    pasted = "AI Strategist\nLead the missions…  (pasted, spelling untouched: recieve)\n"
+    r = call("tok-cos", "attach_text", {"initiative_id": pid, "name": "../Job posting", "text": pasted,
+                                        "source_event_id": "SE-pi-0001"})
+    assert r.status_code == 200, r.json
+    added = r.json["added"][0]
+    assert r.json["status"] == "attached" and added["name"] == "Job posting.md"
+    assert added["sha256"] == hashlib.sha256(pasted.encode()).hexdigest()
+    back = call("tok-mc", "read_file", {"initiative_id": pid, "sha256": added["sha256"]}).json
+    assert back["text"] == pasted
+    missing = call("tok-cos", "attach_text", {"initiative_id": "PI-2026-0999", "name": "x.md", "text": "y",
+                                              "source_event_id": "SE-pi-0001"})
+    assert missing.status_code == 422 and missing.json["error"] == "initiative_not_found"
+
+
+def test_692_a_record_filed_before_documents_existed_still_reads_and_lists(api):
+    _, call, _, tmp = api
+    pid = _filed(call)
+    path = next((tmp / "pi").rglob("initiative.json"))
+    record = json.loads(path.read_text())
+    assert "documents" not in record                                      # as #680 wrote it
+    assert call("tok-cos", "list", {}).json["initiatives"][0]["documents"] == {}
+    assert call("tok-cos", "read_document", {"initiative_id": pid, "kind": "brief"}).json["error"] == "document_not_found"
