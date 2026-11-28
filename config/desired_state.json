@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "about": "Approved serving state per Vault ask service (WS3 C1.4). desired_mode is what is APPROVED to serve now; objective is the business goal, judged separately (a keyword-only match never certifies usable meaning search). Changing desired_mode is a reviewed edit by Robert or the release lead (for example to 'meaning' when promotion is approved). canary stays null until Robert chooses the record and question; refs only, never text.",
+  "services": {
+    "vault-ask": {
+      "desired_mode": "keyword",
+      "objective": "usable_meaning_search",
+      "index_path": "/opt/minimoi/vault/current/index/memory.sqlite",
+      "max_age_s": 86400,
+      "career_filter": "none"
+    },
+    "vault-ask-mc": {
+      "desired_mode": "keyword",
+      "objective": "usable_meaning_search",
+      "index_path": "/opt/minimoi/vault-mc/index/memory-mc.sqlite",
+      "max_age_s": 7200,
+      "career_filter": "required",
+      "career_filter_digest": null
+    }
+  },
+  "canary": {
+    "vault-ask": null,
+    "vault-ask-mc": null
+  }
+}

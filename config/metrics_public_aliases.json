@@ -111,5 +111,39 @@
     "seed",
     "index_step",
     "unknown_holder"
+  ],
+  "vault_services": [
+    "vault-ask",
+    "vault-ask-mc"
+  ],
+  "vault_checks": [
+    "meta",
+    "mode",
+    "mode_match",
+    "objective",
+    "privacy",
+    "canary"
+  ],
+  "vault_results": [
+    "ok",
+    "missing",
+    "corrupt",
+    "inconsistent",
+    "stale",
+    "keyword",
+    "meaning",
+    "unknown",
+    "match",
+    "mismatch",
+    "pending",
+    "met",
+    "unverified",
+    "violated",
+    "not_required",
+    "not_configured",
+    "pass",
+    "miss",
+    "fallback",
+    "error"
   ]
 }
