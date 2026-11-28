@@ -548,6 +548,15 @@ class TurnLedger:
         return {"running": _entry(running) if running else None, "pause": barrier,
                 "queued": waiting, "recent": entries, "released": released}
 
+    def paused_entry(self, principal: str) -> dict | None:
+        """The ledger entry the owner's pause names (its conversation is where the paused turn and its Continue
+        are), or None when nothing is paused. Read-only: nothing is released, expired or lifted here (#690)."""
+        with self._tx(principal) as cur:
+            cur.execute("SELECT " + _COLS + " FROM guild.mc_turn_ledger WHERE principal = %s AND id = "
+                        "(SELECT ledger_id FROM guild.mc_turn_barrier WHERE principal = %s)", (principal, principal))
+            row = cur.fetchone()
+        return _entry(row) if row else None
+
     def continue_after(self, principal: str, ledger_id: int) -> dict:
         """Lift the owner's pause, only when it names this entry. The earlier work's outcome stays
         unknown: it may have run, or may still be running."""

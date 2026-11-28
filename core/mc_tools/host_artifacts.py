@@ -22,7 +22,7 @@ ROOT='/Users/vanstedum/Projects/personal-ai-agents/_working'
 MAX=1024*1024
 CHUNK=4096
 TEXT_MAX=20000
-_FILE_NAME=re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(?:md|txt|csv|json)$')
+_FILE_NAME=re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(?:md|txt|json)$')
 
 
 def file_name(args):

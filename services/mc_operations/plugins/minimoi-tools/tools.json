@@ -1079,14 +1079,14 @@
       "name": "minimoi_working_write",
       "label": "working write",
       "capability": "host.artifacts.create",
-      "description": "Create a new private file for Robert to download, in an operation-owned directory. Not for working documents: a draft, note or document Robert asks you to save, keep or read back later goes to minimoi_work_save and is read back with minimoi_work_read; a file made here is never in /minimoi/work and can be recovered only in this conversation. Optional name uses .md, .txt, .csv or .json (for example summary.md); omitted name is artifact.txt. Up to 20000 characters. Never overwrites; use artifact recovery after uncertainty.",
+      "description": "Create a new private file for Robert to download, in an operation-owned directory. Not for working documents: a draft, note or document Robert asks you to save, keep or read back later goes to minimoi_work_save and is read back with minimoi_work_read; a file made here is never in /minimoi/work and can be recovered only in this conversation. Optional name uses .md, .txt or .json (for example summary.md); omitted name is artifact.txt. Up to 20000 characters. Never overwrites; use artifact recovery after uncertainty.",
       "parameters": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "name": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.(md|txt|csv|json)$",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.(md|txt|json)$",
             "minLength": 4,
             "maxLength": 80
           },

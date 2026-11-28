@@ -49,7 +49,7 @@ def run(request, root):
             raise Refused()
         files=[]
         for entry in bundle['files']:
-            if type(entry) is not dict or set(entry)!={'name','text'} or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(?:md|txt|csv|json)',str(entry['name'])) or type(entry['text']) is not str:
+            if type(entry) is not dict or set(entry)!={'name','text'} or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(?:md|txt|json)',str(entry['name'])) or type(entry['text']) is not str:
                 raise Refused()
             raw=entry['text'].encode('utf-8');files.append((entry['name'],raw))
         if len({n for n,_ in files})!=len(files):raise Refused()
