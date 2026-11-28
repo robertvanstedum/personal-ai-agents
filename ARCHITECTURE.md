@@ -1,5 +1,7 @@
 # Architecture: Mini-moi
 
+> **MC / CoS operating-model proposal — 24 October 2026:** [MC-OC-001](docs/specs/spec_mc_openclaw_operating_model_2026-10-24.md) is the canonical review specification for investigative autonomy, capability configuration, governed actions and versioned persona. It includes component/flow diagrams and the MC-first, CoS-fast-follow adoption contract. Pending Robert’s adoption; publication is not runtime activation. Older implementation descriptions below remain historical evidence.
+
 [Download the formatted PDF](ARCHITECTURE.pdf)
 
 *1.2 beta, November 2026. Maintained baseline, version 0.7 (17 November 2026),

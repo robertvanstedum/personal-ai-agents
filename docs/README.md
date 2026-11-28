@@ -9,6 +9,10 @@ documents:
 - [Operations](../OPERATIONS.md) — how the running system is maintained
 - [Roadmap](../ROADMAP.md) — current direction and planned work
 
+## Current agent operating-model proposal
+
+[MC-OC-001 — Master Craftsman, OpenClaw and CoS fast follow](specs/spec_mc_openclaw_operating_model_2026-10-24.md) is the standalone review specification for purpose, known gaps, capabilities, authority, persona versioning and acceptance. It contains reusable architecture diagrams. Pending Robert’s adoption; no runtime activation is implied.
+
 ## Working references
 
 - [Ways of working](WAYS_OF_WORKING.md)
