@@ -16,12 +16,14 @@ than 24 h; ``core.jobs.health.severity``). Kept in ``health-daily-state.json`` i
 
 * a condition (the job, its code and since when it is off) is told once per Chicago day while it lasts, so an open
   problem is repeated daily ("still needs action") instead of told once and forgotten;
-* a red item of a host whose own watchdog alerts (its report says ``alerts: on`` and is fresh) is not told on the day it
-  appears, because that watchdog already sent it within the hour; it is repeated on later days. A stale report's
-  ``alerts: on`` counts for nothing: a host that stopped reporting is not alerting either;
-* a told condition that is gone is announced once as recovered, but only when its host's report is fresh (a missing or
-  stale report proves nothing, so the condition is carried until the host is seen again), and not for a host whose
-  watchdog alerts (it announces its own recoveries). A condition that drops to ``watch`` is announced as improved.
+* a red item of this host is not told on the day it appears only when this host's hourly watchdog *recorded sending it*
+  (``watchdog-state.json``: same job, same condition); it is repeated on later days. ``alerts: on`` in a report proves
+  no delivery, so another host's red items (the Mac's) are told here too: a duplicate beats silence;
+* a told condition is announced as recovered only on affirmative evidence: its host's report is fresh **and** lists the
+  same job green (``ok``). A missing or stale report proves nothing (the condition is carried until the host is seen
+  again); a job that drops to ``watch`` is announced as improved; a job absent from a fresh report (registry changed) is
+  dropped without a message. A recovery whose message fails is retried on the next run. (This host's watchdog may also
+  announce a recovery it sent itself; a second "recovered" line beats a silent one.)
 
 **Why not a helper agent (yet).** Robert asked for a helper (Apprentice or EA) to file this for MC. In 1.2 helpers take
 tasks MC hands them; nothing schedules a helper task on a clock, and adding that scheduler is not a fast-follow change.
@@ -63,6 +65,17 @@ def _state(jobs_root) -> dict:
     return {k: v for k, v in told.items() if isinstance(v, str)} if isinstance(told, dict) else {}
 
 
+def _watchdog_told(jobs_root) -> dict:
+    """What this host's hourly watchdog recorded as sent ({job id: {condition, key}}), the only proof that it delivered.
+    A report's ``alerts: on`` says the switch is on, not that a message went out."""
+    try:
+        doc = json.loads((Path(jobs_root) / "watchdog-state.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    jobs = doc.get("jobs") if isinstance(doc, dict) else None
+    return {k: v for k, v in jobs.items() if isinstance(v, dict)} if isinstance(jobs, dict) else {}
+
+
 def build(reg, health_dir, now: datetime) -> dict:
     hosts = [h for h in reg.hosts() if h not in NOT_A_HOST]
     reports = {h: health.read_report(health_dir, h) for h in hosts}
@@ -76,10 +89,12 @@ def build(reg, health_dir, now: datetime) -> dict:
     fresh = sorted(h for h, r in reporting.items()
                    if (now - status.parse_time(r["checked_at"])).total_seconds()
                    <= health.STALE_AFTER_S.get(h, health.REPORT_STALE_S))
+    green = {h: sorted(i["id"] for i in reporting[h]["items"] if isinstance(i, dict) and i.get("code") == "ok")
+             for h in fresh}
     for item in items:
         item["alerts_on_host"] = item["host"] in fresh and (reporting.get(item["host"]) or {}).get("alerts") == "on"
     return {"schema_version": 1, "checked_at": status.iso(now), "hosts_reporting": sorted(reporting),
-            "hosts_fresh": fresh, "alerts_on_hosts": sorted(h for h in fresh if reporting[h].get("alerts") == "on"),
+            "hosts_fresh": fresh, "green": green, "alerts_on_hosts": sorted(h for h in fresh if reporting[h].get("alerts") == "on"),
             "not_reporting": not_reporting, "items": items,
             "not_tracked": [{"id": i["id"], "name": i["name"], "host": i["host"]} for i in not_tracked],
             "text": text}
@@ -97,12 +112,15 @@ def _split(key: str) -> tuple[str, str, str]:
     return "|".join(parts[:2]), "", ""
 
 
-def notify(daily: dict, told: dict, sender, now: datetime | None = None) -> tuple[dict, bool]:
+def notify(daily: dict, told: dict, sender, now: datetime | None = None, watchdog_told: dict | None = None,
+           own_host: str = "ec2") -> tuple[dict, bool]:
     """Tell each needs-action condition once per Chicago day while it lasts, and its recovery once. Returns (the new told
     map, all delivered). See the module docstring for the rules."""
     now = now or datetime.now(timezone.utc)
     day = now.astimezone(DAY_TZ).date().isoformat()
-    fresh, self_alerting = set(daily.get("hosts_fresh", ())), set(daily.get("alerts_on_hosts", ()))
+    fresh = set(daily.get("hosts_fresh", ()))
+    green = {h: set(ids) for h, ids in (daily.get("green") or {}).items()}
+    watchdog_told = watchdog_told or {}
     delivered, current = True, {}
 
     def send(text: str) -> bool:
@@ -122,8 +140,10 @@ def notify(daily: dict, told: dict, sender, now: datetime | None = None) -> tupl
             current[item["id"]] = prior                 # already told today
             continue
         repeat = prior_condition == condition
-        if not repeat and item.get("alerts_on_host") and item.get("light") == "red":
-            current[item["id"]] = key                   # its own watchdog sent it within the hour; repeat from tomorrow
+        sent_by_watchdog = (item["host"] == own_host and item.get("light") == "red"
+                            and (watchdog_told.get(item["id"]) or {}).get("condition") == item["code"])
+        if not repeat and sent_by_watchdog:
+            current[item["id"]] = key                   # this host's watchdog recorded sending it; repeat from tomorrow
             continue
         head = "still needs action" if repeat else "needs action"
         if send(f"minimoi health, {head}: {health.line(item)}"):
@@ -141,11 +161,13 @@ def notify(daily: dict, told: dict, sender, now: datetime | None = None) -> tupl
         if host not in fresh:
             current[job_id] = prior                     # cannot see that host now: carried, never called recovered
             continue
-        if host in self_alerting:
-            continue                                    # its watchdog announces its own recoveries
         now_item = by_id.get(job_id)
-        text = (f"minimoi health, improved: {health.line(now_item)}" if now_item
-                else f"minimoi health, recovered: {job_id} ({host}) is no longer off")
+        if now_item is not None:
+            text = f"minimoi health, improved: {health.line(now_item)}"     # still off, but no longer needs action
+        elif job_id in green.get(host, ()):
+            text = f"minimoi health, recovered: {job_id} ({host}) is green again"
+        else:
+            continue                                    # not in a fresh report at all (registry changed): dropped, never "recovered"
         if not send(text):
             delivered = False
             current[job_id] = prior                     # announced on the next run instead
@@ -175,7 +197,7 @@ def run(*, jobs_root, health_dir, registry_path=None, sender=alert.send, notify_
         print(f"{own_id}: cannot write the report ({type(exc).__name__})", file=err)
         return 2
     if notify_on:
-        told, delivered = notify(daily, _state(jobs_root), sender, started)
+        told, delivered = notify(daily, _state(jobs_root), sender, started, _watchdog_told(jobs_root), host)
     else:
         told, delivered = {}, True
     status.write_json_atomic(jobs_root, STATE_FILE, {"schema_version": 1, "told": told})

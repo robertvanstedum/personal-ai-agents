@@ -289,10 +289,13 @@ def test_an_unsent_message_is_retried_and_the_run_warns(tmp_path):
 
 
 def test_a_host_that_alerts_itself_is_not_told_twice(tmp_path):
+    # WS3 C0.1: only a recorded send by this host's watchdog counts as "already told" (not alerts: on alone)
     jobs, folder, path = daily_setup(tmp_path)
     doc = json.loads((folder / "health-ec2.json").read_text())
     doc["alerts"] = "on"
     (folder / "health-ec2.json").write_text(json.dumps(doc))
+    status.write_json_atomic(jobs, "watchdog-state.json",
+                             {"schema_version": 1, "jobs": {"broken": {"condition": "failed", "key": "r1"}}})
     sent = []
     run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
     assert sent == []
@@ -605,10 +608,12 @@ def test_a_stale_report_saying_alerts_on_does_not_silence_the_daily_check(tmp_pa
     assert len(sent) == 1
 
 
-def test_a_self_alerting_host_red_is_repeated_from_the_next_day(tmp_path):
+def test_a_red_the_hourly_watchdog_recorded_sending_is_repeated_from_the_next_day(tmp_path):
     jobs, folder, path = daily_setup(tmp_path)
     r = registry.load(path)
     _republish(folder, r, jobs, NOW, alerts="on")
+    status.write_json_atomic(jobs, "watchdog-state.json",
+                             {"schema_version": 1, "jobs": {"broken": {"condition": "failed", "key": "r1"}}})
     sent = []
     run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
     assert sent == []                                                                       # its watchdog sent it
@@ -632,3 +637,51 @@ def test_ec2_hourly_watchdog_alerts_on_and_dev_stays_off():
     text = (REPO / "scripts/jobs/host_watchdog.sh").read_text()
     assert 'MINIMOI_JOBS_ALERT="${MINIMOI_JOBS_ALERT_EC2:-on}"' in text
     assert "export MINIMOI_JOBS_ALERT=off" in text                                          # the dev branch
+
+
+def test_alerts_on_without_a_recorded_send_is_not_proof_of_delivery(tmp_path):
+    """Codex acceptance review: ``alerts: on`` alone proves no delivery."""
+    jobs, folder, path = daily_setup(tmp_path)
+    r = registry.load(path)
+    _republish(folder, r, jobs, NOW, alerts="on")                  # switch on, but no watchdog-state record
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    assert len(sent) == 1 and "needs action" in sent[0]
+
+
+def test_a_downgrade_is_improved_not_recovered(tmp_path):
+    jobs, folder, path = daily_setup(tmp_path)
+    r = registry.load(path)
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    put(jobs, r.get("broken"), state="warn", finished=NOW + H, success=NOW + H)    # red -> fresh yellow
+    _republish(folder, r, jobs, NOW + 2 * H)
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + 2 * H)
+    assert len(sent) == 2 and "improved" in sent[1] and "recovered" not in sent[1]
+
+
+def test_a_job_gone_from_a_fresh_report_is_dropped_without_a_recovery(tmp_path):
+    jobs, folder, path = daily_setup(tmp_path)
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    doc = json.loads((folder / "health-ec2.json").read_text())
+    doc["items"] = [i for i in doc["items"] if i["id"] != "broken"]                 # the registry no longer lists it
+    doc["checked_at"] = status.iso(NOW + 2 * H)
+    (folder / "health-ec2.json").write_text(json.dumps(doc))
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + 2 * H)
+    assert len(sent) == 1
+    assert "broken" not in json.loads((jobs / "health-daily-state.json").read_text())["told"]
+
+
+def test_a_failed_recovery_message_is_retried(tmp_path):
+    jobs, folder, path = daily_setup(tmp_path)
+    r = registry.load(path)
+    run_daily(jobs, folder, path, lambda t: "sent")
+    put(jobs, r.get("broken"), state="ok", finished=NOW + H, success=NOW + H)
+    _republish(folder, r, jobs, NOW + 2 * H)
+    code, _ = run_daily(jobs, folder, path, lambda t: "not_sent", now=NOW + 2 * H)
+    assert code == 1
+    sent = []
+    _republish(folder, r, jobs, NOW + 3 * H)
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + 3 * H)
+    assert len(sent) == 1 and "recovered" in sent[0]
