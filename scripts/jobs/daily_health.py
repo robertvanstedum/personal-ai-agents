@@ -11,9 +11,17 @@ mc-observations volume, ``health/``), and writes there:
   ``off_for`` such as "2 days"), ``not_reporting`` (hosts with no report here), ``not_tracked`` and ``text``, the same
   in a few plain lines, problems first. MC reads it through ``minimoi_portal/guild_ui/jobs_health.py``.
 
-Telegram (``MINIMOI_JOBS_NOTIFY=off`` turns it off; Dev runs that way): only ``needs action``, once per condition (the job, its code and since when it is off; kept in
-``health-daily-state.json`` in the jobs root), and never for a host whose own watchdog already alerts (its report says
-``alerts: on``, the Mac's). Nothing else is sent.
+Telegram (``MINIMOI_JOBS_NOTIFY=off`` turns it off; Dev runs that way): only ``needs action`` (red, or yellow for more
+than 24 h; ``core.jobs.health.severity``). Kept in ``health-daily-state.json`` in the jobs root (WS3 C0.1, 28 Nov 2026):
+
+* a condition (the job, its code and since when it is off) is told once per Chicago day while it lasts, so an open
+  problem is repeated daily ("still needs action") instead of told once and forgotten;
+* a red item of a host whose own watchdog alerts (its report says ``alerts: on`` and is fresh) is not told on the day it
+  appears, because that watchdog already sent it within the hour; it is repeated on later days. A stale report's
+  ``alerts: on`` counts for nothing: a host that stopped reporting is not alerting either;
+* a told condition that is gone is announced once as recovered, but only when its host's report is fresh (a missing or
+  stale report proves nothing, so the condition is carried until the host is seen again), and not for a host whose
+  watchdog alerts (it announces its own recoveries). A condition that drops to ``watch`` is announced as improved.
 
 **Why not a helper agent (yet).** Robert asked for a helper (Apprentice or EA) to file this for MC. In 1.2 helpers take
 tasks MC hands them; nothing schedules a helper task on a clock, and adding that scheduler is not a fast-follow change.
@@ -29,6 +37,7 @@ import os
 import secrets
 import sys
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Callable
 
@@ -42,6 +51,7 @@ JOB_ID = "jobs-daily-health"
 DAILY_NAME = "health-daily.json"
 STATE_FILE = "health-daily-state.json"
 NOT_A_HOST = ("github",)                # listed for completeness; no watchdog runs there
+DAY_TZ = ZoneInfo("America/Chicago")    # "once a day" is Robert's day
 
 
 def _state(jobs_root) -> dict:
@@ -63,33 +73,82 @@ def build(reg, health_dir, now: datetime) -> dict:
     text = health.words(items, hosts=sorted(reporting), not_tracked=len(not_tracked))
     if not_reporting:
         text += f"\nNot reporting here: {', '.join(not_reporting)} (their health is not visible to this host)."
+    fresh = sorted(h for h, r in reporting.items()
+                   if (now - status.parse_time(r["checked_at"])).total_seconds()
+                   <= health.STALE_AFTER_S.get(h, health.REPORT_STALE_S))
     for item in items:
-        item["alerts_on_host"] = (reporting.get(item["host"]) or {}).get("alerts") == "on"
+        item["alerts_on_host"] = item["host"] in fresh and (reporting.get(item["host"]) or {}).get("alerts") == "on"
     return {"schema_version": 1, "checked_at": status.iso(now), "hosts_reporting": sorted(reporting),
+            "hosts_fresh": fresh, "alerts_on_hosts": sorted(h for h in fresh if reporting[h].get("alerts") == "on"),
             "not_reporting": not_reporting, "items": items,
             "not_tracked": [{"id": i["id"], "name": i["name"], "host": i["host"]} for i in not_tracked],
             "text": text}
 
 
-def notify(daily: dict, told: dict, sender) -> tuple[dict, bool]:
-    """Send each needs-action item once. Returns (the new told map, all delivered). A condition that cleared is
-    forgotten, so if it comes back it is told again."""
+def _key(item: dict, day: str) -> str:
+    return f"{item['code']}|{item.get('off_since') or ''}|{day}|{item['host']}"
+
+
+def _split(key: str) -> tuple[str, str, str]:
+    """(condition, day, host) of a told key. A key from before C0.1 ("code|since") has no day or host."""
+    parts = key.split("|")
+    if len(parts) >= 4:
+        return "|".join(parts[:2]), parts[2], parts[3]
+    return "|".join(parts[:2]), "", ""
+
+
+def notify(daily: dict, told: dict, sender, now: datetime | None = None) -> tuple[dict, bool]:
+    """Tell each needs-action condition once per Chicago day while it lasts, and its recovery once. Returns (the new told
+    map, all delivered). See the module docstring for the rules."""
+    now = now or datetime.now(timezone.utc)
+    day = now.astimezone(DAY_TZ).date().isoformat()
+    fresh, self_alerting = set(daily.get("hosts_fresh", ())), set(daily.get("alerts_on_hosts", ()))
     delivered, current = True, {}
+
+    def send(text: str) -> bool:
+        try:
+            return sender(text) == alert.SENT
+        except Exception:                               # noqa: BLE001
+            return False
+
+    by_id = {i["id"]: i for i in daily["items"]}
     for item in daily["items"]:
         if item["severity"] != health.NEEDS_ACTION:
             continue
-        key = f"{item['code']}|{item.get('off_since') or ''}"
-        current[item["id"]] = key
-        if told.get(item["id"]) == key or item.get("alerts_on_host"):
+        key, prior = _key(item, day), told.get(item["id"])
+        condition = _key(item, day).rsplit("|", 2)[0]
+        prior_condition, prior_day, _ = _split(prior) if prior else ("", "", "")
+        if prior_condition == condition and prior_day == day:
+            current[item["id"]] = prior                 # already told today
             continue
-        text = f"minimoi health, needs action: {health.line(item)}"
-        try:
-            ok = sender(text) == alert.SENT
-        except Exception:                               # noqa: BLE001
-            ok = False
-        if not ok:
+        repeat = prior_condition == condition
+        if not repeat and item.get("alerts_on_host") and item.get("light") == "red":
+            current[item["id"]] = key                   # its own watchdog sent it within the hour; repeat from tomorrow
+            continue
+        head = "still needs action" if repeat else "needs action"
+        if send(f"minimoi health, {head}: {health.line(item)}"):
+            current[item["id"]] = key
+        else:
+            delivered = False                           # not recorded for today: the next run tries again
+            if prior:
+                current[item["id"]] = prior
+    for job_id, prior in told.items():
+        if job_id in current:
+            continue
+        _, _, host = _split(prior)
+        if not host:
+            continue                                    # a key from before C0.1: forgotten quietly, once
+        if host not in fresh:
+            current[job_id] = prior                     # cannot see that host now: carried, never called recovered
+            continue
+        if host in self_alerting:
+            continue                                    # its watchdog announces its own recoveries
+        now_item = by_id.get(job_id)
+        text = (f"minimoi health, improved: {health.line(now_item)}" if now_item
+                else f"minimoi health, recovered: {job_id} ({host}) is no longer off")
+        if not send(text):
             delivered = False
-            current.pop(item["id"])                     # not recorded: the next run tries again
+            current[job_id] = prior                     # announced on the next run instead
     return current, delivered
 
 
@@ -116,7 +175,7 @@ def run(*, jobs_root, health_dir, registry_path=None, sender=alert.send, notify_
         print(f"{own_id}: cannot write the report ({type(exc).__name__})", file=err)
         return 2
     if notify_on:
-        told, delivered = notify(daily, _state(jobs_root), sender)
+        told, delivered = notify(daily, _state(jobs_root), sender, started)
     else:
         told, delivered = {}, True
     status.write_json_atomic(jobs_root, STATE_FILE, {"schema_version": 1, "told": told})

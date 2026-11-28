@@ -91,10 +91,12 @@ def test_cos_pull_identity_must_be_a_spec_never_key_text(tmp_path, bad):
         R.profile(p)
 
 
-def test_both_jobs_are_registered_and_not_judged_before_they_run():
+def test_both_jobs_are_registered_with_their_live_date():
+    # WS3 C0.3 (28 Nov 2026): both have run since mid-November, so a missing status file is now red, never "not due".
     jobs = registry.load()
     pull, export = jobs.get("vault-cos-pull"), jobs.get("vault-cos-export")
-    assert pull.host == "mac" and export.host == "ec2" and pull.active_from is None and export.active_from is None
+    live = registry.parse_time("2026-11-13T15:00:00Z")
+    assert pull.host == "mac" and export.host == "ec2" and pull.active_from == live and export.active_from == live
     assert pull.runbook == "core/memory_sync/cos_pull.py" and export.runbook == "core/memory_sync/cos_export.py"
 
 

@@ -54,6 +54,7 @@
       "id": "vault-sync",
       "name": "Vault incremental sync (Mac)",
       "host": "mac",
+      "active_from": "2026-11-13T15:00:00Z",
       "schedule": {
         "text": "every 2 h while awake (launchd StartInterval, RunAtLoad)",
         "kind": "interval",
@@ -77,6 +78,7 @@
       "id": "vault-apply",
       "name": "Vault incremental apply (EC2)",
       "host": "ec2",
+      "active_from": "2026-11-13T15:00:00Z",
       "schedule": {
         "text": "every 15 min (cron)",
         "kind": "interval",
@@ -133,16 +135,17 @@
       "status_file": "vault-meaning-seed.json",
       "owner": "robert",
       "runbook": "core/memory_sync/apply.py",
-      "healthy": "a slice each night until the seed is complete; then seed_not_needed (active_from is a sentinel until the production activation sets the install time)",
+      "healthy": "a slice each night until the seed is complete; then seed_not_needed (active_from is the first production night, 26 Nov 2026; WS3 C0.3)",
       "defined_in": [
         "scripts/vault/vault_apply.py::7-59/15 0-5"
       ],
-      "active_from": "2099-01-01T00:00:00Z"
+      "active_from": "2026-11-26T06:00:00Z"
     },
     {
       "id": "vault-mc-pull",
       "name": "Vault MC pull from production (Mac)",
       "host": "mac",
+      "active_from": "2026-11-13T15:00:00Z",
       "schedule": {
         "text": "every 2 h while awake (launchd StartInterval, RunAtLoad)",
         "kind": "interval",
@@ -165,6 +168,7 @@
       "id": "vault-mc-export",
       "name": "Vault MC export from production (EC2)",
       "host": "ec2",
+      "active_from": "2026-11-13T15:00:00Z",
       "schedule": {
         "text": "every 2 h (cron)",
         "kind": "interval",
@@ -185,6 +189,7 @@
       "id": "vault-cos-pull",
       "name": "Vault CoS pull from production (Mac)",
       "host": "mac",
+      "active_from": "2026-11-13T15:00:00Z",
       "schedule": {
         "text": "every 2 h while awake (launchd StartInterval, RunAtLoad)",
         "kind": "interval",
@@ -206,6 +211,7 @@
       "id": "vault-cos-export",
       "name": "Vault CoS export from production (EC2)",
       "host": "ec2",
+      "active_from": "2026-11-13T15:00:00Z",
       "schedule": {
         "text": "every 2 h (cron)",
         "kind": "interval",
@@ -324,6 +330,7 @@
       "id": "memory-index",
       "name": "Vault index update (Mac)",
       "host": "mac",
+      "active_from": "2026-11-13T15:00:00Z",
       "schedule": {
         "text": "daily 02:30 Chicago",
         "kind": "daily",
@@ -345,6 +352,7 @@
       "id": "vault-backup",
       "name": "Vault encrypted external backup (Mac)",
       "host": "mac",
+      "active_from": "2026-11-13T15:00:00Z",
       "schedule": {
         "text": "daily 04:30 Chicago",
         "kind": "daily",
@@ -784,6 +792,7 @@
       "id": "jobs-helper-check",
       "name": "Apprentice's daily job-health note for MC",
       "host": "ec2",
+      "active_from": "2026-11-13T15:00:00Z",
       "schedule": {
         "text": "daily 09:15 Chicago (root cron, docker exec into the portal)",
         "kind": "daily",
@@ -1075,6 +1084,30 @@
         "scripts/jobs/install_host_watchdog.sh::OnCalendar=*-*-* 04:40:00 America/Chicago"
       ],
       "active_from": "2026-11-15T10:40:00Z"
+    },
+    {
+      "id": "uat-watch-dev",
+      "name": "Automatic staging UAT watcher (Dev)",
+      "host": "dev",
+      "schedule": {
+        "text": "every 5 min (Dev: minimoi-uat-watch.timer / cron line in scripts/uat/uat_watch.sh)",
+        "kind": "interval",
+        "every_s": 300
+      },
+      "expected_every_s": 300,
+      "missed_after_s": 3600,
+      "stuck_after_s": 3600,
+      "grace_s": 300,
+      "evidence": {
+        "kind": "none",
+        "why": "writes no run record yet; registered so the coverage test passes and the gap is visible (WS3 Wave 1 C1.2 adds a status file)"
+      },
+      "healthy": "one UAT run starts after each settled staging deploy",
+      "owner": "robert",
+      "runbook": "scripts/uat/uat_watch.sh",
+      "defined_in": [
+        "scripts/uat/uat_watch.sh"
+      ]
     },
     {
       "id": "curator-mac",

@@ -26,9 +26,10 @@ its last run failed, it has been ``running`` longer than ``stuck_after_s``, or i
   ``<dest>/health/<host>/`` so production MC sees this host (``core.jobs.health.push``). A failed push makes the run
   ``warn`` (result ``health-push: failed``); the report itself is still written here.
 * Its own status file lists each judged job's code while they fit the contract's 20 result parts. A host with more
-  (production judges 24) keeps the problems by name and counts the rest (``fit_results``); the full list is in the report.
-* ``MINIMOI_JOBS_ALERT=off`` judges and reports without sending anything: on EC2 and Dev the daily check
-  (``scripts/jobs/daily_health.py``) is the one that sends, and only for ``needs action``.
+  (production judges 27) keeps the problems by name and counts the rest (``fit_results``); the full list is in the report.
+* ``MINIMOI_JOBS_ALERT=off`` judges and reports without sending anything. Dev runs that way. Production sends red items
+  and recoveries hourly (``host_watchdog.sh``, WS3 C0.2); the daily check (``scripts/jobs/daily_health.py``) adds yellow
+  items off for more than a day and repeats open problems daily.
 
 Exit codes: 0 done (all alerts delivered or none needed); 1 an alert could not be sent, or the registry is unreadable;
 2 the watchdog's own status file could not be written.

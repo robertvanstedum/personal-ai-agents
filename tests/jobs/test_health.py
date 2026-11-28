@@ -271,6 +271,9 @@ def test_daily_check_reports_every_non_green_item_and_tells_telegram_once(tmp_pa
 
 def test_only_needs_action_reaches_telegram(tmp_path):
     jobs, folder, path = daily_setup(tmp_path, state="warn")
+    r = registry.load(path)
+    put(jobs, r.get("broken"), state="warn", finished=NOW - H, success=NOW - H)    # a fresh warning, not a day-old one
+    _republish(folder, r, jobs, NOW)
     sent = []
     code, text = run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
     assert code == 0 and sent == [] and "[watch]" in text
@@ -523,3 +526,109 @@ def test_mc_sees_the_macs_pulled_report(tmp_path):
 def test_the_mac_runtime_pushes_its_report():
     src = (REPO / "scripts/vault/runtime_install.py").read_text()
     assert "'MINIMOI_JOBS_HEALTH_PUSH': cfg['backup_dest']" in src
+
+
+# ---- WS3 Wave 0a (28 Nov 2026): yellow escalates, open problems repeat daily, recoveries are told ---------------------
+
+def test_yellow_for_more_than_a_day_needs_action():
+    base = {"id": "x", "name": "X", "host": "ec2", "light": "yellow", "code": "warn"}
+    assert health.severity({**base, "off_for_s": 23 * 3600}) == health.WATCH
+    assert health.severity({**base, "off_for_s": 25 * 3600}) == health.NEEDS_ACTION
+    assert health.severity({**base, "code": "late", "off_for_s": 25 * 3600}) == health.NEEDS_ACTION
+    stale = {**base, "light": "unknown", "code": "report_stale"}
+    assert health.severity({**stale, "off_for_s": 25 * 3600}) == health.WATCH       # the 72 h host rule decides
+    assert health.severity({**stale, "off_for_s": 73 * 3600}) == health.NEEDS_ACTION
+
+
+def test_a_long_warning_reaches_telegram_through_the_daily_check(tmp_path):
+    jobs, folder, path = tmp_path / "jobs", tmp_path / "health", None
+    path = registry_file(tmp_path, job(id="export", status_file="export.json"))
+    r = registry.load(path)
+    put(jobs, r.get("export"), state="warn", finished=NOW - H, success=NOW - H)
+    first = health.host_report(r, "ec2", {"jobs": str(jobs)}, NOW - 30 * H)      # yellow since 30 h ago
+    report = health.host_report(r, "ec2", {"jobs": str(jobs)}, NOW, previous=first)
+    report["alerts"] = "off"
+    health.publish(folder, "health-ec2.json", report)
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    assert len(sent) == 1 and "needs action" in sent[0] and "30 h" in sent[0]
+
+
+def test_an_open_problem_is_repeated_once_a_chicago_day(tmp_path):
+    jobs, folder, path = daily_setup(tmp_path)
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + 2 * H)      # same day: quiet
+    assert len(sent) == 1
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + D)          # next day: repeated
+    assert len(sent) == 2 and sent[1].startswith("minimoi health, still needs action")
+
+
+def _republish(folder, r, jobs, now, alerts="off"):
+    report = health.host_report(r, "ec2", {"jobs": str(jobs)}, now)
+    report["alerts"] = alerts
+    health.publish(folder, "health-ec2.json", report)
+
+
+def test_a_recovery_is_told_once_when_the_host_is_seen_fresh(tmp_path):
+    jobs, folder, path = daily_setup(tmp_path)
+    r = registry.load(path)
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    put(jobs, r.get("broken"), state="ok", finished=NOW + H, success=NOW + H)
+    _republish(folder, r, jobs, NOW + 2 * H)
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + 2 * H)
+    assert len(sent) == 2 and "recovered: broken (ec2)" in sent[1]
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + 3 * H)
+    assert len(sent) == 2                                                                    # once only
+
+
+def test_a_silent_host_is_never_called_recovered(tmp_path):
+    """Codex review finding 1: an observation that cannot be made must not close a problem."""
+    jobs, folder, path = daily_setup(tmp_path)
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    (folder / "health-ec2.json").unlink()                                                   # the report goes missing
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + 2 * H)
+    assert not any("recovered" in t for t in sent)
+    state = json.loads((jobs / "health-daily-state.json").read_text())
+    assert "broken" in state["told"]                                                        # carried, not forgotten
+
+
+def test_a_stale_report_saying_alerts_on_does_not_silence_the_daily_check(tmp_path):
+    jobs, folder, path = daily_setup(tmp_path)
+    doc = json.loads((folder / "health-ec2.json").read_text())
+    doc["alerts"] = "on"
+    (folder / "health-ec2.json").write_text(json.dumps(doc))
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + 5 * H)      # report 5 h old: stale
+    assert len(sent) == 1
+
+
+def test_a_self_alerting_host_red_is_repeated_from_the_next_day(tmp_path):
+    jobs, folder, path = daily_setup(tmp_path)
+    r = registry.load(path)
+    _republish(folder, r, jobs, NOW, alerts="on")
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    assert sent == []                                                                       # its watchdog sent it
+    _republish(folder, r, jobs, NOW + D, alerts="on")
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent", now=NOW + D)
+    assert len(sent) == 1 and "still needs action" in sent[0]
+
+
+def test_a_told_key_from_before_wave0a_is_forgotten_quietly(tmp_path):
+    jobs, folder, path = daily_setup(tmp_path, state="ok")
+    r = registry.load(path)
+    put(jobs, r.get("broken"), state="ok", finished=NOW - H, success=NOW - H)
+    _republish(folder, r, jobs, NOW)
+    (jobs / "health-daily-state.json").write_text(json.dumps({"schema_version": 1, "told": {"gone": "failed|x"}}))
+    sent = []
+    run_daily(jobs, folder, path, lambda t: sent.append(t) or "sent")
+    assert sent == []
+
+
+def test_ec2_hourly_watchdog_alerts_on_and_dev_stays_off():
+    text = (REPO / "scripts/jobs/host_watchdog.sh").read_text()
+    assert 'MINIMOI_JOBS_ALERT="${MINIMOI_JOBS_ALERT_EC2:-on}"' in text
+    assert "export MINIMOI_JOBS_ALERT=off" in text                                          # the dev branch

@@ -29,7 +29,15 @@ volume_source() {
 
 obs="$(volume_source)"
 export MINIMOI_JOBS_HOST="$host" MINIMOI_JOBS_ROOT="$jobs" MINIMOI_JOBS_REGISTRY="$tools/config/scheduled_jobs.json"
-export MINIMOI_JOBS_ALERT=off            # the daily check is the one that sends, and only for "needs action"
+# Production's hourly watchdog sends red items and their recoveries within the hour (WS3 C0.2, 28 Nov 2026: the
+# meaning seed was red for two nights and nobody was told). MINIMOI_JOBS_ALERT_EC2=off in the cron file turns it back
+# off. Dev judges without sending: its token would be production's. The daily check still sends yellow-for-a-day items
+# and repeats open problems daily.
+if [ "$host" = ec2 ]; then
+  export MINIMOI_JOBS_ALERT="${MINIMOI_JOBS_ALERT_EC2:-on}"
+else
+  export MINIMOI_JOBS_ALERT=off
+fi
 if [ -n "$obs" ]; then
   export MINIMOI_JOBS_ROOT_MC_OBSERVATIONS="$obs/jobs" MINIMOI_JOBS_HEALTH_DIR="$obs/health"
 else
