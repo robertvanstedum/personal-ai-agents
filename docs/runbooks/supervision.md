@@ -122,3 +122,5 @@ The tables stay; nothing else depends on them.
   0.1.16. That text, the unused nudge queue (`guild.supervision_nudges`) and the empty `nudges` field go in a later
   cleanup, once the Mac's sync is reinstalled. Changing the hook or the agents' scripts makes a full release.
 - Codex has no Stop hook. It prints the line with `stop.py line --agent codex --session <thread id>`.
+
+This line was added by a test build on 27 November.
