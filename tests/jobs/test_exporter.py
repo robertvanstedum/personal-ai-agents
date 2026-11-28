@@ -135,3 +135,23 @@ def test_a_duplicate_job_is_published_once(tmp_path):
     identities = [l.rsplit(" ", 1)[0] for l in samples]
     assert len(identities) == len(set(identities))
     assert "minimoi_exporter_invalid 1" in text
+
+
+def test_wrongly_typed_fields_are_skipped_not_fatal(tmp_path):
+    """Codex exporter recheck: light=[] raised TypeError and killed the snapshot."""
+    reg, jobs, hdir = setup(tmp_path)
+    doc = json.loads((hdir / "health-ec2.json").read_text())
+    doc["items"] = [dict(i, light=[]) if i["id"] == "vault-apply" else i for i in doc["items"]]
+    doc["items"].append({"id": "vault-sync", "light": "red", "code": 7})
+    doc["items"].append({"id": "memory-index", "light": "red", "code": "failed", "off_since": 5})
+    (hdir / "health-ec2.json").write_text(json.dumps(doc))
+    text = ex.build(reg, hdir, {"jobs": str(jobs)}, "ec2", ex.Aliases.load(), NOW)
+    assert "minimoi_exporter_invalid 3" in text and 'job_id="vault-apply"' not in text.split("minimoi_job_threshold")[0]
+
+
+def test_a_refusal_is_published_even_when_the_status_file_is_missing(tmp_path):
+    reg, jobs, hdir = setup(tmp_path)
+    seed = reg.get("vault-meaning-seed")
+    (jobs / seed.status_file).unlink()
+    text = ex.build(reg, hdir, {"jobs": str(jobs)}, "ec2", ex.Aliases.load(), NOW)
+    assert 'minimoi_job_last_refusal_timestamp_seconds{host="ec2",job_id="vault-meaning-seed",reason="apply_busy"}' in text

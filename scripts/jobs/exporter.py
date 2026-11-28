@@ -124,15 +124,19 @@ def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: dateti
         snap.add("minimoi_health_report_timestamp_seconds", _ts(report["checked_at"]), host=h)
         published = set()
         for item in report["items"]:
-            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
-                snap.invalid += 1
+            if (not isinstance(item, dict) or not isinstance(item.get("id"), str)
+                    or not isinstance(item.get("light"), str) or item["light"] not in LIGHT
+                    or not isinstance(item.get("code"), str)
+                    or any(item.get(k) is not None and not isinstance(item.get(k), str)
+                           for k in ("last_success_at", "off_since"))):
+                snap.invalid += 1                           # field types checked before any use: one bad entry is skipped
                 continue
             jid = item["id"]
             if jid in published:
                 snap.invalid += 1                           # the first entry for a job wins; later ones are skipped
                 continue
             published.add(jid)
-            snap.add("minimoi_job_light", LIGHT.get(item.get("light"), 3), job_id=jid, host=h)
+            snap.add("minimoi_job_light", LIGHT[item["light"]], job_id=jid, host=h)
             snap.add("minimoi_job_condition", 1, job_id=jid, host=h, code=item.get("code"))
             for metric, key in (("minimoi_job_last_success_timestamp_seconds", "last_success_at"),
                                 ("minimoi_job_off_since_timestamp_seconds", "off_since")):
@@ -148,6 +152,12 @@ def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: dateti
             value = getattr(job, kind)
             if value:
                 snap.add("minimoi_job_threshold_seconds", value, job_id=job.id, kind=kind)
+        # The refusal sidecar is its own observation: read it whether or not the status file is readable.
+        refusal = (status.read_refusal(root, job) if root else None) or (doc or {})
+        ts = _ts(refusal.get("last_refusal_at"))
+        if ts is not None:
+            snap.add("minimoi_job_last_refusal_timestamp_seconds", ts, job_id=job.id, host=host,
+                     reason=refusal.get("last_refusal_reason"))
         if doc is None:
             continue
         progress = doc.get("progress")
@@ -157,11 +167,6 @@ def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: dateti
             if ts is not None:
                 snap.add("minimoi_job_last_progress_timestamp_seconds", ts, job_id=job.id, host=host)
             snap.add("minimoi_job_phase", 1, job_id=job.id, host=host, phase=progress.get("phase"))
-        refusal = status.read_refusal(root, job) or doc     # the sidecar (WS3 C1.2), else fields in the status file
-        ts = _ts(refusal.get("last_refusal_at"))
-        if ts is not None:
-            snap.add("minimoi_job_last_refusal_timestamp_seconds", ts, job_id=job.id, host=host,
-                     reason=refusal.get("last_refusal_reason"))
     snap.add("minimoi_exporter_snapshot_timestamp_seconds", now.timestamp())
     snap.rows.append(("minimoi_exporter_dropped", (), float(snap.dropped)))
     snap.rows.append(("minimoi_exporter_invalid", (), float(snap.invalid)))
