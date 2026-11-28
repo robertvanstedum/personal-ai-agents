@@ -34,6 +34,13 @@ Optional fields (FF-19, #537: one master list of every background job on every h
                              wanted=.. at=..`` line for MC's repository copy (#585); skipped, or a commit other than the
                              one deployed, is "watch"; no file yet is "not watched"
 
+Progress (WS3 C1.2, 28 Nov 2026; judged by ``core.jobs.judge``)
+    progress_required        true: the job's status carries a ``progress`` block and a completed run that has work due
+                             but no progress is not healthy. Needs evidence ``status_file`` and ``idle_allowed_s``
+    idle_allowed_s           how long work may be due with no progress before "no progress" (yellow; twice: red)
+    progress_window          optional {"start": "HH:MM", "end": "HH:MM", "tz": "Area/City"}: the job only runs inside
+                             it, so outside it no progress is expected and idle time is counted from the window start
+
 Loading never touches a status file and never needs the time-zone database (the portal image
 may lack one); ``tests/jobs`` checks the shipped zone names against it.
 """
@@ -81,6 +88,9 @@ class Job:
     retired: bool = False
     status_root: str = "jobs"
     evidence: dict = field(default_factory=lambda: {"kind": "status_file"})
+    progress_required: bool = False
+    idle_allowed_s: int = 0
+    progress_window: dict | None = None
 
     @property
     def overdue_after_s(self) -> int:
@@ -167,6 +177,17 @@ def _evidence(raw: object, where: str) -> dict:
     return out
 
 
+def _window(raw: object, where: str) -> dict:
+    if not isinstance(raw, dict) or set(raw) != {"start", "end", "tz"}:
+        raise RegistryError(f"{where}: progress_window must be {{start, end, tz}}")
+    if not (isinstance(raw["start"], str) and _AT.match(raw["start"]) and isinstance(raw["end"], str)
+            and _AT.match(raw["end"]) and raw["start"] != raw["end"]):
+        raise RegistryError(f"{where}: progress_window start and end must be different HH:MM times")
+    if not isinstance(raw["tz"], str) or not _TZ.match(raw["tz"]):
+        raise RegistryError(f"{where}: progress_window tz must be a zone name")
+    return {"start": raw["start"], "end": raw["end"], "tz": raw["tz"]}
+
+
 def parse(doc: object) -> Registry:
     if not isinstance(doc, dict) or doc.get("schema_version") != SCHEMA_VERSION:
         raise RegistryError("not a scheduled-jobs registry (schema_version 1)")
@@ -212,13 +233,23 @@ def parse(doc: object) -> Registry:
         active = parse_time(active_raw) if active_raw is not None else None
         if active_raw is not None and active is None:
             raise RegistryError(f"{where}: active_from must be an ISO time")
+        progress_required = raw.get("progress_required", False)
+        if not isinstance(progress_required, bool):
+            raise RegistryError(f"{where}: progress_required must be true or false")
+        idle_allowed = _int(raw, "idle_allowed_s", where, minimum=60) if (progress_required or "idle_allowed_s" in raw) else 0
+        if progress_required and evidence["kind"] != "status_file":
+            raise RegistryError(f"{where}: progress_required needs status_file evidence")
+        window = _window(raw.get("progress_window"), where) if "progress_window" in raw else None
+        if window is not None and not progress_required:
+            raise RegistryError(f"{where}: progress_window needs progress_required")
         jobs.append(Job(
             id=job_id, name=_text(raw, "name", where), host=host, schedule=_schedule(raw.get("schedule"), where),
             expected_every_s=expected, missed_after_s=missed, stuck_after_s=_int(raw, "stuck_after_s", where),
             status_file=status_file, owner=_text(raw, "owner", where), runbook=_text(raw, "runbook", where),
             grace_s=_int(raw, "grace_s", where, minimum=0) if "grace_s" in raw else DEFAULT_GRACE_S,
             active_from=active, healthy=healthy.strip(), retired=retired, status_root=status_root,
-            evidence=evidence))
+            evidence=evidence, progress_required=progress_required, idle_allowed_s=idle_allowed,
+            progress_window=window))
     return Registry(tuple(jobs))
 
 

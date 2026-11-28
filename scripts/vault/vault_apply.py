@@ -141,7 +141,7 @@ def cmd_plan(a) -> int:
     return EXIT_OK
 
 
-def _finish(s, job, running, state, code, summary, results, run_id, alert_code=None) -> None:
+def _finish(s, job, running, state, code, summary, results, run_id, alert_code=None, progress=None) -> None:
     finished = datetime.now(timezone.utc)
     try:
         next_due = schedule.next_fire(job.schedule, finished)
@@ -157,7 +157,7 @@ def _finish(s, job, running, state, code, summary, results, run_id, alert_code=N
         if alert_result not in status.ALERT_VALUES:
             alert_result = alert.NOT_SENT
     status.finish_run(s["jobs_root"], job, running, state=state, now=finished, exit_code=code, summary=summary[: status.SUMMARY_MAX],
-                      results=results, next_due_by=next_due, alert=alert_result)
+                      results=results, next_due_by=next_due, alert=alert_result, progress=progress)
 
 
 def cmd_run(a) -> int:
@@ -247,7 +247,10 @@ def cmd_seed(a) -> int:
         admission = apply.P.Admission(s["vault_root"], owner_uid=os.geteuid() if a._allow_non_root else 0, reader_uid=s["reader_uid"],
                                      reader_gid=s["reader_gid"]).__enter__()
     except backup.BackupError as exc:
-        return refuse("apply_busy" if exc.code == "refresh_busy" else exc.code)
+        reason = "apply_busy" if exc.code == "refresh_busy" else exc.code
+        if reason == "apply_busy":
+            _note_refusal(s, a, reason)              # recorded on the status file: contention is never silent (WS3 C1.2)
+        return refuse(reason)
     try:
         job = job_definition(a.registry, SEED_JOB_ID)
         started = datetime.now(timezone.utc)
@@ -256,7 +259,7 @@ def cmd_seed(a) -> int:
             running = status.start_run(s["jobs_root"], job, run_id, started)
         except Exception:                                                       # noqa: BLE001
             return refuse("status_file_not_writable")
-        results, state, code, summary = {}, "failed", EXIT_FAIL, "seed failed"
+        results, state, code, summary, progress = {}, "failed", EXIT_FAIL, "seed failed", None
         try:
             out = apply.run_seed(vault_root=s["vault_root"], index_runner=runner, owner_uid=os.geteuid() if a._allow_non_root else 0,
                                  reader_uid=s["reader_uid"], reader_gid=s["reader_gid"], slice_s=a.slice_s,
@@ -264,6 +267,7 @@ def cmd_seed(a) -> int:
                                  allow_outside_window=a.allow_outside_window)
             results = {"seed": out["code"], "complete": "yes" if out.get("complete") else "no",
                        "embedded_chunks": str(out.get("embedded_chunks", 0)), "release": str(out.get("release", "none")).lower()}
+            progress = seed_progress(out, running.get("progress"), datetime.now(timezone.utc))
             state, code = "ok", EXIT_OK
             summary = f"{out['code']}: {out.get('embedded_chunks', 0)} chunks embedded{', seed complete' if out.get('complete') else ''}"
         except backup.BackupError as exc:
@@ -275,11 +279,33 @@ def cmd_seed(a) -> int:
         except Exception as exc:                                                # noqa: BLE001
             results["seed"] = f"exception_{type(exc).__name__.lower()}"[:40]
             summary = "failed: unexpected error"
-        _finish(s, job, running, state, code, summary, results, run_id, alert_code=results.get("seed"))
+        _finish(s, job, running, state, code, summary, results, run_id, alert_code=results.get("seed"), progress=progress)
         print(summary)
         return code
     finally:
         admission.__exit__(None, None, None)
+
+
+def seed_progress(out: dict, previous: dict | None, now: datetime) -> dict:
+    """The seed's ``progress`` block (WS3 C1.2) from one slice's result. ``work_due`` 1 means "more to embed, count unknown"
+    (the indexer reports what it did, not what is left). ``last_progress_at`` moves only when the slice embedded something."""
+    prior = previous if isinstance(previous, dict) else {}
+    last = prior.get("last_progress_at")
+    code = out.get("code")
+    if code in ("ok", "seed_not_needed"):
+        return {"work_due": 0, "last_progress_at": status.iso(now) if code == "ok" else last, "phase": "complete"}
+    if code == "outside_window":
+        return {"work_due": int(prior.get("work_due") or 0), "last_progress_at": last, "phase": "outside_window"}
+    if int(out.get("embedded_chunks", 0) or 0) > 0:
+        last = status.iso(now)
+    return {"work_due": 1, "last_progress_at": last, "phase": "active"}
+
+
+def _note_refusal(s, a, reason: str) -> None:
+    try:
+        status.record_refusal(s["jobs_root"], job_definition(a.registry, SEED_JOB_ID), reason, datetime.now(timezone.utc))
+    except Exception:                                                       # noqa: BLE001
+        pass                                                                # a refusal note never turns a refusal into a failure
 
 
 def cmd_seed_donor(a) -> int:
