@@ -12,6 +12,9 @@ proposed, and then the platform acts and verifies:
   issue_update       one change to an existing issue (title, body, complete label set, open/closed), as shown
   data_repair        a public GitHub issue naming the records by ref only (no names or emails)
   delegate_research  the job starts from the owner's own note of the proposing turn (never model text)
+  delegate_build     the job's brief is the design the card showed, at its exact revision, with the owner's own
+                     note (#693); only a yes that names the proposal's code starts it, and a design that has
+                     changed since the card starts nothing
   access_invite      a Meu Português guest request is recorded and granted through guest_requests.grant;
                      the temporary password goes only to the invitee's approval email (and, if that
                      fails, the owner's Telegram notice, as on the Operate grant path), never to a reply
@@ -38,6 +41,9 @@ KINDS = {"lesson": "lessons.adopt", "guest_reject": "guest.reject_request", "iss
          "issue_create": "issue.create", "issue_update": "issue.update",
          "data_repair": "issue.create_data_repair", "delegate_research": "delegate.start_research",
          "access_invite": "access.invite_user", "delegate_build": "delegate.start_build"}
+# Kinds a plain "yes" never approves, whatever turn it comes in: the owner names the code (Robert, 27 Nov 2026, #693:
+# "a plain yes is easy to give by accident"). A build is public, paid work on a branch.
+NAMED_ONLY_KINDS = frozenset({"delegate_build"})
 _YES = re.compile(r"^(?:yes|yes,?\s+please|ja|ja,?\s+bitte|yep|yeah|ok(?:ay)?|sure|go\s+ahead|do\s+it|please\s+do|confirm(?:ed)?|"
                   r"approve(?:d)?)(?:[,.!]?\s+(?:please|thanks|thank\s+you|do\s+it|go\s+ahead))?\s*[.!]?$", re.I)
 _NO = re.compile(r"^(?:no|nope|no,?\s+thanks|cancel|don['’]t|do\s+not|never\s*mind)\s*[.!]?$", re.I)
@@ -335,6 +341,10 @@ class ToolProposals:
                 if p is not None and p["display_state"] != "published":
                     cur.execute("SELECT * FROM guild.mc_tool_proposals WHERE proposal_id=%s", (p["proposal_id"],))
                     p = cur.fetchone()                 # reconciled just now: re-read its published time
+                if p is not None and code is None and p["kind"] in NAMED_ONLY_KINDS:
+                    return _reply(f"A build starts only when you name its code. Reply “yes {p['code']}” to start "
+                                  f"proposal {p['code']} (it is shown above), or “no” to drop it. Nothing was done.",
+                                  "needs_code", proposal=p["code"])
                 # A plain yes approves only what the platform showed in the turn just before, and never a
                 # proposal made after reading text anyone can write; otherwise Robert names it (review P1-1).
                 if p is not None and code is None and (p["untrusted_input"] or not self._next_turn(cur, p, turn_key)):
@@ -737,12 +747,27 @@ class ToolProposals:
             return _reply(f"I asked {who} to start building but cannot confirm it started. Do not ask again yet; "
                           "check this conversation's jobs first.", "unknown")
         receipt = self._finish(effect, "delegate_build", {"state": state, "job_id": job_id}, state == "started")
+        if state == "design_changed":
+            return _reply("Nothing was started: the design is no longer the one on the card (the working document was "
+                          "changed, replaced by a newer revision, or is gone). Ask me to propose the build again and "
+                          "check the new card.", "failed", code="design_changed",
+                          receipt_id=str(receipt["receipt_id"]))
+        if state == "design_unavailable":
+            return _reply("Nothing was started: the design could not be read again to check it is the one on the card. "
+                          "Ask me to propose the build again in a moment.", "failed", code="design_unavailable",
+                          receipt_id=str(receipt["receipt_id"]))
         if state != "started":
             return _reply(f"{who}'s build could not be started, so nothing is running.", "failed",
                           receipt_id=str(receipt["receipt_id"]))
-        return _reply(f"Started: {who} is building from your message in a fresh copy of the repository, on a branch "
-                      "of its own (no push, no merge, no release). Its status shows here; its result and changes come "
-                      "back here for your review. Say stop to cancel.", "verified", receipt_id=str(receipt["receipt_id"]))
+        design = p["payload"]
+        from .build_brief import COST_CAP_USD, MINUTES
+        return _reply(f"Started: {who} is building the design “{design.get('design_title')}”, revision "
+                      f"{design.get('design_revision')}, in a fresh copy of the repository on its own branch mc/…. The "
+                      "runner runs the tests itself and opens a draft pull request only if it is set up to publish. "
+                      f"Nothing is merged, released or deployed. Cost cap {COST_CAP_USD} USD, time limit {MINUTES} "
+                      "minutes. The result comes back into this conversation when it ends; Master Craftsman is not told, "
+                      "so ask it how the build went. Say stop to cancel.", "verified",
+                      receipt_id=str(receipt["receipt_id"]), job_id=job_id)
 
     def _guest_request(self, p):
         """The owner's own invite as a guest request (domain = the app), returned as its ref. An open request with the

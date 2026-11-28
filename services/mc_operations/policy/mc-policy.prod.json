@@ -1,6 +1,6 @@
 {
   "schema": "mc-policy/1",
-  "revision": "mc-prod-20261125-work-documents",
+  "revision": "mc-prod-20261127-delegate-result",
   "rules": [
     {
       "capability": "host.health",
@@ -933,6 +933,24 @@
       "approval": "none",
       "source_requirement": "current_owner_turn",
       "handler": "initiative_read_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "delegation.result.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "delegate_result_v1",
       "verify": null,
       "undo": null,
       "egress": "none",

@@ -1029,6 +1029,24 @@
       "max_operations_per_turn": 5
     },
     {
+      "capability": "delegation.result.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "delegate_result_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
       "capability": "vault.mc.search",
       "version": 1,
       "actors": [

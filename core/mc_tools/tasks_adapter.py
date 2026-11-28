@@ -165,6 +165,12 @@ class TasksAdapter:
         except TaskServiceUnavailable:
             return result("unknown", "work_unavailable", "Canonical working documents could not be read. Do not infer that no saved work exists.")
 
+    def read_design(self, artifact_id, revision):
+        """The canonical store's answer for one working document at one exact revision (#693: the design of a build
+        proposal, read again when Robert approves it). The same seat, scope and path as work_read; raises
+        TaskServiceRefused or TaskServiceUnavailable, and the caller decides what an unread design means."""
+        return self.client.work_artifacts("read", {"artifact_id": artifact_id, "revision": revision}, scope=self.scope)
+
     def initiative_read(self, host, args, caller):
         """#680: CoS's professional-initiative store, read-only for MC. The read marks the turn as having read untrusted
         data, as work_read does; MC's seat binding carries only ``professional_initiatives: [read]``."""

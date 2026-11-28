@@ -11,6 +11,11 @@
   Keychain (service minimoi_delegation_runner, account <environment>); production keeps only its SHA-256.
 * Before each claim the mirror is fetched, so the dispatcher's exact commit is present.
 * Actors: only those with a real budget adapter (Claude Code today). Scopes: research by default; build with --scopes research,build.
+* A completed build is committed by the runner on its own branch ``mc/<job>`` and tested by the runner. With
+  ``--publish-repo owner/name`` the runner then pushes that one branch and opens a draft pull request (publish.py),
+  with the token ``--publish-credential`` names: ``gh`` (default: ``gh auth token``, the Mac's own GitHub login, asked
+  at publish time by the runner, never by the agent) or ``keychain`` (a token for the one repository: service
+  minimoi_delegation_publish, account <environment>). Nothing merges.
 * Each pass is one ``run_once``; a failed pass is logged by type and the loop continues.
 
 Subcommands (host runtime spec v0.5 §3.3: one binary, two configurations). Without one, or with ``run`` and the flags
@@ -74,6 +79,53 @@ def _keychain_token(environment: str) -> str:
     return value
 
 
+PUBLISH_SERVICE = "minimoi_delegation_publish"
+
+
+def _secret(argv):
+    """One secret printed by a command, or None. Run with the runner's own environment, never the child's."""
+    try:
+        value = subprocess.run(argv, capture_output=True, text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return value if 20 <= len(value) <= 512 else None
+
+
+def _gh_token(environment: str):
+    """``gh``: the Mac's existing GitHub login (Robert, 27 Nov 2026: for now), read with ``gh auth token`` each time a
+    publish starts and held in memory for that call only. The runner asks; the delegated agent never can (the GitHub
+    CLI is denied to it and its environment carries no credential)."""
+    return _secret(["gh", "auth", "token"])
+
+
+def _keychain_publish_token(environment: str):
+    """``keychain``: the narrower choice, kept for later: a fine-grained GitHub token for the one repository
+    (Contents: write, Pull requests: write), which Robert creates himself and puts in the login Keychain (service
+    minimoi_delegation_publish, account <environment>)."""
+    return _secret(["security", "find-generic-password", "-s", PUBLISH_SERVICE, "-a", environment, "-w"])
+
+
+PUBLISH_CREDENTIALS = {"gh": _gh_token, "keychain": _keychain_publish_token}
+
+
+def _publisher(repo: str, environment: str, credential: str = "gh", sources=None):
+    """The publisher for ``--publish-repo owner/name`` with the token source ``--publish-credential`` names. The
+    source is asked again at every publish. A source with no token now is said in one plain line; the runner still
+    starts, and such a build completes with ``publish: {state: refused, code: no_publish_credential}``."""
+    from . import publish, workspace
+    source = (sources or PUBLISH_CREDENTIALS)[credential]
+    try:
+        publisher = publish.Publisher(repo, lambda: source(environment), base_env=workspace.child_env)
+    except ValueError:
+        raise SystemExit("--publish-repo takes owner/name")
+    if source(environment) is None:
+        where = "`gh auth token` gave none" if credential == "gh" else \
+            f"none in the Keychain (service {PUBLISH_SERVICE}, account {environment})"
+        print(f"no publish credential ({credential}: {where}): builds will be committed and tested but NOT published "
+              "until there is one", flush=True)
+    return publisher
+
+
 def _fetch(mirror: Path):
     subprocess.run(["git", "--git-dir", str(mirror), "fetch", "--quiet", "origin", "+refs/heads/*:refs/heads/*"],
                    check=False, timeout=120, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
@@ -113,6 +165,14 @@ def _run_v1(argv=None) -> int:
     # research (read-only) by default; build only when the operator enables it here AND Robert confirmed a build
     # proposal for the job (commands.py: fresh checkout, edits only, no push or GitHub).
     p.add_argument("--scopes", default="research", help="comma list from: research, build")
+    # A completed build (#693): the runner commits it on mc/<job> and runs the tests itself. With --publish-repo and a
+    # publish credential (--publish-credential) it also pushes that one branch and opens a draft pull request; without
+    # --publish-repo nothing leaves the Mac (today's behaviour). --test-python: the interpreter that has pytest and the project's
+    # dependencies, for the runner's own test run (default: the runner's own interpreter).
+    p.add_argument("--publish-repo", metavar="OWNER/NAME")
+    p.add_argument("--publish-credential", choices=sorted(PUBLISH_CREDENTIALS), default="gh",
+                   help="where the runner gets the token at publish time: gh (`gh auth token`) or keychain")
+    p.add_argument("--test-python", type=Path)
     args = p.parse_args(argv)
     mirrors = {}
     for item in args.mirror:
@@ -133,6 +193,10 @@ def _run_v1(argv=None) -> int:
                               workspace_root=args.workspace_root.expanduser(),
                               artifact_root=args.artifact_root.expanduser(), max_cost_usd=args.max_cost_usd,
                               cost_enforcers=dict(ENFORCERS))
+    if args.test_python:
+        cfg.test_command = (str(args.test_python.expanduser()), *runner.DEFAULT_TEST_COMMAND[1:])
+    if args.publish_repo and "build" in scopes:
+        cfg.publisher = _publisher(args.publish_repo, args.environment, args.publish_credential)
     if args.door:
         from core.mc_delegation_dispatcher.door import HttpDispatcher
         dispatcher = HttpDispatcher(args.door, _keychain_token(args.environment), cfg.artifact_root)

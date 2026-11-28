@@ -82,15 +82,61 @@ A stalled session doesn't resume by itself. Robert, or MC on his word, hands it 
 
 ## MC hands work to Claude Code or Codex on the Mac (delegation)
 
-MC proposes delegated research (`minimoi_delegate_research`, agent `claude-code` or `codex`). Robert confirms, and the
+MC proposes delegated research (`minimoi_delegate_research`, agent `claude-code` or `codex`), or a build for Claude
+Code (see "Builds" below). Robert confirms, and the
 job is queued in prod's `guild.mc_delegations`. The Mac runner claims it through
 `/internal/mc/v1/delegation-runner`, which is outbound HTTPS from the Mac; prod's database is never exposed. The
-runner works in a fresh read-only checkout of `main` and returns the answer as the job's result note in that Guild
-conversation.
+runner works in a fresh checkout of `main` (read-only for research) and returns the answer as the job's result note
+in that Guild conversation.
 
-- Limits: Claude Code is capped at 2 USD per job. Codex runs on Robert's plan, research only, read-only sandbox,
-  30 minutes per job (Robert, 26 Oct: "30 minutes and we adjust if needed to be higher":
+- Limits: Claude Code research is capped at 2 USD per job. Codex runs on Robert's plan, research only, read-only
+  sandbox, 30 minutes per job (Robert, 26 Oct: "30 minutes and we adjust if needed to be higher":
   `CODEX_DEADLINE_S` in `core/mc_delegation_dispatcher/relay.py`). One job at a time.
+- Builds (#693; Robert's decisions of 27 Nov 2026). A build goes to Claude Code only, after Robert's yes to that
+  exact proposal, capped at 5 USD and 60 minutes (`BUILD_COST_CAP_USD`, `BUILD_DEADLINE_S` in the same file). What
+  happens on the Mac, in order:
+  1. A fresh clone at the exact commit of `main`, never reused, on a new local branch `mc/<job>`, where `<job>` is
+     the first 8 hex digits of the request id plus `-g<generation>` (for example `mc/0f3a9c2e-g1`). The clone has no
+     remote and refuses pushes.
+  2. Claude Code edits files there. It may run a fixed list of commands and nothing else: `python -m pytest`,
+     `python3 -m pytest`, `pytest`, `git status`, `git diff`, `git log`, `git add`, `node --check`. `git push`, `gh`,
+     `curl`, `wget`, web fetch and web search are denied by name; any other shell command is refused. It gets no
+     credential and does not commit.
+  3. After it exits with success, the runner itself commits everything on the branch as
+     `MiniMoi delegated build <noreply@minimoi.ai>`, with the message `Delegated build <job>` (plus `(#n)` when the
+     brief names an issue) and a `Co-Authored-By: Claude` line. No changes: no commit.
+  4. The runner then runs the tests itself: `pytest -q -x --no-header -p no:cacheprovider` on the `tests/<name>`
+     directories that match the changed source paths and on changed test files, for at most 10 minutes. It records
+     the command, the exit code, the last lines and the duration. If no test path matches, the record says
+     `no_tests_selected`. A failing or timed-out test run does not fail the job; it is reported.
+  5. Only when the runner was started with `--publish-repo` (the installer passes it): the runner pushes that one
+     branch to GitHub and opens a draft pull request whose text states the job, the base commit, the start of the
+     brief and the runner's own test result. A failed publish does not fail the job; the result says
+     `not published: <code>`.
+  6. The result note ends with fixed lines: branch, commit, changed yes/no, the test command with its exit code and
+     last line, and the pull request link or why there is none. The patch stays on the Mac as before
+     (`~/minimoi-runtime/runner-prod/artifacts/<task>.patch`), with the test record beside it (`<task>.tests`).
+- The publish credential. The runner gets it at publish time, outside Claude Code, keeps it in memory for that one
+  publish and writes it nowhere: not on a command line, not in git configuration, not in a log, a stage file, the
+  result or an artifact. `--publish-credential` chooses the source:
+  - `gh` (the default, for now): the Mac's existing GitHub login, read with `gh auth token`. That login can write to
+    every repository Robert owns. The runner uses it for this one repository, this one branch and one draft pull
+    request.
+  - `keychain` (narrower, for later): a fine-grained token limited to `robertvanstedum/personal-ai-agents` with
+    Contents: write and Pull requests: write, which Robert creates himself and stores with
+    `security add-generic-password -s minimoi_delegation_publish -a prod -w`. Install with
+    `MINIMOI_PUBLISH_CREDENTIAL=keychain bash scripts/mc_host/install_delegation_runner.sh`.
+  - No credential from the chosen source: the build still completes, and its result says
+    `not published: no_publish_credential`.
+  - Issue #695 will replace this step with a central GitHub service; it lives in one module,
+    `core/mc_delegation_runner/publish.py`.
+- What a build never does: merge, mark a pull request ready, review or approve, release, deploy to any environment,
+  force-push, push any branch other than its own `mc/<job>`, push a tag, or delete a branch. There is no code for
+  any of these. A pull request for the branch is looked up before one is opened, so a runner restart mid-publish
+  opens no second one. Stop pressed before the publish step means nothing is pushed.
+- The runner's own test run needs an interpreter with pytest and the project's dependencies: the installer passes
+  `--test-python` with `MINIMOI_BUILD_TEST_PYTHON`, or the installing checkout's `venv/bin/python` when it exists.
+  Without one the test record will show that pytest could not run.
 - Codex runs with `--ignore-user-config`. The Mac user's configured model needs a newer CLI (26 Oct), and a
   delegated job should carry none of his settings or MCP servers anyway.
 - Turn on, after this is on main:

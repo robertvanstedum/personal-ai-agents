@@ -118,8 +118,12 @@ HANDLERS = {
                                     "lesson_readback_v1", "none"),
     "research_v1": Handler("minimoi_delegate_research", "delegate.start_research", frozenset({3}),
                            "job_started_v1", "delegation"),
-    # Robert's yes to MC's build proposal: a build job from his own note (fresh checkout, no push) — tier 3 only.
+    # Robert's yes (naming the proposal's code) to MC's build proposal: a build job whose brief is the design he was shown at
+    # one exact revision, with his own note (#693) — tier 3 only.
     "build_v1": Handler("minimoi_delegate_build", "delegate.start_build", frozenset({3}), "job_started_v1", "delegation"),
+    # #693: the state and result of a delegated job of this conversation, read-only. Named "delegation." so the
+    # "delegate." floor (starting paid work, tier 3 only) stays what it is; a read starts nothing.
+    "delegate_result_v1": Handler("minimoi_delegate_result", "delegation.result.read", frozenset({1}), None, "none"),
     "access_invite_v1": Handler("minimoi_access_invite", "access.invite_user", frozenset({3}), "account_readback_v1",
                                 "email"),
 }

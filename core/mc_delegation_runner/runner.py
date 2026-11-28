@@ -27,6 +27,12 @@ the MiniMoi conversation; this runner only executes what it claimed:
   (``cost_enforcers[actor].apply(argv, env, cap_usd)``); otherwise the task is refused as
   unenforceable rather than run under a cap nobody checks.
 * Artifacts carry author, sha256, size and ``review_status: unreviewed``.
+* A build that completed (#693; version 1 only) is then finished by the runner itself, never by the agent:
+  it commits what the agent left on the job's own branch ``mc/<job>`` under a fixed identity, runs a fixed test
+  command and records the real result, and, only when a publisher is configured, pushes that one branch and opens
+  a draft pull request (publish.py). Each step has its own durable stage (``committed``, ``tested``,
+  ``published``), so a reclaim never repeats a finished step. A failing test run or a failed publish is reported
+  in the result and does not change the job's status. Nothing merges.
 """
 from __future__ import annotations
 
@@ -65,6 +71,11 @@ class RunnerConfig:
     max_output_bytes: int = 2 * 1024 * 1024
     capabilities: dict = field(default_factory=dict)
     runtime: object = None              # version 2 (spec v0.5): the HostRuntime whose pass this is; None is version 1
+    # A completed build (#693, version 1): the runner's own test run, and the optional push and draft pull request.
+    test_command: tuple = None          # None: DEFAULT_TEST_COMMAND; the selected test paths are appended
+    test_timeout_s: float = 600.0
+    publisher: object = None            # publish.Publisher, or None: nothing is ever pushed
+    publish_base: str = "main"
 
     def caps(self) -> dict:
         return {"actors": list(self.actors), "scopes": list(self.scopes),
@@ -282,19 +293,312 @@ class _BoundedCapture:
             pass
 
 
-def _collect(cfg, env, task, task_dir, status, exit_code) -> list:
+def _collect(cfg, env, task, task_dir, status, exit_code, build=None) -> list:
     log_path = cfg.artifact_root / f"{task}.log"
     data = log_path.read_bytes()[:cfg.max_output_bytes] if log_path.exists() else b""
     artifacts = [_artifact(cfg, task, "output", data, env.actor)]
     if env.scope == "build" and task_dir.exists():     # evidence even when completion is unknown
-        patch, _ = workspace.collect_diff(task_dir, env.ref)
+        patch, _ = workspace.collect_diff(task_dir, env.ref, committed=bool(build))
         artifacts.append(_artifact(cfg, task, "patch", patch, env.actor))
+    if build:                                          # the runner's own records: its test run, and the footer
+        tests = build.get("tests") or _no_tests("no_record")
+        artifacts.append(_artifact(cfg, task, "tests", json.dumps(tests, sort_keys=True).encode(), RUNNER))
+        artifacts.append(_artifact(cfg, task, "summary", build_footer(build).encode(), RUNNER))
     _write_json(_stage_path(cfg, task), {"stage": "artifacts", "status": status, "exit_code": exit_code,
-                                         "artifacts": artifacts})
+                                         "artifacts": artifacts, **({"build": build} if build else {})})
     return artifacts
 
 
-def _resume(dispatcher, cfg, env, task, stage) -> dict:
+# ── A completed build: the runner's own commit, test run and optional publish (#693, version 1) ────────────────────
+RUNNER = "runner"
+DEFAULT_TEST_COMMAND = (sys.executable, "-m", "pytest", "-q", "-x", "--no-header", "-p", "no:cacheprovider")
+BUILD_STAGES = ("exited", "committed", "tested", "published")
+TEST_PATHS_MAX, TEST_SUMMARY_LINES, TEST_SUMMARY_CHARS, TEST_TAIL_BYTES = 20, 40, 4000, 64 * 1024
+DETAIL_MAX = 6000                       # the door takes a detail of at most 8192 characters of JSON
+BRIEF_QUOTE_CHARS, FOOTER_MARK = 1500, "--- Delegated build ---"
+_TEST_PATH = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]*$")
+_ISSUE = re.compile(r"(?:\bissue\s+#?|#)([1-9][0-9]{0,5})\b", re.IGNORECASE)
+PR_NOTICE = "Opened by the MiniMoi delegation runner after the owner's approval. Draft: not reviewed, not merged."
+
+
+def job_short(request_id, generation) -> str:
+    return workspace.branch_name(request_id, generation)[len("mc/"):]
+
+
+_DESIGN_TITLE = re.compile(r"^--- Approved design: (.{1,160}?) \(revision [0-9]+, sha256 [0-9a-f]{12,64}\) ---$", re.M)
+
+
+def _issue_number(brief):
+    """The first issue number the brief names ("#693", "issue 693"), or None. Used for wording only."""
+    m = _ISSUE.search(brief or "")
+    return int(m.group(1)) if m else None
+
+
+def commit_message(env) -> str:
+    n = _issue_number(env.brief)
+    return (f"Delegated build {job_short(env.request_id, env.generation)}" + (f" (#{n})" if n else "")
+            + "\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n")
+
+
+def select_tests(task_dir, changed) -> list:
+    """Test paths for what changed, cheaply: for each changed source path, ``tests/<name>`` for its first two
+    directory names when that directory exists (core/mc_delegation_runner/x.py → tests/mc_delegation_runner), plus
+    each changed test file under ``tests/`` that still exists and is not already inside a chosen directory. At most
+    TEST_PATHS_MAX; anything that is not a plain relative path is left out."""
+    task_dir, dirs, files = Path(task_dir), [], []
+    for path in changed:
+        if not _TEST_PATH.fullmatch(path) or ".." in path.split("/"):
+            continue
+        parts = path.split("/")
+        if parts[0] == "tests":
+            name = parts[-1]
+            if name.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py")) \
+                    and (task_dir / path).is_file():
+                files.append(path)
+            continue
+        for name in parts[:-1][:2]:
+            candidate = f"tests/{name}"
+            if candidate not in dirs and (task_dir / candidate).is_dir():
+                dirs.append(candidate)
+    files = [f for f in dict.fromkeys(files) if not any(f.startswith(d + "/") for d in dirs)]
+    return (dirs + files)[:TEST_PATHS_MAX]
+
+
+def _tail_text(data: bytes) -> str:
+    lines = data.decode("utf-8", errors="replace").replace("\r", "").splitlines()
+    return "\n".join(lines[-TEST_SUMMARY_LINES:])[-TEST_SUMMARY_CHARS:]
+
+
+def _one_line(text, limit=200) -> str:
+    for line in reversed((text or "").splitlines()):
+        if line.strip():
+            return " ".join(line.split()).strip("= ")[:limit]
+    return ""
+
+
+def _no_tests(note) -> dict:
+    return {"command": None, "exit_code": None, "summary": "", "duration_s": 0.0, "timed_out": False, "note": note}
+
+
+def _run_tests(dispatcher, cfg, env, task_dir, paths, now, sleep):
+    """The runner's own test run: (record, None), or (record, "cancelled") when Stop was pressed, or (None,
+    "lease_lost" | "control_lost"). The command is fixed (cfg.test_command) plus the selected paths, with the
+    scrubbed child environment, in its own process group, stopped at cfg.test_timeout_s or the job's deadline,
+    whichever is first. Its output is kept only as a bounded tail. The lease is renewed while it runs."""
+    command = [*(cfg.test_command or DEFAULT_TEST_COMMAND), *paths]
+    limit = min(float(cfg.test_timeout_s), (env.deadline - now()).total_seconds())
+    if limit <= 0:
+        return _no_tests("deadline_reached"), None
+    tail, lock = bytearray(), threading.Lock()
+
+    def drain(pipe):
+        try:
+            while True:
+                chunk = os.read(pipe.fileno(), 65536)
+                if not chunk:
+                    return
+                with lock:
+                    tail.extend(chunk)
+                    del tail[:-TEST_TAIL_BYTES]
+        except (OSError, ValueError):
+            return
+
+    started, flag, timed_out = time.monotonic(), None, False
+    try:
+        proc = subprocess.Popen(command, cwd=task_dir, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, env=workspace.child_env(), start_new_session=True)
+    except OSError:
+        return {"command": command, "exit_code": None, "summary": "the test command could not be started",
+                "duration_s": 0.0, "timed_out": False, "note": "test_command_unavailable"}, None
+    reader = threading.Thread(target=drain, args=(proc.stdout,), daemon=True)
+    reader.start()
+    try:
+        last_renew = time.monotonic()
+        while proc.poll() is None:
+            if time.monotonic() - started >= limit:
+                timed_out = True
+                break
+            if dispatcher.cancel_requested(env.request_id, env.generation):
+                flag = "cancelled"
+                break
+            if time.monotonic() - last_renew >= cfg.lease_renew_s:
+                if not dispatcher.renew(env.request_id, env.generation):
+                    flag = "lease_lost"
+                    break
+                last_renew = time.monotonic()
+            sleep(cfg.tick_s)
+    except Exception:
+        flag = "control_lost"
+    finally:
+        _kill_group(proc.pid, cfg.kill_grace_s, proc)
+        reader.join(cfg.kill_grace_s)
+        try:
+            proc.stdout.close()
+        except OSError:
+            pass
+    if flag in ("lease_lost", "control_lost"):
+        return None, flag
+    with lock:
+        summary = _tail_text(bytes(tail))
+    stopped = timed_out or flag == "cancelled"
+    record = {"command": command, "exit_code": None if stopped else proc.returncode, "summary": summary,
+              "duration_s": round(time.monotonic() - started, 1), "timed_out": timed_out}
+    if flag == "cancelled":
+        record["note"] = "cancelled"
+    return record, flag
+
+
+def tests_line(tests) -> str:
+    """One line for the footer and the pull request: command | exit code | the run's last line."""
+    if not tests or tests.get("command") is None:
+        return f"not run ({(tests or {}).get('note') or 'no_record'})"
+    code = "none" if tests.get("exit_code") is None else str(tests["exit_code"])
+    last = (f"timed out after {tests.get('duration_s')} s" if tests.get("timed_out")
+            else tests.get("note") if tests.get("note") else _one_line(tests.get("summary")) or "no output")
+    return f"{' '.join(tests['command'])[:600]} | exit {code} | {last}"
+
+
+def build_footer(build) -> str:
+    """The fixed lines the owner reads under the agent's answer (dispatcher_adapter.output_of appends them)."""
+    publish = build.get("publish") or {}
+    pr = publish.get("pr_url") if publish.get("state") == "published" else \
+        f"not published: {publish.get('code') or publish.get('state') or 'unknown'}"
+    return "\n".join([FOOTER_MARK,
+                      f"Branch: {build.get('branch')}",
+                      f"Commit: {build.get('commit') or 'none'}",
+                      f"Changed: {'yes' if build.get('changed') else 'no'}",
+                      f"Tests: {tests_line(build.get('tests'))}",
+                      f"Pull request: {pr}"])
+
+
+def pr_text(env, build) -> tuple:
+    """(title, body) of the draft pull request, from fixed fields only."""
+    job, n, tests = job_short(env.request_id, env.generation), _issue_number(env.brief), build["tests"]
+    # The approved design's own title when the brief names one (#693: "--- Approved design: <title> (revision N, ..."),
+    # else the brief's first line. The first live run (27 Nov) showed the brief's fixed header as the title.
+    m = _DESIGN_TITLE.search(env.brief or "")
+    first = _one_line(m.group(1) if m else (env.brief.strip().splitlines()[0] if env.brief.strip() else ""), 100)
+    title = (f"{first} " if first else "") + f"(delegated build {job}" + (f", #{n}" if n else "") + ")"
+    quoted = "\n".join("> " + line for line in env.brief[:BRIEF_QUOTE_CHARS].splitlines())
+    code = "none" if tests.get("exit_code") is None else tests["exit_code"]
+    fence = "`" * 3
+    body = "\n".join([
+        PR_NOTICE, "",
+        f"- Job: `{env.request_id}` generation {env.generation}",
+        f"- Base commit: `{env.ref}`",
+        f"- Branch commit: `{build.get('commit')}`", "",
+        "## Brief (first 1500 characters)", "", quoted, "",
+        "## Tests run by the runner", "",
+        f"- Command: `{' '.join(tests['command'])}`" if tests.get("command") else
+        f"- Not run: {tests.get('note') or 'no_record'}",
+        f"- Exit code: {code}" + (" (timed out)" if tests.get("timed_out") else ""), "",
+        fence, (tests.get("summary") or "").replace(fence, "'" * 3), fence, ""])
+    return title, body
+
+
+def _build_steps(dispatcher, cfg, env, task, task_dir, stage, now, sleep):
+    """Finish a completed build from its last durable stage: (status, build), or "lease_lost"/"control_lost" (nothing
+    is reported for a lease this runner no longer holds). ``build`` is {branch, commit, changed, tests, publish}."""
+    status, exit_code = stage["status"], stage.get("exit_code")
+    build = dict(stage.get("build") or {})
+
+    def save(name):
+        _write_json(_stage_path(cfg, task), {"stage": name, "status": status, "exit_code": exit_code, "build": build})
+
+    if "changed" not in build:
+        build["branch"] = workspace.branch_name(env.request_id, env.generation)
+        try:
+            build.update(workspace.commit_all(task_dir, env.ref, commit_message(env)))
+        except Exception as exc:
+            build.update({"commit": None, "changed": False,
+                          "commit_error": str(exc) if isinstance(exc, workspace.WorkspaceError) else type(exc).__name__})
+        save("committed")
+    if "tests" not in build:
+        if build.get("commit_error"):
+            build["tests"] = _no_tests("commit_failed")
+        elif not build["changed"]:
+            build["tests"] = _no_tests("no_changes")
+        else:
+            try:
+                paths = select_tests(task_dir, workspace.changed_paths(task_dir, env.ref))
+            except Exception:
+                paths = []
+            if not paths:
+                build["tests"] = _no_tests("no_tests_selected")
+            else:
+                record, flag = _run_tests(dispatcher, cfg, env, task_dir, paths, now, sleep)
+                if record is None:
+                    return flag
+                build["tests"] = record
+                if flag == "cancelled":
+                    status = "cancelled"
+        save("tested")
+    if "publish" not in build:
+        if status != "completed":
+            build["publish"] = {"state": "skipped", "code": "not_completed"}
+        elif not build.get("commit"):
+            build["publish"] = {"state": "skipped", "code": "commit_failed" if build.get("commit_error") else "no_changes"}
+        elif cfg.publisher is None:
+            build["publish"] = {"state": "skipped", "code": "publisher_not_configured"}
+        else:
+            try:                          # Stop, and the lease, are asked once more right before anything leaves the Mac
+                if dispatcher.cancel_requested(env.request_id, env.generation):
+                    status = "cancelled"
+                elif not dispatcher.renew(env.request_id, env.generation):
+                    return "lease_lost"
+            except Exception:
+                return "control_lost"
+            if status != "completed":
+                build["publish"] = {"state": "skipped", "code": "cancelled"}
+            else:
+                title, body = pr_text(env, build)
+                try:
+                    out = cfg.publisher.publish(task_dir, build["branch"], base_branch=cfg.publish_base, title=title,
+                                                body=body, commit=build["commit"])
+                except Exception as exc:
+                    out = {"state": "pr_failed", "code": f"error_{type(exc).__name__}"}
+                build["publish"] = _publish_record(out)
+        save("published")
+    return status, build
+
+
+def _publish_record(out) -> dict:
+    """Only the fixed fields of a publisher's answer are kept: a state, a short code, and the pull request."""
+    out = out if isinstance(out, dict) else {}
+    state = out.get("state") if out.get("state") in ("published", "push_failed", "pr_failed", "refused") else "pr_failed"
+    number, url = out.get("pr_number"), out.get("pr_url")
+    if state == "published" and type(number) is int and isinstance(url, str) \
+            and re.fullmatch(r"https://github\.com/[A-Za-z0-9._/-]{3,150}/pull/[0-9]{1,9}", url):
+        return {"state": "published", "pr_url": url, "pr_number": number}
+    code = out.get("code")
+    code = code if isinstance(code, str) and re.fullmatch(r"[A-Za-z0-9_]{1,64}", code) else "unknown"
+    return {"state": "pr_failed" if state == "published" else state, "code": code}
+
+
+def _detail(env, exit_code, build=None) -> dict:
+    """The result's detail. For a build the runner finished: also ``branch``, ``commit``, ``changed``, ``tests``,
+    ``publish`` and, when published, ``pr_url``; the test summary is cut from its start until the whole detail fits
+    the door's bound."""
+    detail = {"exit_code": exit_code, "base_ref": env.ref}
+    if not build:
+        return detail
+    tests = dict(build.get("tests") or {})
+    detail.update({"branch": build.get("branch"), "commit": build.get("commit"), "changed": bool(build.get("changed")),
+                   "tests": tests, "publish": build.get("publish")})
+    if build.get("commit_error"):
+        detail["commit_error"] = str(build["commit_error"])[:64]
+    if (build.get("publish") or {}).get("state") == "published":
+        detail["pr_url"] = build["publish"]["pr_url"]
+    if isinstance(tests.get("command"), list):
+        tests["command"] = [str(c)[:300] for c in tests["command"]]
+    over = len(json.dumps(detail)) - DETAIL_MAX
+    while over > 0 and tests.get("summary"):
+        tests["summary"] = tests["summary"][min(len(tests["summary"]), max(over, 64)):]
+        over = len(json.dumps(detail)) - DETAIL_MAX
+    return detail
+
+
+def _resume(dispatcher, cfg, env, task, stage, now=_now, sleep=time.sleep) -> dict:
     """A reclaim after a crash: finish from the last durable stage, never rerun the work."""
     task_dir = Path(cfg.workspace_root) / task
     if stage["stage"] == "preparing":
@@ -314,12 +618,20 @@ def _resume(dispatcher, cfg, env, task, stage) -> dict:
         artifacts = _collect(cfg, env, task, task_dir, "interrupted", None)
         return _finish(dispatcher, cfg, env, "interrupted", artifacts,
                        {"code": "child_outcome_unknown", "base_ref": env.ref}, resumed=True)
-    if stage["stage"] == "exited":
-        artifacts = _collect(cfg, env, task, task_dir, stage["status"], stage.get("exit_code"))
+    status, build = stage["status"], stage.get("build")
+    if stage["stage"] in BUILD_STAGES:
+        if env.scope == "build" and (status == "completed" or build) and task_dir.exists():
+            # The agent's work is never rerun; the runner's own steps continue after the last one recorded. A commit
+            # is made at most once (commit_all changes nothing the second time), and a publish first looks for the
+            # branch's pull request, so neither is doubled.
+            out = _build_steps(dispatcher, cfg, env, task, task_dir, stage, now, sleep)
+            if isinstance(out, str):
+                return _lost(dispatcher, cfg, env, out)
+            status, build = out
+        artifacts = _collect(cfg, env, task, task_dir, status, stage.get("exit_code"), build)
     else:
         artifacts = stage["artifacts"]
-    return _finish(dispatcher, cfg, env, stage["status"], artifacts,
-                   {"exit_code": stage.get("exit_code"), "base_ref": env.ref}, resumed=True)
+    return _finish(dispatcher, cfg, env, status, artifacts, _detail(env, stage.get("exit_code"), build), resumed=True)
 
 
 def run_once(dispatcher, cfg: RunnerConfig, *, now=_now, sleep=time.sleep) -> dict:
@@ -357,7 +669,7 @@ def run_once(dispatcher, cfg: RunnerConfig, *, now=_now, sleep=time.sleep) -> di
     task = _task_name(env.request_id, env.generation)
     stage = _read_stage(cfg, task)
     if stage is not None:
-        resumed = _resume(dispatcher, cfg, env, task, stage)
+        resumed = _resume(dispatcher, cfg, env, task, stage, now, sleep)
         if resumed is not None:
             return resumed
     elif (Path(cfg.workspace_root) / task).exists():
@@ -375,7 +687,10 @@ def run_once(dispatcher, cfg: RunnerConfig, *, now=_now, sleep=time.sleep) -> di
     dispatcher.heartbeat(cfg.runner_id, state="busy", capabilities=cfg.caps())
     _write_json(_stage_path(cfg, task), {"stage": "preparing"})      # durable before the workspace exists
     try:
-        task_dir = workspace.prepare(cfg.workspace_root, Path(cfg.repositories[env.repository]), task, env.ref)
+        # A build works on its own branch mc/<job> (#693); research stays on a detached commit.
+        branch = workspace.branch_name(env.request_id, env.generation) if env.scope == "build" else None
+        task_dir = workspace.prepare(cfg.workspace_root, Path(cfg.repositories[env.repository]), task, env.ref,
+                                     branch=branch)
     except workspace.WorkspaceError as exc:
         return _finish(dispatcher, cfg, env, "failed", [], {"code": str(exc)})
     try:
@@ -429,11 +744,7 @@ def run_once(dispatcher, cfg: RunnerConfig, *, now=_now, sleep=time.sleep) -> di
             capture.finish(cfg.kill_grace_s)
 
     if outcome_local:
-        try:
-            dispatcher.heartbeat(cfg.runner_id, state="online", capabilities=cfg.caps())
-        except Exception:
-            pass
-        return {"state": outcome_local, "request_id": env.request_id, "delivered": False}
+        return _lost(dispatcher, cfg, env, outcome_local)
     if capture.exceeded.is_set():
         status = "output_limit"         # a burst written just before exiting still counts
     if not capture.ok:
@@ -444,10 +755,26 @@ def run_once(dispatcher, cfg: RunnerConfig, *, now=_now, sleep=time.sleep) -> di
                         "base_ref": env.ref}, workspace_dir=task_dir)
     if status is None:
         status = "completed" if proc.returncode == 0 else "failed"
-    _write_json(_stage_path(cfg, task), {"stage": "exited", "status": status, "exit_code": proc.returncode})
-    artifacts = _collect(cfg, env, task, task_dir, status, proc.returncode)
-    return _finish(dispatcher, cfg, env, status, artifacts, {"exit_code": proc.returncode, "base_ref": env.ref},
+    exited = {"stage": "exited", "status": status, "exit_code": proc.returncode}
+    _write_json(_stage_path(cfg, task), exited)
+    build = None
+    if env.scope == "build" and status == "completed":
+        out = _build_steps(dispatcher, cfg, env, task, task_dir, exited, now, sleep)
+        if isinstance(out, str):
+            return _lost(dispatcher, cfg, env, out)
+        status, build = out
+    artifacts = _collect(cfg, env, task, task_dir, status, proc.returncode, build)
+    return _finish(dispatcher, cfg, env, status, artifacts, _detail(env, proc.returncode, build),
                    workspace_dir=task_dir)
+
+
+def _lost(dispatcher, cfg, env, outcome) -> dict:
+    """The lease or the dispatcher's control calls were lost: the work is stopped and no result is posted."""
+    try:
+        dispatcher.heartbeat(cfg.runner_id, state="online", capabilities=cfg.caps())
+    except Exception:
+        pass
+    return {"state": outcome, "request_id": env.request_id, "delivered": False}
 
 
 def _finish(dispatcher, cfg, env, status, artifacts, detail, workspace_dir=None, resumed=False) -> dict:
