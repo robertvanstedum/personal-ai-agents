@@ -58,7 +58,8 @@ HELP = {
     "minimoi_lock_state": "1 for each Vault lock's probed state (held, free, absent, unknown); never inferred from file age.",
     "minimoi_docker_readable": "1 when the container list could be read, 0 when docker could not say (counts below absent).",
     "minimoi_vault_containers": "Running Vault index containers by kind (an inventory figure, not proof of an orphan).",
-    "minimoi_vault_orphan_containers": "Over budget, owner lock not held and owner job not running.",
+    "minimoi_vault_orphan_containers": "Over budget, owner lock known not held and owner jobs known not running.",
+    "minimoi_vault_undetermined_containers": "Over budget, but the lock state or an owner status could not be read.",
     "minimoi_vault_container_oldest_age_seconds": "Age of the oldest running Vault index container by kind.",
 }
 
@@ -121,7 +122,7 @@ def _ts(value) -> float | None:
     return moment.timestamp() if moment else None
 
 
-def vault_traps(snap: "Snapshot", vault_root, containers, owner_running: bool) -> None:
+def vault_traps(snap: "Snapshot", vault_root, containers, owner_running) -> None:
     """Lock states and Vault index containers (WS3 C1.3). ``containers`` is the docker listing or None (unreadable)."""
     states = {name: locks.probe(path) for name, path in locks.lock_paths(vault_root).items()}
     for name, state in states.items():
@@ -133,6 +134,7 @@ def vault_traps(snap: "Snapshot", vault_root, containers, owner_running: bool) -
     for kind, row in (kinds or {}).items():
         snap.add("minimoi_vault_containers", row["count"], container=kind)
         snap.add("minimoi_vault_orphan_containers", row["orphans"], container=kind)
+        snap.add("minimoi_vault_undetermined_containers", row["undetermined"], container=kind)
         snap.add("minimoi_vault_container_oldest_age_seconds", row["oldest_s"], container=kind)
 
 
@@ -191,12 +193,16 @@ def build(reg, health_dir, roots: dict, host: str, aliases: Aliases, now: dateti
                 snap.add("minimoi_job_last_progress_timestamp_seconds", ts, job_id=job.id, host=host)
             snap.add("minimoi_job_phase", 1, job_id=job.id, host=host, phase=progress.get("phase"))
     if vault_root:
-        running = False
+        running, unreadable = False, False                  # True / False / None (an owner status unreadable)
         for jid in ("vault-apply", "vault-meaning-seed"):
             j = reg.get(jid)
-            root = roots.get(j.status_root) or roots.get("jobs") if j else None
+            root = (roots.get(j.status_root) or roots.get("jobs")) if j else None
             d = status.read_status(root, j.status_file, j.id) if (j and root) else None
-            running = running or bool(d and d.get("state") == "running")
+            if d is None:
+                unreadable = True
+            elif d.get("state") == "running":
+                running = True
+        running = True if running else (None if unreadable else False)
         vault_traps(snap, vault_root, containers, running)
     snap.add("minimoi_exporter_snapshot_timestamp_seconds", now.timestamp())
     snap.rows.append(("minimoi_exporter_dropped", (), float(snap.dropped)))

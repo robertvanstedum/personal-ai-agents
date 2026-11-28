@@ -18,8 +18,9 @@ lock is refused once, as busy (``apply_busy``), and records that refusal; it ret
 **Orphans** (``classify``): the seed container has a fixed name (``minimoi-vault-seed``) and index steps the prefix
 ``minimoi-vault-index-`` (#705). The host process that starts either holds ``vault_refresh`` for the whole run. So a
 container is an **orphan** only when all three hold: it is older than its approved budget plus five minutes, the
-``vault_refresh`` lock is not held, and the owning job's status is not ``running``. A container whose owner is held
-and running is a legitimate long step (reported, not an orphan). A container with no recognised name but a
+``vault_refresh`` lock is known not held (free or absent), and the owner jobs' statuses are readable and not
+``running``. A held lock or a running owner is a legitimate long step (reported, not an orphan); an unknown lock state
+or an unreadable owner status makes it **undetermined**, never an orphan and never fine. A container with no recognised name but a
 ``vault-work`` mount is an **unknown holder** (the pre-#705 kind). A count alone is an inventory figure, never proof.
 Cleanup stays manual (runbook); nothing here removes a container.
 """
@@ -28,6 +29,7 @@ from __future__ import annotations
 import errno
 import fcntl
 import os
+import stat
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime
@@ -49,12 +51,15 @@ def lock_paths(vault_root: str | Path) -> dict:
 
 def probe(path: str | Path) -> str:
     try:
-        fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        # O_NONBLOCK: a FIFO or device in the lock's place must not block the exporter (Codex locks review 2).
+        fd = os.open(str(path), os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0))
     except FileNotFoundError:
         return "absent"
     except OSError:
         return "unknown"
     try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return "unknown"                             # only a regular file is a lock file
         try:
             fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
         except OSError as exc:
@@ -93,21 +98,32 @@ def list_containers(run=subprocess.run, docker: str = "docker") -> list[Containe
     rows = []
     for line in (out.stdout or "").splitlines():
         parts = line.split("|", 2)
-        if len(parts) != 3:
-            continue
+        if len(parts) != 3 or not parts[0].startswith("/"):
+            return None                                  # a malformed row: the listing is partial, so unknown
         name, started, mounts = parts
-        rows.append(Container(name.lstrip("/"), parse_time(started.replace(" +0000 UTC", "Z")),
-                              tuple(m for m in mounts.split(";") if m)))
+        moment = parse_time(started.replace(" +0000 UTC", "Z"))
+        if moment is None:
+            return None
+        rows.append(Container(name.lstrip("/"), moment, tuple(m for m in mounts.split(";") if m)))
+    if len(rows) != len(found):
+        return None                                      # not every running container was described: unknown, never zero
     return rows
 
 
-def classify(containers: list[Container] | None, refresh_lock: str, owner_running: bool, now: datetime) -> dict:
-    """Counts by kind for the exporter: {kind: {"count", "orphans", "oldest_s"}} with kinds seed, index_step and
-    unknown_holder, or ``None`` when docker could not be read (unknown, not zero)."""
+def classify(containers: list[Container] | None, refresh_lock: str, owner_running: bool | None, now: datetime) -> dict:
+    """Counts by kind for the exporter: {kind: {"count", "orphans", "undetermined", "oldest_s"}} with kinds seed,
+    index_step and unknown_holder, or ``None`` when docker could not be read (unknown, not zero).
+
+    The owner is whichever Vault job holds ``vault_refresh`` (apply or seed; they exclude each other), judged as a
+    whole, not per container. An over-budget container is an **orphan** only when the lock is ``free`` or ``absent``
+    **and** ``owner_running`` is ``False`` (both owner statuses readable, neither running). When the lock state is
+    ``unknown`` or the owner status cannot be read (``owner_running is None``) it is **undetermined**, never an orphan
+    and never fine. A held lock or a running owner means no orphan claim."""
     if containers is None:
         return None
-    out = {k: {"count": 0, "orphans": 0, "oldest_s": 0} for k in ("seed", "index_step", "unknown_holder")}
-    owner_alive = refresh_lock == "held" and owner_running
+    out = {k: {"count": 0, "orphans": 0, "undetermined": 0, "oldest_s": 0} for k in ("seed", "index_step", "unknown_holder")}
+    lock_known_free = refresh_lock in ("free", "absent")
+    lock_unknown = refresh_lock not in ("free", "absent", "held")
     for c in containers:
         if c.name == SEED_CONTAINER:
             kind, budget = "seed", SEED_BUDGET_S
@@ -122,6 +138,12 @@ def classify(containers: list[Container] | None, refresh_lock: str, owner_runnin
         slot["count"] += 1
         if age is not None:
             slot["oldest_s"] = max(slot["oldest_s"], age)
-        if budget is not None and age is not None and age > budget + ORPHAN_MARGIN_S and not owner_alive:
+        if budget is None or age is None or age <= budget + ORPHAN_MARGIN_S:
+            continue
+        if refresh_lock == "held" or owner_running is True:
+            continue                                     # a live owner: a long step, not an orphan
+        if lock_known_free and owner_running is False:
             slot["orphans"] += 1
+        elif lock_unknown or owner_running is None:
+            slot["undetermined"] += 1
     return out
